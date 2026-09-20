@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <%- include('partials/head') %>
+  </head>
+  <body>
+    <%- include('partials/navbar') %>
+
+    <main class="page">
+      <h1 class="page__title"><%= pageTitle %></h1>
+
+      <!-- Shown once a valid Spotify login is present. -->
+      <section class="page__content" data-auth-required hidden></section>
+
+      <!-- Page-level gating: no Spotify login, no page content. -->
+      <section class="empty-state" data-auth-missing>
+        <p>Please log in to Spotify first</p>
+      </section>
+    </main>
+
+    <script src="/js/storage.js"></script>
+    <script src="/js/navbar.js"></script>
+    <script src="/js/auth.js"></script>
+  </body>
+</html>

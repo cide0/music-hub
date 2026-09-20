@@ -1,0 +1,47 @@
+/*
+ * The single source of truth for Music Hub's colors.
+ * Never hard-code a hex value anywhere else - reference these variables.
+ */
+:root {
+  /* Purple palette, lightest to darkest */
+  --color-purple-50: #F6E7FE;
+  --color-purple-100: #E5BAFC;
+  --color-purple-200: #D58EFA;
+  --color-purple-300: #C462F8;
+  --color-purple-400: #B336F7;
+  --color-purple-500: #A30AF5;
+  --color-purple-600: #8508C9;
+  --color-purple-700: #7407B0;
+  --color-purple-800: #4B0571;
+  --color-purple-900: #2E0345;
+  --color-purple-950: #100118;
+  --color-black: #000000;
+
+  /* Semantic roles */
+  --color-primary: var(--color-purple-700);
+  --color-primary-hover: var(--color-purple-600);
+  --color-accent: var(--color-purple-500);
+  --color-link: var(--color-purple-300);
+
+  --color-bg: var(--color-black);
+  --color-surface: var(--color-purple-950);
+  --color-surface-raised: var(--color-purple-900);
+
+  --color-text: #FFFFFF;
+  --color-text-soft: var(--color-purple-50);
+  --color-text-muted: #B3B3B3;
+
+  /* Grays for borders and disabled/inactive controls */
+  --color-border: #3E3E3E;
+  --color-disabled-bg: #2A2A2A;
+  --color-disabled-text: #8A8A8A;
+
+  --color-focus: var(--color-primary);
+  --color-error: #F2707D;
+
+  /* Shared layout tokens */
+  --radius-pill: 999px;
+  --radius-card: 12px;
+  --navbar-height: 64px;
+  --content-max-width: 1200px;
+}

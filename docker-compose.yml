@@ -1,0 +1,14 @@
+services:
+  music-hub:
+    build: .
+    image: music-hub:dev
+    container_name: music-hub
+    env_file:
+      - .env
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    volumes:
+      # Bind-mount the source so nodemon picks up file changes without a rebuild.
+      - .:/app
+    command: ["npm", "run", "dev"]
+    restart: unless-stopped

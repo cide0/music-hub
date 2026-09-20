@@ -1,0 +1,68 @@
+<header class="navbar">
+  <div class="navbar__bar">
+    <button
+      type="button"
+      class="icon-button navbar__toggle"
+      id="navbar-toggle"
+      aria-controls="navbar-tabs"
+      aria-expanded="false"
+      aria-label="Toggle navigation menu"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+      </svg>
+    </button>
+
+    <a class="navbar__brand" href="/">
+      <img src="/favicon.png" alt="" /><span>Music Hub</span>
+    </a>
+
+    <nav class="navbar__tabs" id="navbar-tabs" aria-label="Pages">
+      <% tabs.forEach(function (tab) { %>
+        <% if (tab.external) { %>
+          <a class="navbar__tab" href="<%= tab.href %>" target="_blank" rel="noopener noreferrer">
+            <%= tab.label %>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
+        <% } else { %>
+          <a
+            class="navbar__tab<%= tab.href === activePath ? ' navbar__tab--active' : '' %>"
+            href="<%= tab.href %>"
+            <%- tab.href === activePath ? 'aria-current="page"' : '' %>
+          ><%= tab.label %></a>
+        <% } %>
+      <% }); %>
+    </nav>
+
+    <div class="navbar__actions">
+      <button type="button" class="icon-button" id="export-data" title="Export data" aria-label="Export data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        <span class="icon-button__label">Export</span>
+      </button>
+
+      <button type="button" class="icon-button" id="import-data" title="Import data" aria-label="Import data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+        <span class="icon-button__label">Import</span>
+      </button>
+      <input type="file" id="import-file" accept="application/json,.json" hidden />
+
+      <a class="button button--primary navbar__login" id="spotify-login" href="/login" title="Login with Spotify">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="20" height="20">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" />
+        </svg>
+        <span class="navbar__login-label">Login with Spotify</span>
+      </a>
+
+      <a class="navbar__user" id="spotify-user" href="#" title="Open your profile in Spotify" hidden>
+        <img class="navbar__avatar" id="spotify-avatar" src="" alt="" />
+        <span id="spotify-user-name"></span>
+      </a>
+    </div>
+  </div>
+</header>
