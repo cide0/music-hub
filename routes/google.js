@@ -13,57 +13,34 @@ import {
 
 const router = Router();
 
-const SPOTIFY_AUTHORIZE_URL = 'https://accounts.spotify.com/authorize';
-const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
-const STORAGE_KEY = 'spotifyAuth';
+const GOOGLE_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const STORAGE_KEY = 'googleAuth';
 
-const SCOPES = [
-  'user-read-private',
-  'user-follow-read',
-  'playlist-read-private',
-  'playlist-read-collaborative',
-  'playlist-modify-private',
-  'playlist-modify-public',
-].join(' ');
+// Only what "Add to calendar" needs - creating events, nothing else.
+const SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
-function basicAuthHeader() {
-  const clientId = requireEnv('SPOTIFY_CLIENT_ID');
-  const clientSecret = requireEnv('SPOTIFY_CLIENT_SECRET');
-  return `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
-}
-
-router.get('/login', (req, res) => {
+router.get('/auth/google', (req, res) => {
   try {
-    const clientId = requireEnv('SPOTIFY_CLIENT_ID');
-    const redirectUri = requireEnv('SPOTIFY_REDIRECT_URI');
-
-    const codeVerifier = base64url(crypto.randomBytes(48));
-    const codeChallenge = base64url(crypto.createHash('sha256').update(codeVerifier).digest());
-
-    // The verifier travels in the signed state - no server-side storage.
-    const state = signState({
-      v: codeVerifier,
-      r: safeReturnTo(req.query.from),
-      n: base64url(crypto.randomBytes(8)),
-    });
-
     const params = new URLSearchParams({
-      client_id: clientId,
+      client_id: requireEnv('GOOGLE_CLIENT_ID'),
+      redirect_uri: requireEnv('GOOGLE_REDIRECT_URI'),
       response_type: 'code',
-      redirect_uri: redirectUri,
-      code_challenge_method: 'S256',
-      code_challenge: codeChallenge,
-      state,
-      scope: SCOPES,
+      scope: SCOPE,
+      // A refresh token is only issued with offline access, and Google only
+      // re-issues it when consent is asked for explicitly.
+      access_type: 'offline',
+      prompt: 'consent',
+      state: signState({ r: safeReturnTo(req.query.from), n: base64url(crypto.randomBytes(8)) }),
     });
 
-    res.redirect(`${SPOTIFY_AUTHORIZE_URL}?${params.toString()}`);
+    res.redirect(`${GOOGLE_AUTHORIZE_URL}?${params.toString()}`);
   } catch (err) {
     res.status(500).send(err.message);
   }
 });
 
-router.get('/callback', async (req, res) => {
+router.get('/auth/google/callback', async (req, res) => {
   if (req.query.error) {
     res.status(400).type('html').send(
       renderTokenCallbackPage({ storageKey: STORAGE_KEY, error: String(req.query.error), returnTo: '/' }),
@@ -72,7 +49,7 @@ router.get('/callback', async (req, res) => {
   }
 
   const state = verifyState(req.query.state);
-  if (!state || typeof state.v !== 'string') {
+  if (!state) {
     res.status(400).type('html').send(
       renderTokenCallbackPage({ storageKey: STORAGE_KEY, error: 'invalid or tampered state', returnTo: '/' }),
     );
@@ -82,17 +59,15 @@ router.get('/callback', async (req, res) => {
   const returnTo = safeReturnTo(state.r);
 
   try {
-    const response = await fetch(SPOTIFY_TOKEN_URL, {
+    const response = await fetch(GOOGLE_TOKEN_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: basicAuthHeader(),
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code: String(req.query.code || ''),
-        redirect_uri: requireEnv('SPOTIFY_REDIRECT_URI'),
-        code_verifier: state.v,
+        client_id: requireEnv('GOOGLE_CLIENT_ID'),
+        client_secret: requireEnv('GOOGLE_CLIENT_SECRET'),
+        redirect_uri: requireEnv('GOOGLE_REDIRECT_URI'),
       }),
     });
 
@@ -113,7 +88,7 @@ router.get('/callback', async (req, res) => {
         storageKey: STORAGE_KEY,
         tokens: {
           accessToken: data.access_token,
-          refreshToken: data.refresh_token,
+          refreshToken: data.refresh_token || null,
           expiresAt: Date.now() + data.expires_in * 1000,
         },
         returnTo,
@@ -126,11 +101,8 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-/**
- * Silent refresh: the browser has the refresh token, but the client secret
- * needed to redeem it must never leave the server - hence this proxy.
- */
-router.post('/api/spotify/refresh', express.json(), async (req, res) => {
+/** Silent Google access-token refresh (needs the client secret). */
+router.post('/api/google/refresh', express.json(), async (req, res) => {
   const refreshToken = req.body?.refreshToken;
   if (!refreshToken) {
     res.status(400).json({ error: 'refreshToken is required' });
@@ -138,15 +110,14 @@ router.post('/api/spotify/refresh', express.json(), async (req, res) => {
   }
 
   try {
-    const response = await fetch(SPOTIFY_TOKEN_URL, {
+    const response = await fetch(GOOGLE_TOKEN_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: basicAuthHeader(),
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
+        client_id: requireEnv('GOOGLE_CLIENT_ID'),
+        client_secret: requireEnv('GOOGLE_CLIENT_SECRET'),
       }),
     });
 
@@ -158,7 +129,7 @@ router.post('/api/spotify/refresh', express.json(), async (req, res) => {
 
     res.json({
       accessToken: data.access_token,
-      // Spotify only sometimes rotates the refresh token; keep the old one otherwise.
+      // Google doesn't return the refresh token again on a refresh.
       refreshToken: data.refresh_token || refreshToken,
       expiresAt: Date.now() + data.expires_in * 1000,
     });

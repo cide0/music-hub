@@ -26,6 +26,35 @@ a {
   color: var(--color-link);
 }
 
+/* Firefox */
+html {
+  scrollbar-color: var(--color-purple-800) var(--color-surface);
+}
+
+/* Chrome / Safari - without this the thumb barely shows on black. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid var(--color-surface);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-purple-800);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-primary);
+}
+
+::-webkit-scrollbar-corner {
+  background-color: var(--color-surface);
+}
+
 /* A single, consistent keyboard-focus treatment across the whole app. */
 :focus-visible {
   outline: 2px solid var(--color-focus);
@@ -250,8 +279,62 @@ a {
 
 .page__title {
   margin: 0 0 1.5rem;
-  font-size: 1.75rem;
+  font-size: var(--font-size-page-title);
   font-weight: 700;
+}
+
+/* Title left, countdown centred, totals right - all on one baseline. */
+.page__header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.page__countdown {
+  grid-column: 2;
+  justify-self: center;
+  margin: 0;
+  color: var(--color-purple-300);
+  /* A step below the page title next to it. */
+  font-size: 1.375rem;
+  font-weight: 700;
+  /* Equal-width digits, so the seconds don't make the text jitter. */
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.page__header .page__title {
+  margin-bottom: 0;
+}
+
+.page__summary {
+  grid-column: 3;
+  justify-self: end;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+  text-align: right;
+}
+
+@media (max-width: 700px) {
+  /* Too narrow for three columns: stack them, all left-aligned. */
+  .page__header {
+    grid-template-columns: 1fr;
+  }
+
+  .page__countdown,
+  .page__summary {
+    grid-column: 1;
+    justify-self: start;
+    text-align: left;
+  }
+
+  /* A full-size countdown would wrap over several lines on a phone. */
+  .page__countdown {
+    font-size: 1.125rem;
+  }
 }
 
 .empty-state {
@@ -294,14 +377,23 @@ a {
   }
 
   /* The tabs collapse into the hamburger menu; login and export/import
-     controls stay visible as compact icon buttons. */
+     controls stay visible as compact icon buttons. The open menu is taken out
+     of flow and drops over the page content instead of pushing it down (it
+     resolves against .navbar, which is sticky and therefore positioned). */
   .navbar__tabs {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    z-index: 1;
     display: none;
-    flex-basis: 100%;
     flex-direction: column;
     align-items: stretch;
     gap: 0.25rem;
-    padding: 0.5rem 0 0.25rem;
+    padding: 0.5rem 1rem 0.75rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55);
     overflow: visible;
   }
 
@@ -338,4 +430,355 @@ a {
   .navbar__user {
     padding: 0.25rem;
   }
+}
+
+/* ------------------------------------------------- page controls & notices */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.toolbar__meta {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.status-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  overflow: hidden;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 0.9375rem;
+}
+
+/* Grows from left to right as artists are checked off. */
+.status-bar__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  background-color: var(--color-purple-800);
+  transition: width 0.35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-bar__fill {
+    transition: none;
+  }
+}
+
+.status-bar__text {
+  position: relative;
+  flex: 1;
+}
+
+.status-bar__cancel {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: transparent;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.status-bar__cancel:hover {
+  background-color: var(--color-purple-900);
+  color: var(--color-text);
+}
+
+.status-bar__cancel svg {
+  width: 16px;
+  height: 16px;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 0.9375rem;
+}
+
+.notice__dismiss {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.notice__dismiss:hover {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.notice__dismiss svg {
+  width: 16px;
+  height: 16px;
+}
+
+.button--ghost {
+  border: 1px solid var(--color-border);
+  background-color: transparent;
+  color: var(--color-text-soft);
+}
+
+.button--ghost:hover {
+  background-color: var(--color-surface-raised);
+}
+
+/* A plain on/off flag, visually distinct from the primary purple action. */
+.toggle-button {
+  border: 1px solid var(--color-border);
+  background-color: transparent;
+  color: var(--color-text-soft);
+}
+
+.toggle-button:hover {
+  background-color: var(--color-surface-raised);
+}
+
+.toggle-button--on,
+.toggle-button--on:hover {
+  background-color: var(--color-purple-800);
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+/* ------------------------------------------------------------ concert list */
+
+.concert-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.concert-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* The whole card opens the Ticketmaster page: an overlay link covers it,
+   while the action buttons sit above the overlay and stay clickable. */
+.concert-card__link {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+/* Hover only - a click leaves the overlay link focused, and the lift
+   shouldn't stick around afterwards. `hover: hover` keeps touch devices from
+   latching onto it after a tap. */
+@media (hover: hover) {
+  .concert-card--linked:hover {
+    transform: translateY(-3px) scale(1.01);
+    border-color: var(--color-purple-300);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Keyboard focus only: :focus-visible doesn't match a mouse click, so the
+   outline no longer lingers after clicking a card. The overlay covers the
+   whole card, so its outline frames the card. */
+.concert-card__link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .concert-card {
+    transition: border-color 0.18s ease;
+  }
+
+  .concert-card--linked:hover {
+    transform: none;
+  }
+}
+
+/* Highlights what the latest fetch turned up that wasn't there before. */
+.concert-card--new {
+  border-color: var(--color-primary);
+}
+
+.concert-card--new .concert-card__body {
+  background-color: var(--color-surface-new);
+}
+
+/* A concert the user is going to: the brightest treatment on the page, so it
+   stands out from both plain and newly-found items. Listed after --new so it
+   wins when a card happens to be both. */
+.concert-card--attending {
+  border-color: var(--color-purple-400);
+}
+
+.concert-card--attending .concert-card__body {
+  background-color: var(--color-surface-attending);
+}
+
+.concert-card__image {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background-color: var(--color-surface-raised);
+}
+
+.concert-card__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 1rem;
+}
+
+.concert-card__artists {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.concert-card__event {
+  margin: 0;
+  color: var(--color-text-soft);
+  font-size: 0.9375rem;
+}
+
+.concert-card__meta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+.concert-card__note {
+  margin: 0.25rem 0 0;
+  color: var(--color-purple-200);
+  font-size: 0.8125rem;
+}
+
+.concert-card__actions {
+  /* Above the card's overlay link, so the buttons stay clickable. */
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.75rem;
+}
+
+.concert-card__actions .button {
+  min-height: 40px;
+  padding: 0.375rem 1rem;
+  font-size: 0.9375rem;
+}
+
+.concert-card__error {
+  margin: 0.5rem 0 0;
+  color: var(--color-error);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 600px) {
+  .concert-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Marks a followed artist who isn't the headliner of that show. */
+.concert-card__role {
+  display: inline-block;
+  margin-left: 0.375rem;
+  padding: 0.0625rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-purple-600);
+  color: var(--color-text);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* ------------------------------------------------------------ filter group */
+
+/* Sits at the right-hand edge of the content, opposite the fetch button. */
+.toolbar .filter-group {
+  margin-left: auto;
+}
+
+.filter-group {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.filter-button {
+  min-height: 36px;
+  padding: 0.25rem 0.875rem;
+  border: none;
+  border-radius: var(--radius-pill);
+  background-color: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.filter-button:hover:not(:disabled) {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.filter-button--active,
+.filter-button--active:hover:not(:disabled) {
+  background-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.filter-button:disabled {
+  color: var(--color-disabled-text);
+  cursor: not-allowed;
 }

@@ -34,12 +34,23 @@ database**, and the service sleeps/restarts, so no server-side state survives).
 ```
 server.js            Express app (static files, EJS views, routers)
 config/navigation.js Navbar tabs + page routes (single source of truth)
-routes/auth.js       /login, /callback, POST /api/spotify/refresh
+lib/oauth.js         Signed-state helpers + the token callback page (both flows)
+lib/cities.js        Allowed cities for Concert Date Fetcher + name matching
+routes/auth.js       Spotify: /login, /callback, POST /api/spotify/refresh
+routes/google.js     Google: /auth/google(/callback), POST /api/google/refresh
+routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster)
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
 views/               EJS pages + partials/ (head, navbar)
 public/css/          variables.css (palette) + style.css
-public/js/           storage.js, navbar.js, auth.js (loaded on every page)
+public/js/           storage.js, navbar.js, auth.js (every page),
+                     spotify.js + google.js (shared API helpers),
+                     <page-name>.js per page
 ```
+
+Each third-party API gets a proxy route here, called sequentially from the
+frontend with a small fixed delay (~220ms for Ticketmaster/Last.fm) to stay
+under the provider's rate limit; a single failed lookup is collected into a
+"failed artists" notice rather than aborting the run.
 
 ## Auth
 

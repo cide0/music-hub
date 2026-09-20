@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
 import express from 'express';
 
+import apiRouter from './routes/api.js';
 import authRouter from './routes/auth.js';
+import googleRouter from './routes/google.js';
 import pagesRouter from './routes/pages.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,6 +19,8 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(authRouter);
+app.use(googleRouter);
+app.use(apiRouter);
 app.use(pagesRouter);
 
 app.use((req, res) => {

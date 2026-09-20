@@ -7,10 +7,53 @@
     <%- include('partials/navbar') %>
 
     <main class="page">
-      <h1 class="page__title"><%= pageTitle %></h1>
+      <div class="page__header">
+        <h1 class="page__title"><%= pageTitle %></h1>
+        <p class="page__countdown" id="next-attending" data-auth-required hidden></p>
+        <p class="page__summary" id="concerts-summary" data-auth-required hidden></p>
+      </div>
 
       <!-- Shown once a valid Spotify login is present. -->
-      <section class="page__content" data-auth-required></section>
+      <section class="page__content" data-auth-required>
+        <div class="toolbar">
+          <button type="button" class="button button--primary" id="fetch-concerts">Fetch concert dates</button>
+          <button type="button" class="button button--ghost" id="clear-concerts" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18">
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+            Clear saved data
+          </button>
+          <span class="toolbar__meta" id="last-fetched" hidden></span>
+
+          <div class="filter-group" id="concert-filters" role="group" aria-label="Filter concerts" hidden>
+            <button type="button" class="filter-button filter-button--active" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="filter-button" data-filter="attending" aria-pressed="false">I&rsquo;m attending</button>
+            <button type="button" class="filter-button" data-filter="new" aria-pressed="false" disabled>New</button>
+          </div>
+        </div>
+
+        <div class="status-bar" id="fetch-status" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+          <div class="status-bar__fill" id="fetch-progress"></div>
+          <span class="status-bar__text" id="fetch-status-text"></span>
+          <button type="button" class="status-bar__cancel" id="fetch-cancel" aria-label="Cancel fetching">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="notice" id="failed-notice" hidden>
+          <span id="failed-text"></span>
+          <button type="button" class="notice__dismiss" id="failed-dismiss" aria-label="Dismiss">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="empty-state" id="concerts-message" hidden></p>
+        <div class="concert-grid" id="concerts-list"></div>
+      </section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->
       <section class="empty-state" data-auth-missing>
@@ -21,5 +64,8 @@
     <script src="/js/storage.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
+    <script src="/js/spotify.js"></script>
+    <script src="/js/google.js"></script>
+    <script src="/js/concert-date-fetcher.js"></script>
   </body>
 </html>

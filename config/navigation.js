@@ -7,6 +7,7 @@ export const tabs = [
   { label: 'Discogs', href: '/discogs', external: false },
   { label: 'Spotify Video Matcher', href: 'https://spotify-video-matcher.onrender.com/', external: true },
   { label: 'Spotify Release List', href: 'https://spotifyreleaselist.netlify.app/', external: true },
+  { label: 'Spotify Listening Stats', href: 'https://stats.fm/user/cide?range=lifetime', external: true },
 ];
 
 // Every internal page renders from a view of the same name.

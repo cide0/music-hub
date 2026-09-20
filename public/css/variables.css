@@ -3,6 +3,10 @@
  * Never hard-code a hex value anywhere else - reference these variables.
  */
 :root {
+  /* Tells the browser this is a dark UI, so form controls and scrollbars
+     get their dark variants instead of light ones. */
+  color-scheme: dark;
+
   /* Purple palette, lightest to darkest */
   --color-purple-50: #F6E7FE;
   --color-purple-100: #E5BAFC;
@@ -27,6 +31,12 @@
   --color-surface: var(--color-purple-950);
   --color-surface-raised: var(--color-purple-900);
 
+  /* Card surfaces tinted from the palette rather than hand-picked hexes.
+     Newly-found concerts stay dark and subdued; concerts the user is
+     attending get a noticeably brighter wash, so the two never read alike. */
+  --color-surface-new: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  --color-surface-attending: color-mix(in srgb, var(--color-accent) 30%, var(--color-surface));
+
   --color-text: #FFFFFF;
   --color-text-soft: var(--color-purple-50);
   --color-text-muted: #B3B3B3;
@@ -40,6 +50,7 @@
   --color-error: #F2707D;
 
   /* Shared layout tokens */
+  --font-size-page-title: 1.75rem;
   --radius-pill: 999px;
   --radius-card: 12px;
   --navbar-height: 64px;
