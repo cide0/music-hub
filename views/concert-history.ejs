@@ -7,10 +7,118 @@
     <%- include('partials/navbar') %>
 
     <main class="page">
-      <h1 class="page__title"><%= pageTitle %></h1>
+      <div class="page__header">
+        <h1 class="page__title"><%= pageTitle %></h1>
+      </div>
 
       <!-- Shown once a valid Spotify login is present. -->
-      <section class="page__content" data-auth-required></section>
+      <section class="page__content" data-auth-required>
+        <nav class="breadcrumb" id="breadcrumb" aria-label="Breadcrumb"></nav>
+
+        <!-- Level 1: artist folders -->
+        <section id="view-artists">
+          <div class="toolbar">
+            <div class="add-artist" id="add-artist">
+              <button type="button" class="button button--primary" id="add-artist-toggle">+ Add artist</button>
+
+              <div class="add-panel" id="add-artist-panel" hidden>
+                <label class="visually-hidden" for="artist-search">Search your followed artists</label>
+                <input type="search" id="artist-search" class="text-input" placeholder="Search your followed artists…" autocomplete="off" />
+                <p class="form-message" id="artist-picker-message" hidden></p>
+                <ul class="picker" id="artist-picker"></ul>
+              </div>
+            </div>
+          </div>
+
+          <p class="empty-state" id="artists-empty" hidden></p>
+          <div class="folder-grid" id="artists-grid"></div>
+        </section>
+
+        <!-- Everything hearted, across every artist and concert -->
+        <section id="view-favorites" hidden>
+          <p class="empty-state" id="favorites-empty" hidden></p>
+          <div id="favorites-list"></div>
+        </section>
+
+        <!-- Level 2: concert subfolders -->
+        <section id="view-concerts" hidden>
+          <div class="toolbar">
+            <button type="button" class="button button--primary" id="add-concert">+ Add concert</button>
+          </div>
+
+          <p class="empty-state" id="concerts-empty" hidden></p>
+          <ul class="folder-grid folder-grid--tiles" id="concerts-list"></ul>
+        </section>
+
+        <!-- Level 3: the images and videos of one concert -->
+        <section id="view-media" hidden>
+          <div class="toolbar">
+            <button type="button" class="button button--primary" id="add-media">+ Add media</button>
+
+            <div class="toolbar__end">
+              <label class="visually-hidden" for="media-order">Sort order</label>
+              <div class="select-wrap">
+                <select id="media-order" class="select-input">
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+              </div>
+
+              <div class="filter-group" id="media-filters" role="group" aria-label="Filter media">
+                <button type="button" class="filter-button filter-button--active" data-media-filter="all" aria-pressed="true">All</button>
+                <button type="button" class="filter-button" data-media-filter="favorites" aria-pressed="false">Favorites</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="empty-state" id="media-note" hidden></p>
+
+          <div id="images-section" hidden>
+            <h2 class="section-title">Images</h2>
+            <div class="media-grid" id="images-grid"></div>
+          </div>
+
+          <div id="videos-section" hidden>
+            <h2 class="section-title">Videos</h2>
+            <div class="media-list" id="videos-list"></div>
+          </div>
+        </section>
+
+        <dialog class="modal" id="concert-dialog">
+          <form class="modal__form" id="concert-form">
+            <h2 class="modal__title" id="concert-dialog-title">Add concert</h2>
+            <label class="visually-hidden" for="concert-name-input">Concert folder name</label>
+            <input type="text" id="concert-name-input" class="text-input" placeholder="Concert folder name" required />
+            <p class="form-error" id="concert-name-error" hidden></p>
+            <div class="modal__actions">
+              <button type="button" class="button button--ghost" id="concert-cancel">Cancel</button>
+              <button type="submit" class="button button--primary" id="concert-submit">Add</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="modal" id="media-dialog">
+          <form class="modal__form" id="media-form">
+            <h2 class="modal__title" id="media-dialog-title">Add media</h2>
+            <p class="modal__hint">
+              Paste Google Drive share links or embed codes — one per line. Both formats work, mixed.
+            </p>
+            <label class="switch">
+              <input type="checkbox" id="media-is-video" checked />
+              <span class="switch__track"><span class="switch__thumb"></span></span>
+              <span class="switch__label">These are videos</span>
+            </label>
+            <label class="visually-hidden" for="media-input">Google Drive links or embed codes</label>
+            <textarea id="media-input" class="text-input" rows="6"
+              placeholder="https://drive.google.com/file/d/FILE_ID/view&#10;&lt;iframe src=&quot;https://drive.google.com/file/d/FILE_ID/preview&quot;&gt;&lt;/iframe&gt;"></textarea>
+            <p class="form-error" id="media-error" hidden></p>
+            <div class="modal__actions">
+              <button type="button" class="button button--ghost" id="media-cancel">Cancel</button>
+              <button type="submit" class="button button--primary" id="media-submit">Add</button>
+            </div>
+          </form>
+        </dialog>
+      </section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->
       <section class="empty-state" data-auth-missing>
@@ -21,5 +129,7 @@
     <script src="/js/storage.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
+    <script src="/js/spotify.js"></script>
+    <script src="/js/concert-history.js"></script>
   </body>
 </html>
