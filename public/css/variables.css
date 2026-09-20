@@ -46,6 +46,11 @@
   --color-disabled-bg: #2A2A2A;
   --color-disabled-text: #8A8A8A;
 
+  /* The one deliberately non-purple accent: recommended (unfollowed) artists
+     in the Followed Artists Graph, so they can't be mistaken for followed ones. */
+  --color-recommended: #3BE081;
+  --color-recommended-dark: #1FA85B;
+
   --color-focus: var(--color-primary);
   --color-error: #F2707D;
 

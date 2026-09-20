@@ -28,6 +28,8 @@ window.MusicHub = window.MusicHub || {};
             name: artist.name,
             imageUrl: artist.images && artist.images.length ? artist.images[0].url : null,
             spotifyUrl: artist.external_urls ? artist.external_urls.spotify : null,
+            // Spotify ships genres with the artist object - no extra call.
+            genres: Array.isArray(artist.genres) ? artist.genres : [],
           });
         });
 

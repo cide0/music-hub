@@ -171,14 +171,14 @@ Scope of the first implementation step:
      | Tab label | Links to | Notes |
      | --- | --- | --- |
      | *(root)* | `/` → redirects to `/concert-date-fetcher` | not a navbar tab itself |
-     | Concert Date Fetcher | `/concert-date-fetcher` | internal page, content defined later |
-     | Followed Artists Graph | `/followed-artists-graph` | internal page, content defined later |
+     | Concerts | `/concert-date-fetcher` | internal page, content defined later |
+     | Artists Graph | `/followed-artists-graph` | internal page, content defined later |
      | Setlist Fetcher | `/setlist-fetcher` | internal page, content defined later |
      | Concert History | `/concert-history` | internal page, content defined later |
      | Discogs | `/discogs` | internal page, content defined later |
-     | Spotify Video Matcher | https://spotify-video-matcher.onrender.com/ | external app — opens that URL directly, not a page of Music Hub |
-     | Spotify Release List | https://spotifyreleaselist.netlify.app/ | external app — opens that URL directly, not a page of Music Hub |
-     | Spotify Listening Stats | https://stats.fm/user/cide?range=lifetime | external link — opens that URL directly, not a page of Music Hub |
+     | Video Matcher | https://spotify-video-matcher.onrender.com/ | external app — opens that URL directly, not a page of Music Hub |
+     | Release List | https://spotifyreleaselist.netlify.app/ | external app — opens that URL directly, not a page of Music Hub |
+     | Listening Stats | https://stats.fm/user/cide?range=lifetime | external link — opens that URL directly, not a page of Music Hub |
 7. Implement the real Spotify OAuth login now (Authorization Code Flow with PKCE), **stateless** — no server-side storage of the verifier, so it survives restarts and multiple instances:
    - `GET /login` — generates a PKCE code verifier + challenge, HMAC-signs the verifier (using `SESSION_SECRET`) into the `state` query param sent to Spotify's `/authorize` endpoint, and redirects the browser there.
    - `GET /callback` — receives the authorization code and the signed `state`; verifies the HMAC signature (rejects if invalid or tampered) and extracts the verifier directly from `state` — no server-side lookup needed. Exchanges the code + verifier for an access + refresh token at `https://accounts.spotify.com/api/token` (using the client secret, server-side only), then returns a small HTML page whose inline script writes the tokens (and expiry) into `localStorage` and redirects back to the page the user started from (or home).

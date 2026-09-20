@@ -2,15 +2,135 @@
 <html lang="en" class="is-logged-out">
   <head>
     <%- include('partials/head') %>
+    <script>
+      /*
+       * Runs before the page paints: with a graph already in storage there is
+       * no point showing the "generate one" view for a frame.
+       */
+      (function () {
+        var hasGraph = false;
+        try {
+          var raw = localStorage.getItem('followedArtistsGraph');
+          var stored = raw ? JSON.parse(raw) : null;
+          hasGraph = !!(stored && stored.artists && stored.artists.length);
+        } catch (err) {
+          hasGraph = false;
+        }
+        var root = document.documentElement;
+        root.classList.toggle('has-graph', hasGraph);
+        root.classList.toggle('no-graph', !hasGraph);
+      })();
+    </script>
   </head>
   <body>
     <%- include('partials/navbar') %>
 
-    <main class="page">
-      <h1 class="page__title"><%= pageTitle %></h1>
+    <main class="page page--graph">
+      <div class="page__header">
+        <h1 class="page__title"><%= pageTitle %></h1>
+      </div>
 
       <!-- Shown once a valid Spotify login is present. -->
-      <section class="page__content" data-auth-required></section>
+      <section class="page__content" data-auth-required>
+        <div class="toolbar" id="generate-toolbar">
+          <button type="button" class="button button--primary" id="generate-graph">Generate graph from followed artists</button>
+        </div>
+
+        <!-- Where the progress bar lives until a graph is on screen. -->
+        <div id="status-slot"></div>
+
+        <!-- Once a graph exists these float over it, in the page's corners. -->
+        <div class="graph-overlay graph-overlay--left" id="overlay-left" hidden>
+          <div class="graph-overlay__row">
+            <button type="button" class="button button--primary" id="update-graph" hidden>Update graph</button>
+            <button type="button" class="button button--ghost" id="clear-graph" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18">
+                <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+              Clear saved data
+            </button>
+            <span class="toolbar__meta" id="last-generated" hidden></span>
+          </div>
+
+          <div class="status-bar" id="graph-status" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+            <div class="status-bar__fill" id="graph-progress"></div>
+            <span class="status-bar__text" id="graph-status-text"></span>
+            <button type="button" class="status-bar__cancel" id="graph-cancel" aria-label="Cancel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          <p class="graph-toast" id="graph-toast" hidden></p>
+        </div>
+
+        <div class="graph-overlay graph-overlay--right" id="overlay-right" hidden>
+          <div class="graph-search">
+            <label class="visually-hidden" for="graph-search-input">Search artist</label>
+            <input type="search" id="graph-search-input" class="text-input" placeholder="Search artist" autocomplete="off" />
+            <ul class="picker graph-search__results" id="graph-search-results" hidden></ul>
+          </div>
+
+          <label class="switch graph-overlay__switch">
+            <input type="checkbox" id="genres-toggle" />
+            <span class="switch__track"><span class="switch__thumb"></span></span>
+            <span class="switch__label">Show genres</span>
+          </label>
+
+          <label class="switch graph-overlay__switch">
+            <input type="checkbox" id="concerts-toggle" />
+            <span class="switch__track"><span class="switch__thumb"></span></span>
+            <span class="switch__label">Only artists with concerts</span>
+          </label>
+
+          <label class="switch">
+            <input type="checkbox" id="recommend-toggle" />
+            <span class="switch__track"><span class="switch__thumb"></span></span>
+            <span class="switch__label">Recommended artists</span>
+          </label>
+
+          <div class="graph-stepper" id="recommend-stepper" hidden>
+            <button type="button" class="icon-button graph-stepper__button" id="recommend-prev" aria-label="Previous recommended artist">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <span class="graph-stepper__label" id="recommend-position">–</span>
+            <button type="button" class="icon-button graph-stepper__button" id="recommend-next" aria-label="Next recommended artist">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </div>
+
+          <ul class="legend" id="graph-legend" hidden>
+            <li class="legend__item"><span class="legend__line"></span>Similarity</li>
+            <li class="legend__item"><span class="legend__line legend__line--dashed"></span>Similarity recommended</li>
+            <li class="legend__item"><span class="legend__dot legend__dot--recommended"></span>Recommended</li>
+            <li class="legend__item"><span class="legend__dot legend__dot--badge">3</span>Concerts</li>
+          </ul>
+
+          <ul class="legend legend--genres" id="genre-legend" hidden></ul>
+        </div>
+
+        <div class="notice" id="graph-failed-notice" hidden>
+          <span id="graph-failed-text"></span>
+          <button type="button" class="notice__dismiss" id="graph-failed-dismiss" aria-label="Dismiss">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="empty-state" id="graph-message" hidden></p>
+
+
+        <div class="graph-canvas" id="graph-canvas" hidden>
+          <svg id="graph-svg" role="img" aria-label="Graph of followed artists and their similarities"></svg>
+        </div>
+
+      </section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->
       <section class="empty-state" data-auth-missing>
@@ -18,8 +138,11 @@
       </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
     <script src="/js/storage.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
+    <script src="/js/spotify.js"></script>
+    <script src="/js/followed-artists-graph.js"></script>
   </body>
 </html>

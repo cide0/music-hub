@@ -7,6 +7,7 @@ import { requireEnv } from '../lib/oauth.js';
 const router = Router();
 
 const TICKETMASTER_URL = 'https://app.ticketmaster.com/discovery/v2/events.json';
+const LASTFM_URL = 'https://ws.audioscrobbler.com/2.0/';
 
 /** Ticketmaster returns several sizes; take a reasonably large 16:9 one. */
 function pickImage(images) {
@@ -91,6 +92,103 @@ router.get('/api/concerts', async (req, res) => {
     }
 
     res.json({ artist, events });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Proxies Last.fm's artist.getsimilar so the API key stays server-side.
+ * (Spotify removed its own related-artists endpoint for new apps in 2024,
+ * which is why the similarity data comes from Last.fm.)
+ */
+router.get('/api/similar-artists', async (req, res) => {
+  const artist = String(req.query.artist || '').trim();
+  if (!artist) {
+    res.status(400).json({ error: 'artist is required' });
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      method: 'artist.getsimilar',
+      artist,
+      api_key: requireEnv('LASTFM_API_KEY'),
+      format: 'json',
+      limit: '30',
+    });
+
+    const response = await fetch(`${LASTFM_URL}?${params.toString()}`);
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      // Last.fm reports its own errors in the body, often with status 200.
+      res.status(response.status === 200 ? 502 : response.status).json({
+        error: data.message || `Last.fm request failed (${response.status})`,
+      });
+      return;
+    }
+
+    const similar = (data.similarartists?.artist || [])
+      .map((entry) => entry?.name)
+      .filter(Boolean);
+
+    res.json({ artist, similar });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/*
+ * Last.fm's tags stand in for genres: Spotify's own genre data is empty on the
+ * followed-artists response and its batch /artists endpoint answers 403 for
+ * this app. Tags are user-generated, so the obvious non-genre ones are
+ * filtered out and only reasonably agreed-on tags are kept.
+ */
+const TAG_BLOCKLIST = new Set([
+  'seen live', 'favorites', 'favourites', 'favorite', 'favourite', 'my favorites',
+  'albums i own', 'vinyl', 'awesome', 'cool', 'love', 'beautiful', 'great',
+  'amazing', 'best', 'loved', 'music', 'check out', 'spotify', 'under 2000 listeners',
+  'all', 'live', 'concert', 'male vocalists', 'female vocalists', 'male vocalist',
+  'female vocalist', 'singer-songwriter-ish', 'favorite artists',
+]);
+
+const MIN_TAG_COUNT = 15;
+const MAX_TAGS = 5;
+
+router.get('/api/artist-tags', async (req, res) => {
+  const artist = String(req.query.artist || '').trim();
+  if (!artist) {
+    res.status(400).json({ error: 'artist is required' });
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      method: 'artist.gettoptags',
+      artist,
+      api_key: requireEnv('LASTFM_API_KEY'),
+      format: 'json',
+      autocorrect: '1',
+    });
+
+    const response = await fetch(`${LASTFM_URL}?${params.toString()}`);
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      res.status(response.status === 200 ? 502 : response.status).json({
+        error: data.message || `Last.fm request failed (${response.status})`,
+      });
+      return;
+    }
+
+    const tags = (data.toptags?.tag || [])
+      .filter((tag) => Number(tag?.count) >= MIN_TAG_COUNT)
+      .map((tag) => String(tag.name || '').trim().toLowerCase())
+      .filter((name) => name && !TAG_BLOCKLIST.has(name))
+      .slice(0, MAX_TAGS);
+
+    res.json({ artist, tags });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

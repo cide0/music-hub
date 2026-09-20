@@ -174,13 +174,10 @@ html {
 }
 
 .navbar__tabs {
-  /* Own row underneath brand + actions: seven tabs never fit on one line
-     next to them, and a cut-off tab row is worse than a second row. */
-  order: 3;
   display: flex;
-  flex-basis: 100%;
+  flex: 1;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.125rem;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -192,13 +189,13 @@ html {
 .navbar__tab {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  min-height: 40px;
-  padding: 0.375rem 0.875rem;
+  gap: 0.3125rem;
+  min-height: 38px;
+  padding: 0.375rem 0.6875rem;
   border-radius: var(--radius-pill);
   color: var(--color-text-muted);
   font-weight: 500;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -225,9 +222,22 @@ html {
 
 .navbar__actions {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
   margin-left: auto;
+}
+
+.navbar__actions .icon-button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.navbar__actions .icon-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .navbar__user {
@@ -284,6 +294,286 @@ html {
 }
 
 /* Title left, countdown centred, totals right - all on one baseline. */
+/* With a stored graph, the "generate one" view never appears - not even for
+   the frame before the script runs. */
+.has-graph .page__header,
+.has-graph #generate-toolbar {
+  display: none;
+}
+
+/* The graph page fills the viewport instead of scrolling. */
+.page--graph {
+  position: relative;
+  padding-bottom: 0.5rem;
+}
+
+/* Pinned into the corners of the graph area. */
+.graph-overlay {
+  position: fixed;
+  top: var(--graph-top, 64px);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100vw - 1rem);
+  padding: 0.5rem 0.75rem;
+  /* A little backing, so controls stay readable over nodes and links. */
+  background-color: color-mix(in srgb, var(--color-bg) 80%, transparent);
+}
+
+/* The left group stacks: buttons on top, progress and notices underneath, all
+   as wide as that first row. */
+.graph-overlay--left {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.graph-overlay__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.graph-overlay .status-bar {
+  margin: 0.5rem 0 0;
+}
+
+/* A short-lived note, e.g. "the graph is already up to date". */
+.graph-toast {
+  margin: 0.5rem 0 0;
+  color: var(--color-text-soft);
+  font-size: 0.875rem;
+  transition: opacity 0.6s ease;
+}
+
+.graph-toast--fading {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-toast {
+    transition: none;
+  }
+}
+
+/* Flush against the page edges; only the inner corners are rounded. */
+.graph-overlay--left {
+  left: 0;
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+}
+
+.graph-overlay--right {
+  right: 0;
+  border-radius: var(--radius-card) 0 0 var(--radius-card);
+}
+
+/* The right-hand group stacks: toggle first, legend underneath. Stretching
+   the children lines the legend up with the switch's track. */
+.graph-overlay--right {
+  flex-direction: column;
+  align-items: stretch;
+  /* One column: wrapping would let the search field and toggles sit narrower
+     than the genre list instead of matching the group's width. */
+  flex-wrap: nowrap;
+  /* Never taller than the screen; the genre list scrolls within it. */
+  max-height: calc(100vh - var(--graph-top, 64px) - 1rem);
+}
+
+.graph-overlay__switch {
+  margin-bottom: 0.75rem;
+}
+
+/* Type-ahead over the artists in the graph. */
+.graph-search {
+  position: relative;
+  margin-bottom: 0.75rem;
+}
+
+.graph-search .text-input {
+  width: 100%;
+  min-height: 38px;
+  border-radius: var(--radius-pill);
+}
+
+.graph-search__results {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  right: 0;
+  left: 0;
+  z-index: 3;
+  max-height: 280px;
+  margin: 0;
+  padding: 0.25rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
+}
+
+.graph-search__results .picker__button {
+  min-height: 52px;
+  gap: 0.75rem;
+  font-size: 0.9375rem;
+}
+
+/* The "nothing matches" row keeps the same footprint as a result. */
+.picker__empty {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0.375rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.graph-search__note {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+/* Genre outlines drawn behind the graph. */
+.genre-hull path {
+  fill: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  stroke: var(--color-purple-600);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 7;
+}
+
+.genre-hull text {
+  fill: var(--color-purple-200);
+  font-size: 16px;
+  font-weight: 700;
+  text-anchor: middle;
+  text-transform: capitalize;
+  paint-order: stroke;
+  stroke: var(--color-bg);
+  stroke-width: 5px;
+  pointer-events: none;
+}
+
+/* The genres currently outlined, each one clickable. */
+
+.legend__button {
+  display: flex;
+  /* A long genre name wraps onto a second line instead of stretching the
+     controls; the swatch stays on the first one. */
+  align-items: flex-start;
+  white-space: normal;
+  gap: 0;
+  width: 100%;
+  padding: 0.125rem 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background-color: transparent;
+  color: var(--color-text-soft);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.legend__button:hover {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+/* The genre currently shown on its own. */
+.legend__button--active {
+  background-color: var(--color-purple-800);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.legend__swatch {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  /* Centred in the same column as the other legend symbols; the small top
+     offset keeps it on the first line when a long name wraps. */
+  margin: 2px calc((var(--legend-symbol, 44px) - 14px) / 2) 0;
+}
+
+/* Steps through the recommended artists one at a time. */
+.graph-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+}
+
+.graph-stepper__button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.graph-stepper__button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.graph-stepper__label {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* In the overlay the legend reads as a stacked key: one item per line, each
+   symbol centred in a fixed-width column so every label starts at the same x. */
+.graph-overlay .legend {
+  --legend-symbol: 44px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  margin: 3rem 0 0;
+  overflow: visible;
+}
+
+.graph-overlay .legend--genres {
+  /* Continues the list above it, at the same spacing - not the 3rem offset
+     that separates the first legend from the toggles. */
+  max-width: 260px;
+  margin-top: 0.5rem;
+  /* Takes whatever height is left in the overlay and scrolls inside it, so a
+     long genre list is never cut off. */
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.graph-overlay .legend__item {
+  justify-content: flex-start;
+}
+
+.graph-overlay .legend__line {
+  width: var(--legend-symbol);
+  flex: none;
+}
+
+.graph-overlay .legend__dot {
+  flex: none;
+  margin: 0 calc((var(--legend-symbol) - 18px) / 2);
+}
+
+/* Title, controls and legend sit above the graph. The overlays are excluded:
+   they are positioned against the viewport, not the content column. */
+.page--graph > *:not(.graph-canvas):not(.graph-overlay),
+.page--graph .page__content > *:not(.graph-canvas):not(.graph-overlay) {
+  position: relative;
+  z-index: 1;
+}
+
 .page__header {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -297,12 +587,45 @@ html {
   justify-self: center;
   margin: 0;
   color: var(--color-purple-300);
+  /* A light band sweeping through the text, matching the foil on the cards
+     of concerts the user is attending. */
+  background-image: linear-gradient(
+    115deg,
+    var(--color-purple-300) 0 36%,
+    var(--color-text) 46%,
+    var(--color-purple-100) 54%,
+    var(--color-purple-300) 68% 100%
+  );
+  background-size: 300% 100%;
+  background-position: 100% 0;
   /* A step below the page title next to it. */
   font-size: 1.375rem;
   font-weight: 700;
   /* Equal-width digits, so the seconds don't make the text jitter. */
   font-variant-numeric: tabular-nums;
   text-align: center;
+}
+
+/* Only paint the gradient into the glyphs where that is supported - otherwise
+   the plain purple above stands. */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .page__countdown {
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: text-glare 9s ease-in-out infinite;
+  }
+}
+
+@keyframes text-glare {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page__countdown {
+    animation: none;
+  }
 }
 
 .page__header .page__title {
@@ -584,6 +907,50 @@ html {
   gap: 1rem;
 }
 
+/* Registered so the sheen's position can be animated, not just set. */
+@property --foil-x {
+  syntax: '<percentage>';
+  /* Inherited, so the value JS sets on the card reaches its ::after. */
+  inherits: true;
+  initial-value: 50%;
+}
+
+@property --foil-y {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 50%;
+}
+
+/* Holographic foil sheen: a light source that follows the cursor, over a
+   shifting colour wash. Purely decorative, so it never takes pointer events. */
+.concert-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      circle at var(--foil-x, 50%) var(--foil-y, 50%),
+      color-mix(in srgb, var(--color-text) 30%, transparent),
+      transparent 42%
+    ),
+    linear-gradient(
+      115deg,
+      transparent 18%,
+      color-mix(in srgb, var(--color-purple-400) 42%, transparent) 38%,
+      color-mix(in srgb, var(--color-recommended) 28%, transparent) 52%,
+      color-mix(in srgb, var(--color-purple-200) 38%, transparent) 66%,
+      transparent 84%
+    );
+  background-size: 100% 100%, 260% 260%;
+  background-position: 0 0, var(--foil-x, 50%) var(--foil-y, 50%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
 .concert-card {
   position: relative;
   display: flex;
@@ -611,7 +978,113 @@ html {
   .concert-card--linked:hover {
     transform: translateY(-3px) scale(1.01);
     border-color: var(--color-purple-300);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+    /* Depth, plus a purple glow around the card. */
+    box-shadow:
+      0 10px 28px rgba(0, 0, 0, 0.5),
+      0 0 26px color-mix(in srgb, var(--color-accent) 40%, transparent);
+  }
+
+  .concert-card:hover::after {
+    opacity: 0.55;
+  }
+
+  /* While the cursor is on the card, it drives the sheen instead. */
+  .concert-card--attending:hover::after {
+    animation: none;
+  }
+}
+
+/* A concert the user is going to shimmers on its own: the same sheen at the
+   same strength as on hover, with the highlight sweeping across as though a
+   cursor were moving over it. */
+.concert-card--attending::after {
+  opacity: 0.55;
+  animation: foil-drift 9s ease-in-out infinite;
+}
+
+.concert-card--attending {
+  box-shadow: 0 0 20px color-mix(in srgb, var(--color-accent) 28%, transparent);
+}
+
+/* Glitter: three layers of tiny lights, twinkling out of step so the card
+   sparkles rather than blinking. Decorative only. */
+.concert-card__glitter,
+.concert-card__glitter::before,
+.concert-card__glitter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  opacity: 0;
+  border-radius: inherit;
+  background-image:
+    radial-gradient(ellipse 0.8px 5px at center, var(--color-text) 0, transparent 100%),
+    radial-gradient(ellipse 5px 0.8px at center, var(--color-text) 0, transparent 100%),
+    radial-gradient(ellipse 0.8px 5px at center, var(--color-purple-100) 0, transparent 100%),
+    radial-gradient(ellipse 5px 0.8px at center, var(--color-purple-100) 0, transparent 100%),
+    radial-gradient(ellipse 0.8px 5px at center, var(--color-text) 0, transparent 100%),
+    radial-gradient(ellipse 5px 0.8px at center, var(--color-text) 0, transparent 100%),
+    radial-gradient(ellipse 0.8px 5px at center, var(--color-purple-200) 0, transparent 100%),
+    radial-gradient(ellipse 5px 0.8px at center, var(--color-purple-200) 0, transparent 100%);
+  background-repeat: no-repeat;
+  background-size: 11px 11px;
+  pointer-events: none;
+}
+
+/* Two gradients per star, so each position is listed twice. */
+.concert-card__glitter {
+  background-position: 14% 26%, 14% 26%, 47% 13%, 47% 13%, 72% 34%, 72% 34%, 88% 21%, 88% 21%;
+}
+
+.concert-card__glitter::before {
+  background-position: 22% 71%, 22% 71%, 55% 84%, 55% 84%, 78% 63%, 78% 63%, 35% 45%, 35% 45%;
+}
+
+.concert-card__glitter::after {
+  background-position: 8% 52%, 8% 52%, 63% 57%, 63% 57%, 91% 78%, 91% 78%, 41% 29%, 41% 29%;
+}
+
+.concert-card--attending .concert-card__glitter {
+  animation: glitter 2.9s ease-in-out infinite;
+}
+
+.concert-card--attending .concert-card__glitter::before {
+  animation: glitter 3.7s ease-in-out 0.8s infinite;
+}
+
+.concert-card--attending .concert-card__glitter::after {
+  animation: glitter 4.3s ease-in-out 1.6s infinite;
+}
+
+@keyframes glitter {
+  0%, 100% { opacity: 0; background-size: 6px 6px; }
+  30% { opacity: 0.95; background-size: 13px 13px; }
+  55% { opacity: 0.25; background-size: 8px 8px; }
+  75% { opacity: 0.75; background-size: 11px 11px; }
+}
+
+@keyframes foil-drift {
+  0% { --foil-x: 12%; --foil-y: 28%; }
+  20% { --foil-x: 46%; --foil-y: 14%; }
+  40% { --foil-x: 88%; --foil-y: 42%; }
+  60% { --foil-x: 62%; --foil-y: 82%; }
+  80% { --foil-x: 24%; --foil-y: 62%; }
+  100% { --foil-x: 12%; --foil-y: 28%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .concert-card::after {
+    transition: none;
+  }
+
+  .concert-card--attending::after {
+    animation: none;
+  }
+
+  .concert-card--attending .concert-card__glitter,
+  .concert-card--attending .concert-card__glitter::before,
+  .concert-card--attending .concert-card__glitter::after {
+    animation: none;
   }
 }
 
@@ -1366,4 +1839,209 @@ textarea.text-input {
 
 .favorites-group__concert {
   color: var(--color-purple-200);
+}
+
+/* ------------------------------------------------------------------ graph */
+
+/* The graph fills the whole viewport - the navbar and the page's own controls
+   render over it, and nodes can be panned underneath them. */
+.graph-canvas {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  overflow: hidden;
+  background-color: var(--color-bg);
+  touch-action: none;
+}
+
+.graph-canvas svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.graph-canvas svg:active {
+  cursor: grabbing;
+}
+
+.graph-link {
+  stroke: var(--color-purple-500);
+  stroke-width: 1.5;
+}
+
+.graph-link--dashed {
+  stroke: var(--color-recommended);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 5;
+}
+
+/* Hidden while a single node's connections are being shown. */
+.graph-hidden {
+  display: none;
+}
+
+.graph-node {
+  cursor: grab;
+}
+
+.graph-node:active {
+  cursor: grabbing;
+}
+
+.graph-node__circle {
+  fill: var(--color-primary);
+  stroke: var(--color-purple-300);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.15s ease, stroke 0.15s ease;
+}
+
+/* Only the dot itself grows - hovering the badge grows the badge instead. */
+.graph-node__circle:hover {
+  transform: scale(1.12);
+  stroke: var(--color-purple-100);
+}
+
+.graph-node--recommended .graph-node__circle {
+  fill: var(--color-disabled-bg);
+  stroke: var(--color-recommended);
+}
+
+.graph-node__label {
+  fill: var(--color-text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--color-bg);
+  stroke-width: 3px;
+  /* The name is the link to Spotify, so it has to be clickable. */
+  cursor: pointer;
+}
+
+.graph-node__label:hover {
+  fill: var(--color-purple-200);
+}
+
+/* Recommended artists are named in the same green as their connections. */
+.graph-node--recommended .graph-node__label {
+  fill: var(--color-recommended);
+}
+
+.graph-node--recommended .graph-node__label:hover {
+  fill: var(--color-recommended-dark);
+}
+
+/* Recommended nodes bubble up as they appear. */
+.graph-node--entering .graph-node__circle {
+  animation: node-pop 0.45s ease-out;
+}
+
+@keyframes node-pop {
+  from { transform: scale(0.1); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-node--entering .graph-node__circle {
+    animation: none;
+  }
+}
+
+/* The badge is a link into Concert History, not part of the draggable node. */
+.graph-badge {
+  cursor: pointer;
+}
+
+.graph-badge__inner {
+  transition: transform 0.15s ease;
+}
+
+.graph-badge:hover .graph-badge__inner {
+  transform: scale(1.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-badge__inner {
+    transition: none;
+  }
+}
+
+.graph-badge circle {
+  fill: var(--color-accent);
+  stroke: var(--color-bg);
+  stroke-width: 2;
+}
+
+.graph-badge text {
+  fill: var(--color-text);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* ----------------------------------------------------------------- legend */
+
+.legend {
+  /* One row; on a narrow screen it scrolls sideways rather than stacking. */
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 1.25rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  list-style: none;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.legend::-webkit-scrollbar {
+  display: none;
+}
+
+.legend__item {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend__line {
+  width: 28px;
+  height: 0;
+  /* Same purple as the links it stands for. */
+  border-top: 2px solid var(--color-purple-500);
+}
+
+.legend__line--dashed {
+  border-top-width: 3px;
+  border-top-style: dashed;
+  border-top-color: var(--color-recommended);
+}
+
+.legend__dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.legend__dot--recommended {
+  background-color: var(--color-disabled-bg);
+  border: 2px solid var(--color-recommended);
+}
+
+.legend__dot--badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-accent);
+  color: var(--color-text);
+  font-size: 0.6875rem;
+  font-weight: 700;
 }

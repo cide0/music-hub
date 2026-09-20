@@ -703,6 +703,19 @@ window.MusicHub = window.MusicHub || {};
     body.appendChild(error);
     card.appendChild(body);
 
+    // Three sparkle layers, only visible while the card is one the user is
+    // attending (see .concert-card--attending in the stylesheet).
+    var glitter = el('span', 'concert-card__glitter');
+    glitter.setAttribute('aria-hidden', 'true');
+    card.appendChild(glitter);
+
+    // Feeds the foil sheen the pointer position, as percentages of the card.
+    card.addEventListener('pointermove', function (event) {
+      var rect = card.getBoundingClientRect();
+      card.style.setProperty('--foil-x', ((event.clientX - rect.left) / rect.width * 100) + '%');
+      card.style.setProperty('--foil-y', ((event.clientY - rect.top) / rect.height * 100) + '%');
+    });
+
     if (concert.ticketUrl) {
       var cardLink = el('a', 'concert-card__link');
       cardLink.href = concert.ticketUrl;
