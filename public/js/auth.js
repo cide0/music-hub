@@ -164,15 +164,17 @@ window.MusicHub = window.MusicHub || {};
   function render() {
     var loggedIn = isLoggedIn();
 
+    // Everything marked data-auth-required / data-auth-missing is shown or
+    // hidden by CSS off this class - the head partial already set it before
+    // the first paint, this keeps it correct as the state changes.
+    var root = document.documentElement;
+    root.classList.toggle('is-logged-in', loggedIn);
+    root.classList.toggle('is-logged-out', !loggedIn);
+
     var loginButton = document.getElementById('spotify-login');
-    var userBox = document.getElementById('spotify-user');
     if (loginButton) {
       // Come back to the page the login was started from.
       loginButton.href = '/login?from=' + encodeURIComponent(window.location.pathname);
-      loginButton.hidden = loggedIn;
-    }
-    if (userBox) {
-      userBox.hidden = !loggedIn;
     }
 
     if (loggedIn) {
@@ -181,14 +183,6 @@ window.MusicHub = window.MusicHub || {};
         renderUser(cached);
       }
     }
-
-    // Page-level gating: a page's own content only renders once logged in.
-    document.querySelectorAll('[data-auth-required]').forEach(function (el) {
-      el.hidden = !loggedIn;
-    });
-    document.querySelectorAll('[data-auth-missing]').forEach(function (el) {
-      el.hidden = loggedIn;
-    });
 
     document.dispatchEvent(
       new CustomEvent('musichub:authchange', { detail: { loggedIn: loggedIn } }),

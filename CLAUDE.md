@@ -50,7 +50,11 @@ code server-side and hands the tokens to an inline script that writes them to
 `localStorage` under `spotifyAuth`. `public/js/auth.js` handles expiry checks
 and silent refresh (via `POST /api/spotify/refresh`) and gates page content:
 elements marked `data-auth-required` render only when logged in, while
-`data-auth-missing` shows "Please log in to Spotify first".
+`data-auth-missing` shows "Please log in to Spotify first". The gating itself
+is pure CSS, driven by `.is-logged-in` / `.is-logged-out` on `<html>` — set by
+an inline script in `views/partials/head.ejs` before the first paint, so
+neither state ever flashes. Mark new elements with those attributes rather
+than toggling them from page scripts.
 
 ## Full spec
 

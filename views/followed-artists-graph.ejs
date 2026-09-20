@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="is-logged-out">
   <head>
     <%- include('partials/head') %>
   </head>
@@ -10,7 +10,7 @@
       <h1 class="page__title"><%= pageTitle %></h1>
 
       <!-- Shown once a valid Spotify login is present. -->
-      <section class="page__content" data-auth-required hidden></section>
+      <section class="page__content" data-auth-required></section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->
       <section class="empty-state" data-auth-missing>

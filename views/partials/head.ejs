@@ -1,3 +1,23 @@
+<script>
+  /*
+   * Runs before the page paints, so a logged-in user never sees the
+   * "please log in" state flash by. It only sets a class on <html>;
+   * public/js/auth.js keeps that class up to date afterwards.
+   * The key must stay in sync with AUTH_KEY in public/js/auth.js.
+   */
+  (function () {
+    var loggedIn = false;
+    try {
+      var raw = localStorage.getItem('spotifyAuth');
+      loggedIn = !!(raw && JSON.parse(raw).accessToken);
+    } catch (err) {
+      loggedIn = false;
+    }
+    var root = document.documentElement;
+    root.classList.toggle('is-logged-in', loggedIn);
+    root.classList.toggle('is-logged-out', !loggedIn);
+  })();
+</script>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title><%= pageTitle %> · Music Hub</title>

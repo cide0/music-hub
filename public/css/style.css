@@ -231,6 +231,15 @@ a {
   display: none !important;
 }
 
+/* Login gating. The inline script in the head partial sets .is-logged-in /
+   .is-logged-out on <html> before the first paint, so neither state ever
+   flashes while switching pages. Only the wrong one is hidden, so the other
+   keeps whatever display its own rules give it. */
+.is-logged-out [data-auth-required],
+.is-logged-in [data-auth-missing] {
+  display: none;
+}
+
 /* --------------------------------------------------------- page structure */
 
 .page {

@@ -52,14 +52,14 @@
       </button>
       <input type="file" id="import-file" accept="application/json,.json" hidden />
 
-      <a class="button button--primary navbar__login" id="spotify-login" href="/login" title="Login with Spotify">
+      <a class="button button--primary navbar__login" id="spotify-login" data-auth-missing href="/login" title="Login with Spotify">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="20" height="20">
           <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" />
         </svg>
         <span class="navbar__login-label">Login with Spotify</span>
       </a>
 
-      <a class="navbar__user" id="spotify-user" href="#" title="Open your profile in Spotify" hidden>
+      <a class="navbar__user" id="spotify-user" data-auth-required href="#" title="Open your profile in Spotify">
         <img class="navbar__avatar" id="spotify-avatar" src="" alt="" />
         <span id="spotify-user-name"></span>
       </a>
