@@ -13,11 +13,18 @@ window.MusicHub = window.MusicHub || {};
   'use strict';
 
   var CONCERTS_KEY = 'concertDateFetcher';
-  var PROFILE_KEY = 'spotifyProfile';
   var TIMEZONE = 'Europe/Berlin';
-  // Spotify has no published limit; a short pause keeps a long setlist from
-  // tripping its 429s.
-  var MATCH_DELAY_MS = 100;
+  // Spotify only says it limits over a rolling 30 seconds, per app. A steady
+  // pace keeps a long setlist from tripping its 429s.
+  var MATCH_DELAY_MS = 250;
+  // On a 429 every search waits until Spotify's Retry-After has passed. The
+  // header isn't always readable from the browser, so without it the wait
+  // doubles per attempt instead (2s, 4s, 8s, ...), up to this many tries.
+  var RATE_LIMIT_RETRIES = 5;
+  var RATE_LIMIT_FALLBACK_S = 2;
+  // Anything longer means Spotify has locked the app out for a while - not
+  // worth keeping the page waiting for.
+  var RATE_LIMIT_MAX_WAIT_S = 120;
   var MATCH_CANDIDATES = 5;
   var MANUAL_RESULTS = 10;
   // Spotify accepts at most 100 URIs per add request.
@@ -35,12 +42,15 @@ window.MusicHub = window.MusicHub || {};
   // { type: 'remove', song, index } or { type: 'status', song, from, to }.
   var undoStack = [];
   var redoStack = [];
+  // The playlist dropdown (playlist-picker.js) and what it was filled with.
+  var picker = null;
   var playlists = null;
-  var selectedPlaylistId = null;
-  // Index of the keyboard-highlighted option while the dropdown is open.
-  var activeOption = -1;
   var playlistsLoading = null;
   var adding = false;
+  // No Spotify request goes out before this time (ms) - set by a 429.
+  var rateLimitedUntil = 0;
+  // Ticks the "resuming in Xs" countdown while a pause lasts.
+  var rateLimitTimer = null;
   // How long a fading message stays before it fades, and the fade itself
   // (matches the CSS transition).
   var FADE_AFTER_MS = 6000;
@@ -277,7 +287,7 @@ window.MusicHub = window.MusicHub || {};
     current = null;
     undoStack = [];
     redoStack = [];
-    closePicker(false);
+    picker.close(false);
     hide(els.error);
     hide(els.empty);
     hide(els.setlist);
@@ -823,14 +833,62 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------ Spotify matching */
 
-  /** GET against Spotify, waiting out one 429 before giving up. */
-  function spotifyGet(path, retried) {
-    return MusicHub.auth.spotifyFetch(path).then(function (response) {
-      if (response.status === 429 && !retried) {
-        var seconds = Math.min(Number(response.headers.get('Retry-After')) || 2, 10);
-        return delay(seconds * 1000).then(function () {
-          return spotifyGet(path, true);
-        });
+  function lockedOutMessage() {
+    var minutes = Math.ceil((rateLimitedUntil - Date.now()) / 60000);
+    return 'Spotify is rate-limiting this app for about ' + minutes
+      + (minutes === 1 ? ' minute' : ' minutes') + ' — try again later.';
+  }
+
+  function isLockedOut() {
+    return rateLimitedUntil - Date.now() > RATE_LIMIT_MAX_WAIT_S * 1000;
+  }
+
+  /** Holds every Spotify request back until `seconds` from now. */
+  function pauseRequests(seconds) {
+    rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + seconds * 1000);
+    if (rateLimitTimer || isLockedOut()) {
+      updateAddState();
+      return;
+    }
+    rateLimitTimer = window.setInterval(function () {
+      if (Date.now() >= rateLimitedUntil) {
+        window.clearInterval(rateLimitTimer);
+        rateLimitTimer = null;
+      }
+      updateAddState();
+    }, 1000);
+    updateAddState();
+  }
+
+  /** Resolves once no pause is in effect; fails while Spotify locks us out. */
+  function waitForRateLimit() {
+    if (isLockedOut()) {
+      return Promise.reject(new Error(lockedOutMessage()));
+    }
+    var wait = rateLimitedUntil - Date.now();
+    return wait > 0 ? delay(wait) : Promise.resolve();
+  }
+
+  /**
+   * GET against Spotify. A 429 pauses every request - the whole matching run,
+   * not just this song - so the rolling window actually gets to clear.
+   */
+  function spotifyGet(path, attempt) {
+    attempt = attempt || 0;
+    return waitForRateLimit().then(function () {
+      return MusicHub.auth.spotifyFetch(path);
+    }).then(function (response) {
+      if (response.status === 429) {
+        var header = Number(response.headers.get('Retry-After'));
+        var seconds = header > 0 ? header : RATE_LIMIT_FALLBACK_S * Math.pow(2, attempt);
+        pauseRequests(seconds);
+        if (isLockedOut()) {
+          throw new Error(lockedOutMessage());
+        }
+        if (attempt + 1 >= RATE_LIMIT_RETRIES) {
+          throw new Error('Spotify kept rate-limiting the search — try again in a minute.');
+        }
+        return spotifyGet(path, attempt + 1);
       }
       if (!response.ok) {
         throw new Error('Spotify search failed (' + response.status + ').');
@@ -957,16 +1015,6 @@ window.MusicHub = window.MusicHub || {};
 
   /* -------------------------------------------------------------- playlist */
 
-  function loadUserId() {
-    var profile = MusicHub.storage.read(PROFILE_KEY, null);
-    if (profile && profile.id) {
-      return Promise.resolve(profile.id);
-    }
-    return spotifyGet('/me').then(function (me) {
-      return me.id;
-    });
-  }
-
   /** Only playlists the user can add to: their own and collaborative ones. */
   function loadPlaylists() {
     if (playlistsLoading) {
@@ -974,30 +1022,7 @@ window.MusicHub = window.MusicHub || {};
     }
 
     show(els.playlistMessage, 'Loading your playlists…');
-    playlistsLoading = loadUserId().then(function (userId) {
-      var editable = [];
-
-      function fetchPage(path) {
-        return spotifyGet(path).then(function (data) {
-          (data.items || []).forEach(function (playlist) {
-            if (playlist && (playlist.collaborative || (playlist.owner && playlist.owner.id === userId))) {
-              var images = playlist.images || [];
-              var tracks = playlist.tracks || playlist.items || {};
-              editable.push({
-                id: playlist.id,
-                name: playlist.name,
-                // Largest first; the dropdown only needs a thumbnail.
-                imageUrl: images.length ? images[images.length - 1].url : null,
-                trackCount: typeof tracks.total === 'number' ? tracks.total : null,
-              });
-            }
-          });
-          return data.next ? fetchPage(data.next) : editable;
-        });
-      }
-
-      return fetchPage('/me/playlists?limit=50');
-    }).then(function (list) {
+    playlistsLoading = MusicHub.spotify.getEditablePlaylists().then(function (list) {
       playlists = list;
       renderPlaylists();
     }).catch(function (err) {
@@ -1020,170 +1045,17 @@ window.MusicHub = window.MusicHub || {};
     }
 
     hide(els.playlistMessage);
-    els.pickerList.textContent = '';
-    playlists.forEach(function (playlist, index) {
-      var option = el('li', 'playlist-option');
-      option.id = 'playlist-option-' + index;
-      option.setAttribute('role', 'option');
-      option.setAttribute('aria-selected', 'false');
-      option.appendChild(playlistSummary(playlist));
-      option.addEventListener('click', function () {
-        choosePlaylist(playlist);
-      });
-      option.addEventListener('mousemove', function () {
-        // Hover only highlights - the list scrolls when the user scrolls it.
-        highlightOption(index, false);
-      });
-      els.pickerList.appendChild(option);
-    });
+    picker.setPlaylists(playlists);
+    // The default playlist from Settings starts out selected; picking
+    // another one here still works as usual.
+    if (!picker.selected()) {
+      var fallback = MusicHub.storage.getSetting('setlistDefaultPlaylist', null);
+      if (fallback && fallback.id) {
+        picker.select(fallback.id);
+      }
+    }
     show(els.picker);
     updateAddState();
-  }
-
-  /** Cover, name and song count - used by the options and the closed toggle. */
-  function playlistSummary(playlist) {
-    var summary = el('span', 'playlist-option__summary');
-    if (playlist.imageUrl) {
-      var image = el('img', 'playlist-option__cover');
-      image.src = playlist.imageUrl;
-      image.alt = '';
-      image.loading = 'lazy';
-      summary.appendChild(image);
-    } else {
-      summary.appendChild(el('span', 'playlist-option__cover playlist-option__cover--empty', '♪'));
-    }
-    var text = el('span', 'playlist-option__text');
-    text.appendChild(el('span', 'playlist-option__name', playlist.name));
-    if (playlist.trackCount !== null) {
-      text.appendChild(el('span', 'playlist-option__meta',
-        playlist.trackCount + (playlist.trackCount === 1 ? ' song' : ' songs')));
-    }
-    summary.appendChild(text);
-    return summary;
-  }
-
-  function selectedPlaylist() {
-    return (playlists || []).filter(function (playlist) {
-      return playlist.id === selectedPlaylistId;
-    })[0] || null;
-  }
-
-  function choosePlaylist(playlist) {
-    selectedPlaylistId = playlist.id;
-    els.pickerCurrent.textContent = '';
-    els.pickerCurrent.appendChild(playlistSummary(playlist));
-    Array.prototype.forEach.call(els.pickerList.children, function (option, index) {
-      option.setAttribute('aria-selected', playlists[index].id === playlist.id ? 'true' : 'false');
-    });
-    closePicker(true);
-    updateAddState();
-  }
-
-  function openPicker() {
-    // The list is positioned absolutely, so opening it downwards near the end
-    // of the page would stretch the page. Measure the page first, then open
-    // upwards whenever the list wouldn't fit below the field.
-    var pageHeight = document.documentElement.scrollHeight;
-    els.picker.classList.remove('playlist-picker--up');
-    els.pickerList.hidden = false;
-    var toggleRect = els.pickerToggle.getBoundingClientRect();
-    var listBottom = toggleRect.bottom + window.scrollY + els.pickerList.offsetHeight + 8;
-    var roomAbove = toggleRect.top + window.scrollY;
-    if (listBottom > pageHeight && roomAbove > els.pickerList.offsetHeight) {
-      els.picker.classList.add('playlist-picker--up');
-    }
-    els.pickerToggle.setAttribute('aria-expanded', 'true');
-    var selected = playlists.map(function (playlist) {
-      return playlist.id;
-    }).indexOf(selectedPlaylistId);
-    highlightOption(selected === -1 ? 0 : selected);
-    els.pickerList.focus();
-  }
-
-  function closePicker(refocus) {
-    if (els.pickerList.hidden) {
-      return;
-    }
-    els.pickerList.hidden = true;
-    els.pickerToggle.setAttribute('aria-expanded', 'false');
-    els.pickerList.removeAttribute('aria-activedescendant');
-    if (refocus) {
-      els.pickerToggle.focus();
-    }
-  }
-
-  /**
-   * Marks an option as the active one. With `reveal`, the list scrolls just
-   * far enough to show it - for the keyboard, never for the mouse.
-   */
-  function highlightOption(index, reveal) {
-    var options = els.pickerList.children;
-    if (!options.length) {
-      return;
-    }
-    activeOption = Math.max(0, Math.min(index, options.length - 1));
-    Array.prototype.forEach.call(options, function (option, i) {
-      option.classList.toggle('playlist-option--active', i === activeOption);
-    });
-    var active = options[activeOption];
-    els.pickerList.setAttribute('aria-activedescendant', active.id);
-    if (reveal !== false) {
-      revealOption(active);
-    }
-  }
-
-  /** Scrolls the list itself (never the page) so the option is fully visible. */
-  function revealOption(option) {
-    var list = els.pickerList;
-    // The list is positioned, so offsetTop is measured from its padding edge.
-    var top = option.offsetTop;
-    var bottom = top + option.offsetHeight;
-    var padding = parseFloat(window.getComputedStyle(list).paddingTop) || 0;
-    if (top - padding < list.scrollTop) {
-      list.scrollTop = top - padding;
-    } else if (bottom + padding > list.scrollTop + list.clientHeight) {
-      list.scrollTop = bottom + padding - list.clientHeight;
-    }
-  }
-
-  function onPickerKeydown(event) {
-    var options = els.pickerList.children;
-    var page = 5;
-    switch (event.key) {
-      case 'ArrowDown':
-        highlightOption(activeOption + 1);
-        break;
-      case 'ArrowUp':
-        highlightOption(activeOption - 1);
-        break;
-      case 'PageDown':
-        highlightOption(activeOption + page);
-        break;
-      case 'PageUp':
-        highlightOption(activeOption - page);
-        break;
-      case 'Home':
-        highlightOption(0);
-        break;
-      case 'End':
-        highlightOption(options.length - 1);
-        break;
-      case 'Enter':
-      case ' ':
-        if (playlists[activeOption]) {
-          choosePlaylist(playlists[activeOption]);
-        }
-        break;
-      case 'Escape':
-        closePicker(true);
-        break;
-      case 'Tab':
-        closePicker(false);
-        return;
-      default:
-        return;
-    }
-    event.preventDefault();
   }
 
   function updateAddState() {
@@ -1196,8 +1068,14 @@ window.MusicHub = window.MusicHub || {};
     var unmatched = songs.filter(function (song) { return song.status === 'unmatched'; }).length;
     var ready = songs.filter(function (song) { return song.status === 'matched'; }).length;
 
-    if (!songs.length) {
+    var pause = rateLimitedUntil - Date.now();
+    if (isLockedOut()) {
+      els.matchStatus.textContent = lockedOutMessage();
+    } else if (!songs.length) {
       els.matchStatus.textContent = 'Every song has been removed.';
+    } else if (pending && pause > 0) {
+      els.matchStatus.textContent = 'Spotify is rate-limiting — resuming in ' + Math.ceil(pause / 1000)
+        + 's… ' + (songs.length - pending) + ' of ' + songs.length;
     } else if (pending) {
       els.matchStatus.textContent = 'Matching songs on Spotify… ' + (songs.length - pending) + ' of ' + songs.length;
     } else if (unmatched) {
@@ -1219,11 +1097,11 @@ window.MusicHub = window.MusicHub || {};
       hide(els.playlistHint);
     }
 
-    els.addButton.disabled = adding || !selectedPlaylist() || pending > 0 || unmatched > 0 || ready === 0;
+    els.addButton.disabled = adding || !picker.selected() || pending > 0 || unmatched > 0 || ready === 0;
   }
 
   function addToPlaylist() {
-    var playlist = selectedPlaylist();
+    var playlist = picker.selected();
     if (!current || !playlist || adding) {
       return;
     }
@@ -1316,9 +1194,6 @@ window.MusicHub = window.MusicHub || {};
     els.songList = document.getElementById('song-list');
     els.playlistMessage = document.getElementById('playlist-message');
     els.picker = document.getElementById('playlist-picker');
-    els.pickerToggle = document.getElementById('playlist-picker-toggle');
-    els.pickerCurrent = document.getElementById('playlist-picker-current');
-    els.pickerList = document.getElementById('playlist-picker-list');
     els.addButton = document.getElementById('playlist-add-button');
     els.playlistHint = document.getElementById('playlist-hint');
     els.playlistError = document.getElementById('playlist-error');
@@ -1341,25 +1216,7 @@ window.MusicHub = window.MusicHub || {};
       event.preventDefault();
       runSearch(els.artistInput.value, els.cityInput.value, els.searchButton, null);
     });
-    els.pickerToggle.addEventListener('click', function () {
-      if (els.pickerList.hidden) {
-        openPicker();
-      } else {
-        closePicker(true);
-      }
-    });
-    els.pickerToggle.addEventListener('keydown', function (event) {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        openPicker();
-      }
-    });
-    els.pickerList.addEventListener('keydown', onPickerKeydown);
-    document.addEventListener('click', function (event) {
-      if (!els.picker.contains(event.target)) {
-        closePicker(false);
-      }
-    });
+    picker = MusicHub.playlistPicker.create(els.picker, { onChange: updateAddState });
     els.addButton.addEventListener('click', addToPlaylist);
     // Throws the whole setlist away - matching stops, edits and history go.
     els.closeButton = document.getElementById('setlist-close');

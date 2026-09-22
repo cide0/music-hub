@@ -22,6 +22,10 @@ database**, and the service sleeps/restarts, so no server-side state survives).
   (`localStorage`) — there is no database and no server-side session store.
   Go through `public/js/storage.js`, and add any new app-data key to its
   `APP_DATA_KEYS` list so Export/Import keeps working.
+- User settings (the Settings page, `/settings`, behind the navbar's gear icon)
+  all live under the one `settings` key — read and write them with
+  `MusicHub.storage.getSetting` / `setSetting`, never a key of their own, so
+  every setting travels with Export/Import.
 - All colors come from the CSS custom properties in `public/css/variables.css` —
   never hard-code hex values elsewhere.
 - Every page must work on mobile too (responsive grids, tabs collapsing into the
@@ -45,6 +49,7 @@ views/               EJS pages + partials/ (head, navbar)
 public/css/          variables.css (palette) + style.css
 public/js/           storage.js, navbar.js, auth.js (every page),
                      spotify.js + google.js (shared API helpers),
+                     playlist-picker.js (shared playlist dropdown),
                      <page-name>.js per page
 ```
 

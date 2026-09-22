@@ -421,6 +421,54 @@ window.MusicHub = window.MusicHub || {};
     return svg;
   }
 
+  // Small hearts floating up in the burst, and how long it lasts overall
+  // (the slowest heart's delay + duration, see .heart-burst in style.css).
+  var BURST_HEARTS = 12;
+  var BURST_MS = 1600;
+
+  /**
+   * Plays a burst of hearts over a media item that was just favorited: one
+   * big heart pops in the middle while small ones float up and fade.
+   * Decorative only - it never takes clicks off the embed underneath.
+   */
+  function playHeartBurst(wrapper) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+    var previous = wrapper.querySelector('.heart-burst');
+    if (previous) {
+      previous.parentNode.removeChild(previous);
+    }
+
+    var burst = el('div', 'heart-burst');
+    burst.setAttribute('aria-hidden', 'true');
+
+    var big = heartIcon(true);
+    big.setAttribute('class', 'heart-burst__big');
+    burst.appendChild(big);
+
+    for (var i = 0; i < BURST_HEARTS; i++) {
+      var small = heartIcon(true);
+      small.setAttribute('class', 'heart-burst__small');
+      // Spread across the item, each a little different in size, drift,
+      // tilt and timing so they don't move as one block.
+      small.style.left = (8 + Math.random() * 84) + '%';
+      small.style.setProperty('--size', (14 + Math.random() * 18) + 'px');
+      small.style.setProperty('--drift', ((Math.random() - 0.5) * 60) + 'px');
+      small.style.setProperty('--tilt', ((Math.random() - 0.5) * 50) + 'deg');
+      small.style.animationDelay = (Math.random() * 350) + 'ms';
+      small.style.animationDuration = (900 + Math.random() * 350) + 'ms';
+      burst.appendChild(small);
+    }
+
+    wrapper.appendChild(burst);
+    window.setTimeout(function () {
+      if (burst.parentNode) {
+        burst.parentNode.removeChild(burst);
+      }
+    }, BURST_MS);
+  }
+
   /** Sets a heart button to its on/off appearance, in place. */
   function paintHeart(heart, favorite) {
     heart.textContent = '';
@@ -538,13 +586,16 @@ window.MusicHub = window.MusicHub || {};
 
       card.appendChild(open);
       card.appendChild(button('icon-button folder-card__delete', '✕', function () {
-        if (!window.confirm('Delete "' + artist.artistName + '" and every concert inside it?\n\n'
-          + 'This only removes them from Music Hub - nothing in Google Drive is touched.')) {
-          return;
-        }
-        deleteArtist(data, artist.spotifyArtistId);
-        save();
-        render();
+        confirmRemoval({
+          title: 'Delete “' + artist.artistName + '”?',
+          text: 'This deletes the artist and every concert inside it. It only removes them from '
+            + 'Music Hub - nothing in Google Drive is touched.',
+          action: 'Delete',
+        }, function () {
+          deleteArtist(data, artist.spotifyArtistId);
+          save();
+          render();
+        });
       }));
 
       els.artistsGrid.appendChild(card);
@@ -590,13 +641,16 @@ window.MusicHub = window.MusicHub || {};
       tile.appendChild(rename);
 
       var remove = button('icon-button folder-card__delete', '✕', function () {
-        if (!window.confirm('Delete "' + concert.name + '" and all of its images and videos?\n\n'
-          + 'This only removes them from Music Hub - nothing in Google Drive is touched.')) {
-          return;
-        }
-        deleteConcert(data, artist.spotifyArtistId, concert.id);
-        save();
-        render();
+        confirmRemoval({
+          title: 'Delete “' + concert.name + '”?',
+          text: 'This deletes the concert and all of its images and videos. It only removes them '
+            + 'from Music Hub - nothing in Google Drive is touched.',
+          action: 'Delete',
+        }, function () {
+          deleteConcert(data, artist.spotifyArtistId, concert.id);
+          save();
+          render();
+        });
       });
       remove.title = 'Delete';
       remove.setAttribute('aria-label', 'Delete ' + concert.name);
@@ -622,6 +676,9 @@ window.MusicHub = window.MusicHub || {};
       var favorite = toggleFavorite(data, currentView.artistId, currentView.concertId, kind, item.id);
       save();
       paintHeart(heart, favorite);
+      if (favorite) {
+        playHeartBurst(wrapper);
+      }
       applyMediaView();
     });
     paintHeart(heart, item.favorite);
@@ -629,18 +686,20 @@ window.MusicHub = window.MusicHub || {};
 
     wrapper.appendChild(button('icon-button media-item__delete', '✕', function () {
       var what = kind === 'images' ? 'image' : 'video';
-      if (!window.confirm('Remove this ' + what + ' from the concert?\n\n'
-        + 'It only disappears from Music Hub - the file itself stays in Google Drive.')) {
-        return;
-      }
-      deleteMedia(data, currentView.artistId, currentView.concertId, kind, item.id);
-      save();
-      // Drop just this element; the rest keep their loaded embeds.
-      wrapper.parentNode.removeChild(wrapper);
-      mediaNodes[kind] = mediaNodes[kind].filter(function (node) {
-        return node.item.id !== item.id;
+      confirmRemoval({
+        title: 'Remove this ' + what + '?',
+        text: 'It only disappears from this concert in Music Hub - the file itself stays in Google Drive.',
+        action: 'Remove',
+      }, function () {
+        deleteMedia(data, currentView.artistId, currentView.concertId, kind, item.id);
+        save();
+        // Drop just this element; the rest keep their loaded embeds.
+        wrapper.parentNode.removeChild(wrapper);
+        mediaNodes[kind] = mediaNodes[kind].filter(function (node) {
+          return node.item.id !== item.id;
+        });
+        applyMediaView();
       });
-      applyMediaView();
     }));
 
     return wrapper;
@@ -786,14 +845,17 @@ window.MusicHub = window.MusicHub || {};
 
     wrapper.appendChild(button('icon-button media-item__delete', '✕', function () {
       var what = entry.kind === 'images' ? 'image' : 'video';
-      if (!window.confirm('Remove this ' + what + ' from "' + group.concertName + '"?\n\n'
-        + 'It only disappears from Music Hub - the file itself stays in Google Drive.')) {
-        return;
-      }
-      deleteMedia(data, group.artistId, group.concertId, entry.kind, entry.item.id);
-      save();
-      wrapper.hidden = true;
-      refreshFavoritesChrome();
+      confirmRemoval({
+        title: 'Remove this ' + what + '?',
+        text: 'It is removed from “' + group.concertName + '” in Music Hub - the file itself stays '
+          + 'in Google Drive.',
+        action: 'Remove',
+      }, function () {
+        deleteMedia(data, group.artistId, group.concertId, entry.kind, entry.item.id);
+        save();
+        wrapper.hidden = true;
+        refreshFavoritesChrome();
+      });
     }));
 
     return wrapper;
@@ -1014,6 +1076,35 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /* ------------------------------------------------------ confirm modal */
+
+  // What the confirm dialog's button does - set each time it opens.
+  var pendingRemoval = null;
+
+  /**
+   * Asks before something is removed, in the page's own dialog rather than
+   * the browser's. `onConfirm` runs only when the user confirms.
+   */
+  function confirmRemoval(options, onConfirm) {
+    pendingRemoval = onConfirm;
+    els.confirmTitle.textContent = options.title;
+    els.confirmText.textContent = options.text;
+    els.confirmSubmit.textContent = options.action || 'Delete';
+    els.confirmDialog.showModal();
+    // Cancel is the safe default for Enter.
+    els.confirmCancel.focus();
+  }
+
+  function submitConfirmDialog(event) {
+    event.preventDefault();
+    var action = pendingRemoval;
+    pendingRemoval = null;
+    els.confirmDialog.close();
+    if (action) {
+      action();
+    }
+  }
+
   /* ------------------------------------------------------------------ init */
 
   /* --------------------------------------------------- concert name modal */
@@ -1138,6 +1229,11 @@ window.MusicHub = window.MusicHub || {};
     els.concertError = document.getElementById('concert-name-error');
     els.concertSubmit = document.getElementById('concert-submit');
     els.mediaDialog = document.getElementById('media-dialog');
+    els.confirmDialog = document.getElementById('confirm-dialog');
+    els.confirmTitle = document.getElementById('confirm-dialog-title');
+    els.confirmText = document.getElementById('confirm-dialog-text');
+    els.confirmSubmit = document.getElementById('confirm-submit');
+    els.confirmCancel = document.getElementById('confirm-cancel');
     els.mediaTitle = document.getElementById('media-dialog-title');
     els.mediaInput = document.getElementById('media-input');
     els.mediaError = document.getElementById('media-error');
@@ -1175,6 +1271,15 @@ window.MusicHub = window.MusicHub || {};
     });
     closeOnBackdropClick(els.concertDialog);
     closeOnBackdropClick(els.mediaDialog);
+    closeOnBackdropClick(els.confirmDialog);
+    document.getElementById('confirm-form').addEventListener('submit', submitConfirmDialog);
+    els.confirmCancel.addEventListener('click', function () {
+      els.confirmDialog.close();
+    });
+    // However it closes - Cancel, Escape, the backdrop - nothing is removed.
+    els.confirmDialog.addEventListener('close', function () {
+      pendingRemoval = null;
+    });
 
     document.getElementById('concert-form').addEventListener('submit', submitConcertDialog);
     document.getElementById('concert-cancel').addEventListener('click', function () {

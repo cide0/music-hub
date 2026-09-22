@@ -57,6 +57,13 @@
      with no Spotify match yet). */
   --color-warning: #F5C451;
 
+  /* Google's own logo colours, for the "G" on the Settings page - a brand
+     mark, so it keeps them rather than taking the palette's. */
+  --color-google-blue: #4285F4;
+  --color-google-red: #EA4335;
+  --color-google-yellow: #FBBC05;
+  --color-google-green: #34A853;
+
   /* Shared layout tokens */
   --font-size-page-title: 1.75rem;
   --radius-pill: 999px;

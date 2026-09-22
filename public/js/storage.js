@@ -1,5 +1,5 @@
 /*
- * localStorage access for Music Hub, plus the navbar's Export / Import data
+ * localStorage access for Music Hub, plus the Settings page's Export / Import data
  * feature. There is no database - this file is the whole persistence layer.
  */
 window.MusicHub = window.MusicHub || {};
@@ -14,7 +14,11 @@ window.MusicHub = window.MusicHub || {};
     'followedArtistsGraph',
     'concertHistory',
     'discogsVinylReleases',
+    // The user's choices on the Settings page - see getSetting / setSetting.
+    'settings',
   ];
+
+  var SETTINGS_KEY = 'settings';
 
   var BACKUP_FILENAME = 'music-hub-backup.json';
 
@@ -44,6 +48,32 @@ window.MusicHub = window.MusicHub || {};
     } catch (err) {
       console.warn('Could not remove "' + key + '" from localStorage', err);
     }
+  }
+
+  /**
+   * One value from the user's settings, all of which live together under the
+   * `settings` key so Export / Import carries them across devices.
+   */
+  function getSetting(name, fallback) {
+    var settings = read(SETTINGS_KEY, null);
+    if (!settings || typeof settings !== 'object' || !(name in settings)) {
+      return fallback;
+    }
+    return settings[name];
+  }
+
+  /** Saves one setting; null or undefined removes it. */
+  function setSetting(name, value) {
+    var settings = read(SETTINGS_KEY, null);
+    if (!settings || typeof settings !== 'object') {
+      settings = {};
+    }
+    if (value === null || value === undefined) {
+      delete settings[name];
+    } else {
+      settings[name] = value;
+    }
+    return write(SETTINGS_KEY, settings);
   }
 
   function collectAppData() {
@@ -133,6 +163,8 @@ window.MusicHub = window.MusicHub || {};
     read: read,
     write: write,
     remove: remove,
+    getSetting: getSetting,
+    setSetting: setSetting,
     collectAppData: collectAppData,
     exportData: exportData,
     importDataFromFile: importDataFromFile,

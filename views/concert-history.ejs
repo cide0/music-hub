@@ -97,6 +97,19 @@
           </form>
         </dialog>
 
+        <!-- Asks before anything is removed; filled in by confirmRemoval(). -->
+        <dialog class="modal modal--confirm" id="confirm-dialog" aria-labelledby="confirm-dialog-title"
+          aria-describedby="confirm-dialog-text">
+          <form class="modal__form" id="confirm-form">
+            <h2 class="modal__title" id="confirm-dialog-title">Delete?</h2>
+            <p class="modal__hint" id="confirm-dialog-text"></p>
+            <div class="modal__actions">
+              <button type="button" class="button button--ghost" id="confirm-cancel">Cancel</button>
+              <button type="submit" class="button button--danger" id="confirm-submit">Delete</button>
+            </div>
+          </form>
+        </dialog>
+
         <dialog class="modal" id="media-dialog">
           <form class="modal__form" id="media-form">
             <h2 class="modal__title" id="media-dialog-title">Add media</h2>
@@ -106,7 +119,7 @@
             <label class="switch">
               <input type="checkbox" id="media-is-video" checked />
               <span class="switch__track"><span class="switch__thumb"></span></span>
-              <span class="switch__label">These are videos</span>
+              <span class="switch__label">Videos</span>
             </label>
             <label class="visually-hidden" for="media-input">Google Drive links or embed codes</label>
             <textarea id="media-input" class="text-input" rows="6"

@@ -69,7 +69,14 @@
         <div class="graph-overlay graph-overlay--right" id="overlay-right" hidden>
           <div class="graph-search">
             <label class="visually-hidden" for="graph-search-input">Search artist</label>
-            <input type="search" id="graph-search-input" class="text-input" placeholder="Search artist" autocomplete="off" />
+            <div class="input-clear">
+              <input type="text" id="graph-search-input" class="text-input" placeholder="Search artist" autocomplete="off" />
+              <button type="button" class="input-clear__button" id="graph-search-clear" aria-label="Clear search" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
             <ul class="picker graph-search__results" id="graph-search-results" hidden></ul>
           </div>
 

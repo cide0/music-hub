@@ -43,6 +43,8 @@ window.MusicHub = window.MusicHub || {};
   var activeRun = null;
   // Pending timeout of the node-by-node reveal after a (re)build.
   var revealTimer = null;
+  // The running move into (or out of) the genre layout, if any.
+  var layoutTween = null;
 
   function startRun(kind) {
     activeRun = { kind: kind, cancelled: false, controller: new AbortController() };
@@ -1225,7 +1227,7 @@ window.MusicHub = window.MusicHub || {};
           return (d.followed ? 28 : 22) + 160;
         }).iterations(2));
       view.simulation.force('link').strength(0.12).distance(dense ? 380 : 560);
-      view.simulation.alpha(0.5).restart();
+      moveToLayout(0.5);
       return;
     }
 
@@ -1290,14 +1292,83 @@ window.MusicHub = window.MusicHub || {};
       }).strength(0.15));
 
     view.simulation.force('link').strength(0);
-    view.simulation.alpha(0.9).restart();
+    moveToLayout(0.9);
 
     // Bring the whole pack into view.
     var scale = Math.max(0.02, Math.min(1, Math.min(width, height) / (2.2 * bounds.r)));
-    view.svg.transition().duration(600).call(view.zoom.transform, window.d3.zoomIdentity
+    view.svg.transition().duration(LAYOUT_TWEEN_MS).call(view.zoom.transform, window.d3.zoomIdentity
       .translate(width / 2, height / 2)
       .scale(scale)
       .translate(-width / 2, -height / 2));
+  }
+
+  // How long the nodes take to glide into a new layout.
+  var LAYOUT_TWEEN_MS = 800;
+
+  function stopLayoutTween() {
+    if (layoutTween) {
+      layoutTween.stop();
+      layoutTween = null;
+    }
+  }
+
+  /**
+   * Settles the simulation with its current forces off screen, then glides
+   * every node from where it is to where it ended up. Letting the live
+   * simulation do the move means seconds of hundreds of avatars shoving
+   * through each other, redrawn every tick - the lag when switching genres
+   * on or off. While the graph is still being revealed the live simulation
+   * keeps going instead; the reveal redoes the layout once it's done.
+   */
+  function moveToLayout(alpha) {
+    var simulation = view.simulation;
+    stopLayoutTween();
+
+    if (view.pending.length) {
+      simulation.alpha(alpha).restart();
+      return;
+    }
+
+    simulation.stop();
+    var nodes = view.nodes;
+    var from = nodes.map(function (node) {
+      return { x: node.x, y: node.y };
+    });
+
+    simulation.alpha(alpha);
+    var ticks = Math.ceil(Math.log(simulation.alphaMin() / alpha)
+      / Math.log(1 - simulation.alphaDecay()));
+    simulation.tick(ticks);
+
+    var to = nodes.map(function (node) {
+      node.vx = 0;
+      node.vy = 0;
+      return { x: node.x, y: node.y };
+    });
+
+    var reduceMotion = window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      drawPositions();
+      return;
+    }
+
+    function placeAt(t) {
+      nodes.forEach(function (node, index) {
+        node.x = from[index].x + (to[index].x - from[index].x) * t;
+        node.y = from[index].y + (to[index].y - from[index].y) * t;
+      });
+      drawPositions();
+    }
+
+    placeAt(0);
+    layoutTween = window.d3.timer(function (elapsed) {
+      var t = Math.min(1, elapsed / LAYOUT_TWEEN_MS);
+      placeAt(window.d3.easeCubicInOut(t));
+      if (t === 1) {
+        stopLayoutTween();
+      }
+    });
   }
 
   function setShowGenres(enabled) {
@@ -1410,6 +1481,7 @@ window.MusicHub = window.MusicHub || {};
         // The focused node is the feedback; leave the field ready for the
         // next search.
         els.searchInput.value = '';
+        els.searchClear.hidden = true;
         closeSearchResults();
         focusNode(node);
       });
@@ -1611,8 +1683,25 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /** Builds the canvas, the simulation and everything in it, from scratch. */
+  /** Moves the drawn nodes, links and outlines to the nodes' positions. */
+  function drawPositions() {
+    if (!selection) {
+      return;
+    }
+    selection.link
+      .attr('x1', function (d) { return d.source.x; })
+      .attr('y1', function (d) { return d.source.y; })
+      .attr('x2', function (d) { return d.target.x; })
+      .attr('y2', function (d) { return d.target.y; });
+    selection.node.attr('transform', function (d) {
+      return 'translate(' + d.x + ',' + d.y + ')';
+    });
+    updateHulls();
+  }
+
   function drawGraph(nodes, links) {
     stopReveal();
+    stopLayoutTween();
     var svg = window.d3.select(els.svg);
     svg.selectAll('*').remove();
     selection = null;
@@ -1670,20 +1759,7 @@ window.MusicHub = window.MusicHub || {};
       .force('collide', window.d3.forceCollide(function (d) {
         return (d.followed ? 28 : 22) + 160;
       }).iterations(2))
-      .on('tick', function () {
-        if (!selection) {
-          return;
-        }
-        selection.link
-          .attr('x1', function (d) { return d.source.x; })
-          .attr('y1', function (d) { return d.source.y; })
-          .attr('x2', function (d) { return d.target.x; })
-          .attr('y2', function (d) { return d.target.y; });
-        selection.node.attr('transform', function (d) {
-          return 'translate(' + d.x + ',' + d.y + ')';
-        });
-        updateHulls();
-      });
+      .on('tick', drawPositions);
 
     view = {
       svg: svg,
@@ -1948,6 +2024,7 @@ window.MusicHub = window.MusicHub || {};
     group.call(window.d3.drag()
       .clickDistance(4)
       .on('start', function (event, d) {
+        stopLayoutTween();
         if (!event.active) {
           view.simulation.alphaTarget(0.25).restart();
         }
@@ -1968,6 +2045,7 @@ window.MusicHub = window.MusicHub || {};
       event.stopPropagation();
       d.fx = null;
       d.fy = null;
+      stopLayoutTween();
       view.simulation.alphaTarget(0.25).restart();
       window.setTimeout(function () {
         view.simulation.alphaTarget(0);
@@ -2014,6 +2092,7 @@ window.MusicHub = window.MusicHub || {};
 
     view.simulation.nodes(view.nodes);
     view.simulation.force('link').links(view.links);
+    stopLayoutTween();
     view.simulation.alpha(0.5).restart();
 
     applyVisibility();
@@ -2152,7 +2231,7 @@ window.MusicHub = window.MusicHub || {};
     concertsOnly = enabled;
     var shown = applyVisibility();
     if (enabled && !shown) {
-      setMessage('No artists with concerts in Concert History yet.');
+      setMessage('No artists with concerts in Concert Gallery yet.');
     }
   }
 
@@ -2188,6 +2267,7 @@ window.MusicHub = window.MusicHub || {};
     els.genreLegend = document.getElementById('genre-legend');
     els.generateToolbar = document.getElementById('generate-toolbar');
     els.searchInput = document.getElementById('graph-search-input');
+    els.searchClear = document.getElementById('graph-search-clear');
     els.searchResults = document.getElementById('graph-search-results');
     els.stepper = document.getElementById('recommend-stepper');
     els.stepperLabel = document.getElementById('recommend-position');
@@ -2300,7 +2380,17 @@ window.MusicHub = window.MusicHub || {};
       setShowGenres(true);
     });
 
-    els.searchInput.addEventListener('input', renderSearchResults);
+    els.searchInput.addEventListener('input', function () {
+      // The ✕ shows only while there's something to clear.
+      els.searchClear.hidden = !els.searchInput.value;
+      renderSearchResults();
+    });
+    els.searchClear.addEventListener('click', function () {
+      els.searchInput.value = '';
+      els.searchClear.hidden = true;
+      closeSearchResults();
+      els.searchInput.focus();
+    });
     els.searchInput.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') {
         closeSearchResults();
