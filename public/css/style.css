@@ -461,13 +461,14 @@ button[aria-disabled='true'] {
 
 .genre-hull text {
   fill: var(--color-purple-200);
-  font-size: 16px;
   font-weight: 700;
   text-anchor: middle;
+  /* Hangs from its y, so the name starts just below the outline. */
+  dominant-baseline: hanging;
   text-transform: capitalize;
   paint-order: stroke;
   stroke: var(--color-bg);
-  stroke-width: 5px;
+  stroke-width: 8px;
   pointer-events: none;
 }
 
@@ -503,6 +504,20 @@ button[aria-disabled='true'] {
   background-color: var(--color-purple-800);
   color: var(--color-text);
   font-weight: 700;
+}
+
+/* The artist count, pushed to the right-hand edge of the row. */
+.legend__count {
+  flex: none;
+  margin-left: auto;
+  padding: 0 0.5rem 0 0.75rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.legend__button--active .legend__count,
+.legend__button:hover .legend__count {
+  color: var(--color-text-soft);
 }
 
 .legend__swatch {

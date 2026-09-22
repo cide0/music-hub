@@ -31,8 +31,6 @@ window.MusicHub = window.MusicHub || {};
   var showGenres = false;
   // When set, only this genre's artists are shown.
   var focusedGenre = null;
-  // The genre outline kept on screen while a single artist is focused.
-  var outlinedGenre = null;
   // Which nodes the current filters leave on screen, by id.
   var visibleIds = null;
   var toastTimer = null;
@@ -43,6 +41,8 @@ window.MusicHub = window.MusicHub || {};
   var selection = null;
   // The run currently in flight, if any - so it can be cancelled.
   var activeRun = null;
+  // Pending timeout of the node-by-node reveal after a (re)build.
+  var revealTimer = null;
 
   function startRun(kind) {
     activeRun = { kind: kind, cancelled: false, controller: new AbortController() };
@@ -104,9 +104,6 @@ window.MusicHub = window.MusicHub || {};
           imageUrl: artist.imageUrl || null,
           spotifyUrl: artist.spotifyUrl || null,
           genres: Array.isArray(artist.genres) ? artist.genres : [],
-          // Whether the tag lookup has run for this artist - some artists
-          // simply have no tags, and those must not be retried forever.
-          genresChecked: !!artist.genresChecked,
           similarArtistNames: Array.isArray(artist.similarArtistNames) ? artist.similarArtistNames : [],
         };
       }),
@@ -177,28 +174,49 @@ window.MusicHub = window.MusicHub || {};
    * relevance). Genres are very granular, so groups below `minSize` are left
    * out rather than drawing a blob around every two-artist niche.
    */
+  // How many of an artist's top genres it counts towards: enough that an
+  // artist sits in every area it plausibly belongs to, few enough that the
+  // broad tags ("rock", "indie") don't swallow the whole graph.
+  var AREA_GENRES = 3;
+
+  function areaGenres(node) {
+    return (node.genres || []).slice(0, AREA_GENRES);
+  }
+
+  /**
+   * The genre areas. An artist counts towards each of its top genres when
+   * deciding which genres are big enough for an area, but is placed - and
+   * outlined - only in one: its strongest genre that has an area. Otherwise
+   * every multi-genre artist would drag two areas into each other.
+   */
   function genreGroups(nodes, minSize) {
     var threshold = minSize || 3;
-    var byGenre = {};
+    var followed = (nodes || []).filter(function (node) {
+      return node.followed;
+    });
 
-    (nodes || []).forEach(function (node) {
-      if (!node.followed) {
+    var tally = {};
+    followed.forEach(function (node) {
+      areaGenres(node).forEach(function (genre) {
+        tally[genre] = (tally[genre] || 0) + 1;
+      });
+    });
+
+    var byGenre = {};
+    followed.forEach(function (node) {
+      var home = areaGenres(node).filter(function (genre) {
+        return tally[genre] >= threshold;
+      })[0];
+      if (!home) {
         return;
       }
-      var genre = node.genres && node.genres.length ? node.genres[0] : null;
-      if (!genre) {
-        return;
+      if (!byGenre[home]) {
+        byGenre[home] = [];
       }
-      if (!byGenre[genre]) {
-        byGenre[genre] = [];
-      }
-      byGenre[genre].push(node);
+      byGenre[home].push(node);
     });
 
     return Object.keys(byGenre)
-      .filter(function (genre) {
-        return byGenre[genre].length >= threshold;
-      })
       .sort(function (a, b) {
         return byGenre[b].length - byGenre[a].length;
       })
@@ -420,7 +438,9 @@ window.MusicHub = window.MusicHub || {};
       els.lastGenerated.textContent = 'Last generated: '
         + new Intl.DateTimeFormat('de-DE', {
           day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        }).format(new Date(graph.lastGeneratedAt));
+        }).format(new Date(graph.lastGeneratedAt))
+        // Followed artists only - recommendations are kept out of graph.artists.
+        + ' · ' + graph.artists.length + (graph.artists.length === 1 ? ' artist' : ' artists');
       els.lastGenerated.hidden = false;
     } else {
       els.lastGenerated.hidden = true;
@@ -547,8 +567,8 @@ window.MusicHub = window.MusicHub || {};
       // yet, whichever mode this is.
       var jobs = followed.map(function (artist) {
         var previous = cached[artist.id];
-        var tagsKnown = previous
-          && (previous.genresChecked || (previous.genres && previous.genres.length));
+        // An empty answer is asked again next time - Last.fm's tags grow.
+        var tagsKnown = previous && previous.genres && previous.genres.length;
         return {
           artist: artist,
           needSimilar: mode === 'update' ? !previous : true,
@@ -558,13 +578,19 @@ window.MusicHub = window.MusicHub || {};
         return job.needSimilar || job.needTags;
       });
 
-      var toFetch = jobs;
+      var stillFollowed = {};
+      followed.forEach(function (artist) {
+        stillFollowed[artist.id] = true;
+      });
+      var unfollowed = graph.artists.filter(function (artist) {
+        return !stillFollowed[artist.spotifyArtistId];
+      }).length;
 
-      if (mode === 'update' && !toFetch.length) {
+      if (mode === 'update' && !jobs.length && !unfollowed) {
         // Nothing changed, so leave the drawn graph (and its layout) alone -
         // but concert folders may well have been added in the meantime.
         refreshConcertBadges();
-        setMessage('No newly followed artists — the graph is already up to date.');
+        setMessage('No newly followed or unfollowed artists — the graph is already up to date.');
         return null;
       }
 
@@ -589,25 +615,32 @@ window.MusicHub = window.MusicHub || {};
             ? outcome.fetched.tags[artist.id]
             // An empty result is still an answer; keep whatever was cached.
             : ((previous && previous.genres) || []),
-          genresChecked: Object.prototype.hasOwnProperty.call(outcome.fetched.tags, artist.id)
-            || !!(previous && previous.genresChecked),
           similarArtistNames: similar || (previous ? previous.similarArtistNames : []),
         };
       });
 
-      if (outcome.mode === 'update') {
-        // Purely additive: artists already in the graph stay, even if they
-        // were unfollowed in the meantime.
-        var seen = {};
-        artists.forEach(function (artist) {
-          seen[artist.spotifyArtistId] = true;
-        });
-        graph.artists.forEach(function (artist) {
-          if (!seen[artist.spotifyArtistId]) {
-            artists.push(artist);
-          }
-        });
-      }
+      // Built from the current follow list alone, so anyone unfollowed since
+      // the last run drops out of the graph (and their edges with them).
+      var before = {};
+      graph.artists.forEach(function (artist) {
+        before[artist.spotifyArtistId] = true;
+      });
+      var after = {};
+      artists.forEach(function (artist) {
+        after[artist.spotifyArtistId] = true;
+      });
+      var added = artists.filter(function (artist) {
+        return !before[artist.spotifyArtistId];
+      }).length;
+      var removed = graph.artists.filter(function (artist) {
+        return !after[artist.spotifyArtistId];
+      }).length;
+      // Artists that were already here without a genre and got one this time.
+      var tagged = artists.filter(function (artist) {
+        var previous = outcome.cached[artist.id];
+        return previous && !(previous.genres && previous.genres.length)
+          && artist.genres.length;
+      }).length;
 
       graph = {
         lastGeneratedAt: new Date().toISOString(),
@@ -618,7 +651,13 @@ window.MusicHub = window.MusicHub || {};
       };
       save();
       renderControls();
-      render();
+      if (outcome.mode === 'update') {
+        // Only the changed artists come and go; the rest keep their places.
+        updateDrawnGraph();
+        setMessage(changeSummary(added, removed, tagged));
+      } else {
+        render();
+      }
       showFailed(outcome.fetched.failed);
     }).catch(function (err) {
       if (!run.cancelled) {
@@ -833,7 +872,7 @@ window.MusicHub = window.MusicHub || {};
     }
 
     var known = {};
-    view.nodes.forEach(function (node) {
+    view.nodes.concat(view.pending).forEach(function (node) {
       known[node.id] = true;
     });
 
@@ -847,9 +886,16 @@ window.MusicHub = window.MusicHub || {};
       added += 1;
     });
 
+    var drawn = {};
+    view.nodes.forEach(function (node) {
+      drawn[node.id] = true;
+    });
+
     recommended.links.forEach(function (link) {
       if (known[link.source] && known[link.target]) {
-        view.links.push({ source: link.source, target: link.target, dashed: true });
+        // Links to an artist still waiting to pop up are drawn once it does.
+        var target = drawn[link.source] && drawn[link.target] ? view.links : view.pendingLinks;
+        target.push({ source: link.source, target: link.target, dashed: true });
       }
     });
 
@@ -872,6 +918,12 @@ window.MusicHub = window.MusicHub || {};
     view.links = view.links.filter(function (link) {
       return !link.dashed;
     });
+    view.pending = view.pending.filter(function (node) {
+      return node.followed;
+    });
+    view.pendingLinks = view.pendingLinks.filter(function (link) {
+      return !link.dashed;
+    });
 
     recommendIndex = -1;
     setFocus(null);
@@ -882,6 +934,10 @@ window.MusicHub = window.MusicHub || {};
   /* -------------------------------------------------------- genre outlines */
 
   var HULL_PADDING = 90;
+  // Room one artist takes up inside a genre cluster, and the empty space
+  // kept between neighbouring clusters.
+  var GENRE_NODE_AREA = 90 * 90;
+  var GENRE_GAP = 140;
 
   // Colours for the genres currently outlined, by genre name.
   var genreColors = {};
@@ -893,7 +949,11 @@ window.MusicHub = window.MusicHub || {};
    */
   function buildGenreColors(groups) {
     genreColors = {};
-    groups.forEach(function (group, index) {
+    // Handed out in the legend's alphabetical order, so the legend runs
+    // smoothly round the colour wheel.
+    groups.slice().sort(function (a, b) {
+      return a.genre.localeCompare(b.genre);
+    }).forEach(function (group, index) {
       var hue = Math.round((index * 360) / Math.max(1, groups.length));
       genreColors[group.genre] = {
         fill: 'hsl(' + hue + ' 80% 55% / 0.13)',
@@ -931,9 +991,8 @@ window.MusicHub = window.MusicHub || {};
     view.hullGroup.selectAll('g.genre-hull').each(function (group) {
       var element = window.d3.select(this);
 
-      // Either the genre picked in the legend, or the focused artist's own.
-      var onlyGenre = focusedGenre || outlinedGenre;
-      if (onlyGenre && group.genre !== onlyGenre) {
+      // Only the genre picked in the legend, when there is one.
+      if (focusedGenre && group.genre !== focusedGenre) {
         element.attr('display', 'none');
         return;
       }
@@ -968,19 +1027,35 @@ window.MusicHub = window.MusicHub || {};
       }
 
       var centre = window.d3.polygonCentroid(hull);
-      element.attr('display', null);
-      element.select('path').attr('d', line(hull.map(function (point) {
+      var outline = hull.map(function (point) {
         return expandPoint(point, centre, HULL_PADDING);
-      })));
+      });
+      element.attr('display', null);
+      element.select('path').attr('d', line(outline));
+
+      // The name sits just below the area, centred under it. The graph is
+      // viewed well zoomed out, so the size is in graph units: readable at
+      // that zoom, a little larger for the bigger areas.
+      var xs = outline.map(function (point) { return point[0]; });
+      var ys = outline.map(function (point) { return point[1]; });
+      var minX = Math.min.apply(null, xs);
+      var maxX = Math.max.apply(null, xs);
+      element.select('text')
+        .attr('x', (minX + maxX) / 2)
+        .attr('y', Math.max.apply(null, ys) + 24)
+        .attr('font-size', Math.max(40, Math.min(80, (maxX - minX) / 12)));
     });
   }
 
   /** Pans and zooms so one genre's cluster fills the canvas. */
   function focusGenreArea(group) {
+    if (!view) {
+      return;
+    }
     var placed = group.nodes.filter(function (node) {
       return typeof node.x === 'number';
     });
-    if (!view || !placed.length) {
+    if (!placed.length) {
       return;
     }
 
@@ -1012,7 +1087,10 @@ window.MusicHub = window.MusicHub || {};
     els.genreLegend.textContent = '';
     els.genreLegend.hidden = !groups.length;
 
-    groups.forEach(function (group) {
+    // Alphabetical, so a genre is easy to find in a long list.
+    groups.slice().sort(function (a, b) {
+      return a.genre.localeCompare(b.genre);
+    }).forEach(function (group) {
       var colors = genreColor(group.genre);
 
       var item = document.createElement('li');
@@ -1022,6 +1100,7 @@ window.MusicHub = window.MusicHub || {};
       button.type = 'button';
       button.className = 'legend__button';
       button.title = 'Show ' + group.genre + ' (' + group.nodes.length + ' artists)';
+      button.dataset.genre = group.genre;
 
       var swatch = document.createElement('span');
       swatch.className = 'legend__swatch';
@@ -1032,6 +1111,12 @@ window.MusicHub = window.MusicHub || {};
       var label = document.createElement('span');
       label.textContent = group.genre;
       button.appendChild(label);
+
+      // How many artists are in the area.
+      var count = document.createElement('span');
+      count.className = 'legend__count';
+      count.textContent = group.nodes.length;
+      button.appendChild(count);
 
       button.addEventListener('click', function () {
         setFocusedGenre(focusedGenre === group.genre ? null : group.genre, group);
@@ -1052,7 +1137,6 @@ window.MusicHub = window.MusicHub || {};
    */
   function setFocusedGenre(genre, group) {
     focusedGenre = genre;
-    outlinedGenre = null;
     setFocus(null);
     applyVisibility();
     updateHulls();
@@ -1061,7 +1145,7 @@ window.MusicHub = window.MusicHub || {};
       els.genreLegend.querySelectorAll('.legend__button'),
       function (button) {
         button.classList.toggle('legend__button--active',
-          !!genre && button.textContent === genre);
+          !!genre && button.dataset.genre === genre);
       },
     );
 
@@ -1091,6 +1175,14 @@ window.MusicHub = window.MusicHub || {};
           })
           .style('stroke', function (d) {
             return genreColor(d.genre).stroke;
+          });
+        // The genre's name, under its area.
+        group.append('text')
+          .style('fill', function (d) {
+            return genreColor(d.genre).label;
+          })
+          .text(function (d) {
+            return d.genre;
           });
         return group;
       });
@@ -1141,49 +1233,71 @@ window.MusicHub = window.MusicHub || {};
     var height = els.canvas.clientHeight || 700;
     var groups = genreGroups(view.nodes, 3);
 
-    // Enough circumference that neighbouring clusters stay apart, without
-    // flinging them to the edges of the canvas.
-    var spacing = 520;
-    var radius = Math.max(
-      Math.min(width, height) * 0.6,
-      (groups.length * spacing) / (2 * Math.PI),
-    );
+    var home = {};
+    groups.forEach(function (group) {
+      group.nodes.forEach(function (node) {
+        home[node.id] = group.genre;
+      });
+    });
+    var loose = view.nodes.filter(function (node) {
+      return !home[node.id];
+    }).length;
+
+    // One circle per genre, sized for its artists, packed so no two touch.
+    // The artists without an area get a circle of their own in the pack, so
+    // they sit alongside the rest instead of drifting off.
+    function clusterRadius(count) {
+      return Math.sqrt((count * GENRE_NODE_AREA) / Math.PI) + HULL_PADDING + GENRE_GAP;
+    }
+    var circles = groups.map(function (group) {
+      return { key: group.genre, r: clusterRadius(group.nodes.length) };
+    });
+    if (loose) {
+      circles.push({ key: null, r: clusterRadius(loose) });
+    }
+    if (!circles.length) {
+      return;
+    }
+    window.d3.packSiblings(circles);
+    var bounds = window.d3.packEnclose(circles);
 
     var anchors = {};
-    groups.forEach(function (group, index) {
-      var angle = (index / Math.max(1, groups.length)) * Math.PI * 2;
-      anchors[group.genre] = {
-        x: width / 2 + Math.cos(angle) * radius,
-        y: height / 2 + Math.sin(angle) * radius,
+    circles.forEach(function (circle) {
+      anchors[circle.key] = {
+        x: width / 2 + circle.x - bounds.x,
+        y: height / 2 + circle.y - bounds.y,
       };
     });
 
+    // Anyone added after this was worked out waits in the middle until the
+    // layout is redone.
     function anchorFor(node) {
-      var genre = node.genres && node.genres.length ? node.genres[0] : null;
-      return genre ? anchors[genre] : null;
+      return anchors[home[node.id] || null] || { x: width / 2, y: height / 2 };
     }
 
     view.simulation
-      // Eased off, so the genre anchors decide where things sit.
-      .force('charge', window.d3.forceManyBody().strength(-260).distanceMax(900))
+      // Only the genre pull and just enough repulsion to keep a cluster from
+      // collapsing onto itself - similarity links don't move anything here.
+      .force('charge', window.d3.forceManyBody().strength(-40).distanceMax(400))
       .force('collide', window.d3.forceCollide(function (d) {
-        return (d.followed ? 28 : 22) + 34;
+        return (d.followed ? 28 : 22) + 14;
       }).iterations(2))
       .force('genreX', window.d3.forceX(function (node) {
-        var anchor = anchorFor(node);
-        return anchor ? anchor.x : width / 2;
-      }).strength(function (node) {
-        return anchorFor(node) ? 0.2 : 0.02;
-      }))
+        return anchorFor(node).x;
+      }).strength(0.15))
       .force('genreY', window.d3.forceY(function (node) {
-        var anchor = anchorFor(node);
-        return anchor ? anchor.y : height / 2;
-      }).strength(function (node) {
-        return anchorFor(node) ? 0.2 : 0.02;
-      }));
+        return anchorFor(node).y;
+      }).strength(0.15));
 
-    view.simulation.force('link').strength(0.05).distance(200);
+    view.simulation.force('link').strength(0);
     view.simulation.alpha(0.9).restart();
+
+    // Bring the whole pack into view.
+    var scale = Math.max(0.02, Math.min(1, Math.min(width, height) / (2.2 * bounds.r)));
+    view.svg.transition().duration(600).call(view.zoom.transform, window.d3.zoomIdentity
+      .translate(width / 2, height / 2)
+      .scale(scale)
+      .translate(-width / 2, -height / 2));
   }
 
   function setShowGenres(enabled) {
@@ -1191,9 +1305,8 @@ window.MusicHub = window.MusicHub || {};
     updateModeToggles();
     if (!enabled) {
       focusedGenre = null;
-      outlinedGenre = null;
-      applyVisibility();
     }
+    applyVisibility();
     renderHulls();
     applyGenreForce();
   }
@@ -1229,12 +1342,9 @@ window.MusicHub = window.MusicHub || {};
       els.concertsToggle.checked = false;
     }
 
+    // With genres on, the areas of the artist and its connections stay
+    // outlined, same as a click on the node.
     setFocus(node.id);
-
-    // With genres on, keep just this artist's genre outlined.
-    outlinedGenre = showGenres && node.genres && node.genres.length ? node.genres[0] : null;
-    updateHulls();
-
     centerOn(node);
   }
 
@@ -1367,14 +1477,7 @@ window.MusicHub = window.MusicHub || {};
     var counts = concertCounts(MusicHub.storage.read(HISTORY_KEY, null));
 
     var nodes = graph.artists.map(function (artist) {
-      return {
-        id: artist.spotifyArtistId,
-        name: artist.name,
-        imageUrl: artist.imageUrl,
-        genres: artist.genres || [],
-        followed: true,
-        concerts: counts[artist.spotifyArtistId] || 0,
-      };
+      return followedNode(artist, counts);
     });
 
     var links = graph.edges.map(function (edge) {
@@ -1412,8 +1515,104 @@ window.MusicHub = window.MusicHub || {};
     drawGraph(nodes, links);
   }
 
+  function followedNode(artist, counts) {
+    return {
+      id: artist.spotifyArtistId,
+      name: artist.name,
+      imageUrl: artist.imageUrl,
+      genres: artist.genres || [],
+      followed: true,
+      concerts: counts[artist.spotifyArtistId] || 0,
+    };
+  }
+
+  /** "Added 3 artists, removed 1 artist" - the toast after an update. */
+  function changeSummary(added, removed, tagged) {
+    function artists(count) {
+      return count + (count === 1 ? ' artist' : ' artists');
+    }
+    var parts = [];
+    if (added) {
+      parts.push('added ' + artists(added));
+    }
+    if (removed) {
+      parts.push('removed ' + artists(removed));
+    }
+    if (tagged) {
+      parts.push('found genres for ' + artists(tagged));
+    }
+    if (!parts.length) {
+      return 'No newly followed or unfollowed artists — the graph is already up to date.';
+    }
+    var text = parts.join(', ');
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  /**
+   * Brings the drawn graph in line with `graph` without rebuilding it:
+   * unfollowed artists (and any recommendations) drop out, newly followed
+   * ones join the reveal queue, and the edges are swapped for the new set.
+   */
+  function updateDrawnGraph() {
+    if (!view) {
+      render();
+      return;
+    }
+
+    var counts = concertCounts(MusicHub.storage.read(HISTORY_KEY, null));
+    var wanted = {};
+    graph.artists.forEach(function (artist) {
+      wanted[artist.spotifyArtistId] = artist;
+    });
+
+    function keep(node) {
+      return node.followed && wanted[node.id];
+    }
+    view.nodes = view.nodes.filter(keep);
+    view.pending = view.pending.filter(keep);
+
+    var present = {};
+    view.nodes.concat(view.pending).forEach(function (node) {
+      present[node.id] = true;
+      // Genres may have been fetched in this run.
+      node.genres = wanted[node.id].genres || [];
+      node.name = wanted[node.id].name;
+    });
+    graph.artists.forEach(function (artist) {
+      if (!present[artist.spotifyArtistId]) {
+        view.pending.push(followedNode(artist, counts));
+      }
+    });
+
+    view.links = [];
+    view.pendingLinks = graph.edges.map(function (edge) {
+      return { source: edge[0], target: edge[1], dashed: false };
+    });
+    var drawn = {};
+    view.nodes.forEach(function (node) {
+      drawn[node.id] = true;
+    });
+    moveCompletedLinks(drawn);
+
+    if (focusedId && !drawn[focusedId]) {
+      focusedId = null;
+    }
+    recommendIndex = -1;
+    syncGraph();
+    updateStepper();
+
+    if (view.pending.length) {
+      if (!revealTimer) {
+        revealTimer = window.setTimeout(revealStep, view.revealDelay);
+      }
+    } else if (showGenres) {
+      applyGenreForce();
+    }
+  }
+
   /** Builds the canvas, the simulation and everything in it, from scratch. */
   function drawGraph(nodes, links) {
+    stopReveal();
     var svg = window.d3.select(els.svg);
     svg.selectAll('*').remove();
     selection = null;
@@ -1459,8 +1658,9 @@ window.MusicHub = window.MusicHub || {};
     var linkDistance = dense ? 380 : 560;
     var charge = dense ? -3600 : -7000;
 
-    var simulation = window.d3.forceSimulation(nodes)
-      .force('link', window.d3.forceLink(links).id(function (d) {
+    // Starts empty: revealStep() feeds the nodes in one at a time.
+    var simulation = window.d3.forceSimulation([])
+      .force('link', window.d3.forceLink([]).id(function (d) {
         return d.id;
       }).distance(linkDistance).strength(0.12))
       .force('charge', window.d3.forceManyBody().strength(charge).distanceMax(5000))
@@ -1493,11 +1693,134 @@ window.MusicHub = window.MusicHub || {};
       linkGroup: root.append('g'),
       nodeGroup: root.append('g'),
       simulation: simulation,
-      nodes: nodes,
-      links: links,
+      nodes: [],
+      links: [],
+      // Not on screen yet; revealStep() moves them over.
+      pending: revealOrder(nodes, links),
+      pendingLinks: links,
     };
 
+    // Dropping a few hundred avatars and a fully loaded simulation in at once
+    // stalls the page, so the nodes pop up a couple at a time instead -
+    // quicker per step the bigger the graph, so the whole reveal stays short.
+    view.revealDelay = Math.max(15, Math.min(60, 5000 / nodes.length));
+    revealStep();
+  }
+
+  function stopReveal() {
+    if (revealTimer) {
+      window.clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+  }
+
+  /**
+   * Breadth-first from the best-connected artist, so each node that appears
+   * joins something already on screen and the graph grows outward.
+   */
+  function revealOrder(nodes, links) {
+    var byId = {};
+    var neighbours = {};
+    nodes.forEach(function (node) {
+      byId[node.id] = node;
+      neighbours[node.id] = [];
+    });
+    links.forEach(function (link) {
+      var ends = linkEnds(link);
+      if (neighbours[ends[0]] && neighbours[ends[1]]) {
+        neighbours[ends[0]].push(ends[1]);
+        neighbours[ends[1]].push(ends[0]);
+      }
+    });
+
+    var starts = nodes.slice().sort(function (a, b) {
+      return neighbours[b.id].length - neighbours[a.id].length;
+    });
+    var seen = {};
+    var order = [];
+    starts.forEach(function (start) {
+      if (seen[start.id]) {
+        return;
+      }
+      seen[start.id] = true;
+      var queue = [start.id];
+      while (queue.length) {
+        var id = queue.shift();
+        order.push(byId[id]);
+        neighbours[id].forEach(function (next) {
+          if (!seen[next]) {
+            seen[next] = true;
+            queue.push(next);
+          }
+        });
+      }
+    });
+    return order;
+  }
+
+  // Nodes added per reveal step.
+  var REVEAL_BATCH = 2;
+
+  /** Moves the next pending nodes (and any links they complete) on screen. */
+  function revealStep() {
+    revealTimer = null;
+    if (!view || !view.pending.length) {
+      return;
+    }
+
+    var placed = {};
+    view.nodes.forEach(function (existing) {
+      placed[existing.id] = existing;
+    });
+
+    view.pending.splice(0, REVEAL_BATCH).forEach(function (node) {
+      placeNode(node, placed);
+    });
+    moveCompletedLinks(placed);
+
     syncGraph();
+
+    if (view.pending.length) {
+      revealTimer = window.setTimeout(revealStep, view.revealDelay);
+    } else if (showGenres) {
+      // The genre anchors were worked out from a partial graph.
+      applyGenreForce();
+    }
+  }
+
+  /** Draws the pending links whose ends are both on screen now. */
+  function moveCompletedLinks(placed) {
+    view.pendingLinks = view.pendingLinks.filter(function (link) {
+      var ends = linkEnds(link);
+      if (placed[ends[0]] && placed[ends[1]]) {
+        view.links.push(link);
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /** Adds one node to the drawn set, next to a neighbour already on screen. */
+  function placeNode(node, placed) {
+    // Start it next to a neighbour that is already there, rather than
+    // letting it fly in from the middle of the canvas.
+    var anchor = null;
+    view.pendingLinks.forEach(function (link) {
+      var ends = linkEnds(link);
+      if (!anchor && ends[0] === node.id && placed[ends[1]]) {
+        anchor = placed[ends[1]];
+      } else if (!anchor && ends[1] === node.id && placed[ends[0]]) {
+        anchor = placed[ends[0]];
+      }
+    });
+    if (anchor && anchor.x != null) {
+      node.x = anchor.x + (Math.random() - 0.5) * 120;
+      node.y = anchor.y + (Math.random() - 0.5) * 120;
+    }
+
+    node.entering = true;
+    view.nodes.push(node);
+    placed[node.id] = node;
   }
 
   function nodeRadius(d) {
@@ -1590,10 +1913,13 @@ window.MusicHub = window.MusicHub || {};
         return d.imageUrl ? 'url(#avatar-' + d.id + ')' : null;
       })
       .on('click', function (event, d) {
-        // Show this artist and whoever it is connected to, on their own.
+        // Show this artist and whoever it is connected to, on their own -
+        // across all genres, even when one was picked in the legend.
         event.stopPropagation();
+        if (focusedGenre) {
+          setFocusedGenre(null);
+        }
         setFocus(focusedId === d.id ? null : d.id);
-        updateHulls();
       });
 
     group.append('text')
@@ -1684,12 +2010,23 @@ window.MusicHub = window.MusicHub || {};
 
     selection = { node: node, link: link, links: view.links };
     renderHulls();
+    updateRecommendedLegend();
 
     view.simulation.nodes(view.nodes);
     view.simulation.force('link').links(view.links);
     view.simulation.alpha(0.5).restart();
 
     applyVisibility();
+  }
+
+  /** The recommended entries in the legend only while recommendations are on. */
+  function updateRecommendedLegend() {
+    var shown = !!view && view.nodes.concat(view.pending).some(function (node) {
+      return !node.followed;
+    });
+    els.legend.querySelectorAll('[data-legend-recommended]').forEach(function (item) {
+      item.hidden = !shown;
+    });
   }
 
   function linkEnds(link) {
@@ -1734,16 +2071,26 @@ window.MusicHub = window.MusicHub || {};
     var visible = {};
     var shown = 0;
 
+    // A genre picked in the legend shows just the artists inside its area.
+    var genreMembers = null;
+    if (focusedGenre) {
+      genreMembers = {};
+      genreGroups(view.nodes, 3).forEach(function (group) {
+        if (group.genre === focusedGenre) {
+          group.nodes.forEach(function (node) {
+            genreMembers[node.id] = true;
+          });
+        }
+      });
+    }
+
     view.nodes.forEach(function (node) {
       var ok = true;
       if (concertsOnly && node.followed && !(node.concerts > 0)) {
         ok = false;
       }
-      if (focusedGenre) {
-        var primary = node.genres && node.genres.length ? node.genres[0] : null;
-        if (primary !== focusedGenre) {
-          ok = false;
-        }
+      if (genreMembers && !genreMembers[node.id]) {
+        ok = false;
       }
       if (focused && !focused[node.id]) {
         ok = false;
@@ -1783,9 +2130,10 @@ window.MusicHub = window.MusicHub || {};
     selection.node.classed('graph-hidden', function (d) {
       return !visible[d.id];
     });
+    // ...and none of the connections, which would only clutter the one area.
     selection.link.classed('graph-hidden', function (link) {
       var ends = linkEnds(link);
-      return !(visible[ends[0]] && visible[ends[1]]);
+      return !!focusedGenre || !(visible[ends[0]] && visible[ends[1]]);
     });
 
     return shown;
@@ -1793,9 +2141,6 @@ window.MusicHub = window.MusicHub || {};
 
   function setFocus(id) {
     focusedId = id;
-    if (!id) {
-      outlinedGenre = null;
-    }
     applyVisibility();
     updateHulls();
   }

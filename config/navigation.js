@@ -1,7 +1,7 @@
 // Single source of truth for the navbar tabs, used by every page route.
 export const tabs = [
   { label: 'Concerts', title: 'Upcoming concerts', href: '/concert-date-fetcher', external: false },
-  { label: 'Artists Graph', href: '/followed-artists-graph', external: false },
+  { label: 'Artist Graph', href: '/followed-artists-graph', external: false },
   { label: 'Setlist Fetcher', href: '/setlist-fetcher', external: false },
   { label: 'Concert History', href: '/concert-history', external: false },
   { label: 'Discogs', href: '/discogs', external: false },

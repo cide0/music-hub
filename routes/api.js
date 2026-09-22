@@ -153,7 +153,9 @@ const TAG_BLOCKLIST = new Set([
   'female vocalist', 'singer-songwriter-ish', 'favorite artists',
 ]);
 
-const MIN_TAG_COUNT = 15;
+// Last.fm weighs each tag 0-100 for the artist. Low enough that smaller
+// artists, whose tags all score weakly, still get a genre.
+const MIN_TAG_COUNT = 5;
 const MAX_TAGS = 5;
 
 router.get('/api/artist-tags', async (req, res) => {
@@ -182,11 +184,19 @@ router.get('/api/artist-tags', async (req, res) => {
       return;
     }
 
-    const tags = (data.toptags?.tag || [])
-      .filter((tag) => Number(tag?.count) >= MIN_TAG_COUNT)
-      .map((tag) => String(tag.name || '').trim().toLowerCase())
-      .filter((name) => name && !TAG_BLOCKLIST.has(name))
-      .slice(0, MAX_TAGS);
+    const usable = (data.toptags?.tag || [])
+      .map((tag) => ({
+        name: String(tag?.name || '').trim().toLowerCase(),
+        count: Number(tag?.count) || 0,
+      }))
+      .filter((tag) => tag.name && !TAG_BLOCKLIST.has(tag.name));
+
+    let tags = usable.filter((tag) => tag.count >= MIN_TAG_COUNT);
+    // Nothing clears the bar: the strongest remaining tag beats no genre.
+    if (!tags.length && usable.length) {
+      tags = usable.slice(0, 1);
+    }
+    tags = tags.slice(0, MAX_TAGS).map((tag) => tag.name);
 
     res.json({ artist, tags });
   } catch (err) {
