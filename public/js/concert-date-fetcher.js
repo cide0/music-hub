@@ -26,6 +26,12 @@ window.MusicHub = window.MusicHub || {};
   // Ticking countdown to the next concert the user is attending.
   var countdownTimer = null;
   var countdownTarget = null;
+  // The self-dismissing note shown after a fetch.
+  var toastTimer = null;
+  // Estimated time left, shown in the progress bar.
+  var eta = null;
+  // Artists whose lookup failed in the last run, for the notice's Retry.
+  var lastFailed = [];
 
   function delay(ms) {
     return new Promise(function (resolve) {
@@ -316,6 +322,9 @@ window.MusicHub = window.MusicHub || {};
   function setStatus(text, progress) {
     if (!text) {
       els.status.hidden = true;
+      if (eta) {
+        eta.stop();
+      }
       return;
     }
     els.statusText.textContent = text;
@@ -324,6 +333,38 @@ window.MusicHub = window.MusicHub || {};
     var percent = typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : 0;
     els.progress.style.width = percent + '%';
     els.status.setAttribute('aria-valuenow', String(Math.round(percent)));
+
+    if (eta) {
+      eta.update(percent);
+    }
+  }
+
+  /** A note about the run just finished, fading out on its own. */
+  function showToast(text) {
+    if (!els.toast || !text) {
+      return;
+    }
+    window.clearTimeout(toastTimer);
+    els.toast.textContent = text;
+    els.toast.classList.remove('page-toast--fading');
+    els.toast.hidden = false;
+
+    toastTimer = window.setTimeout(function () {
+      els.toast.classList.add('page-toast--fading');
+      toastTimer = window.setTimeout(function () {
+        els.toast.hidden = true;
+        els.toast.classList.remove('page-toast--fading');
+      }, 600);
+    }, 6000);
+  }
+
+  function hideToast() {
+    if (!els.toast) {
+      return;
+    }
+    window.clearTimeout(toastTimer);
+    els.toast.hidden = true;
+    els.toast.classList.remove('page-toast--fading');
   }
 
   /** Pure filter, kept separate from the DOM so it can be tested directly. */
@@ -444,6 +485,26 @@ window.MusicHub = window.MusicHub || {};
     return { shows: concerts.length, artists: Object.keys(artists).length };
   }
 
+  /**
+   * What the toast says after a run: how much this fetch actually added.
+   * A cancelled run says so, since it only covered part of the artists.
+   */
+  function fetchSummaryMessage(concerts, newIds, cancelled) {
+    var added = concerts.filter(function (concert) {
+      return newIds.indexOf(concert.id) !== -1;
+    });
+    var totals = summarize(added);
+
+    var core = totals.shows
+      ? 'added ' + totals.shows + (totals.shows === 1 ? ' concert' : ' concerts')
+        + ' for ' + totals.artists + (totals.artists === 1 ? ' artist' : ' artists') + '.'
+      : 'no new concerts found.';
+
+    return cancelled
+      ? 'Fetch cancelled \u2014 ' + core
+      : core.charAt(0).toUpperCase() + core.slice(1);
+  }
+
   function updateSummary(concerts) {
     if (!els.summary) {
       return;
@@ -514,6 +575,7 @@ window.MusicHub = window.MusicHub || {};
     state = { lastFetchedAt: null, concerts: [] };
     activeFilter = 'all';
     els.failedNotice.hidden = true;
+    hideToast();
     render([]);
   }
 
@@ -527,11 +589,14 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function showFailedArtists(names) {
+    lastFailed = names.slice();
+
     if (!names.length) {
       els.failedNotice.hidden = true;
       return;
     }
     els.failedText.textContent = "Couldn't check concerts for: " + names.join(', ');
+    els.failedRetry.textContent = names.length === 1 ? 'Retry artist' : 'Retry ' + names.length + ' artists';
     els.failedNotice.hidden = false;
   }
 
@@ -586,6 +651,12 @@ window.MusicHub = window.MusicHub || {};
     var card = el('article', 'concert-card'
       + (isNew ? ' concert-card--new' : '')
       + (concert.attending ? ' concert-card--attending' : ''));
+
+    // Corner flag over the artist image, so a newly-found concert is obvious
+    // without having to compare border colours.
+    if (isNew) {
+      card.appendChild(el('span', 'concert-card__tag', 'New'));
+    }
 
     if (concert.imageUrl) {
       var image = el('img', 'concert-card__image');
@@ -794,6 +865,63 @@ window.MusicHub = window.MusicHub || {};
     return newIds;
   }
 
+  /**
+   * A run covering only some of the artists builds each concert from just
+   * those it checked, so its line-up can be shorter than the one already
+   * stored - and an act the stored entry knows is support can look like the
+   * headliner to a retry of that act alone. The stored line-up is therefore
+   * the one kept, with any name the run newly turned up appended to it.
+   */
+  function mergeArtists(concert, before) {
+    if (!before) {
+      return concert;
+    }
+
+    var artists = (before.artists || []).slice();
+    concert.artists.forEach(function (name) {
+      if (artists.indexOf(name) === -1) {
+        artists.push(name);
+      }
+    });
+
+    var support = (before.supportArtists || []).slice();
+    (concert.supportArtists || []).forEach(function (name) {
+      if (support.indexOf(name) === -1 && (before.artists || []).indexOf(name) === -1) {
+        support.push(name);
+      }
+    });
+
+    concert.artists = artists;
+    concert.supportArtists = support;
+    return concert;
+  }
+
+  /**
+   * Folds a cancelled run's partial results into the stored list. The artists
+   * the run never got to still have their concerts in `previous`, so those are
+   * kept; where both lists hold the same concert, the fresh one wins.
+   */
+  function mergeConcerts(partial, previous) {
+    var previousById = {};
+    (previous || []).forEach(function (concert) {
+      previousById[concert.id] = concert;
+    });
+
+    var seen = {};
+    var combined = partial.map(function (concert) {
+      seen[concert.id] = true;
+      return mergeArtists(concert, previousById[concert.id]);
+    });
+    (previous || []).forEach(function (concert) {
+      if (!seen[concert.id]) {
+        combined.push(concert);
+      }
+    });
+    return combined.sort(function (a, b) {
+      return sortValue(a) < sortValue(b) ? -1 : sortValue(a) > sortValue(b) ? 1 : 0;
+    });
+  }
+
   /* -------------------------------------------------------------- fetching */
 
   function fetchConcertsFor(artistName, signal) {
@@ -813,22 +941,102 @@ window.MusicHub = window.MusicHub || {};
     activeRun.controller.abort();
   }
 
-  function runFetch() {
+  /**
+   * Walks a list of artist names, one Ticketmaster lookup at a time with a
+   * small delay in between so the rate limit is never hit. A single failed
+   * lookup is collected rather than fatal.
+   */
+  function checkArtists(names, run, matches, failed) {
+    var chain = Promise.resolve();
+
+    names.forEach(function (name, index) {
+      chain = chain.then(function () {
+        if (run.cancelled) {
+          return null;
+        }
+        var label = 'Checking concerts for ' + name + ' (' + (index + 1) + '/' + names.length + ')…';
+        setStatus(label, (index / names.length) * 100);
+
+        return fetchConcertsFor(name, run.controller.signal).then(function (data) {
+          (data.events || []).forEach(function (event) {
+            matches.push({ artistName: name, event: event });
+          });
+        }).catch(function (err) {
+          if (run.cancelled) {
+            return;
+          }
+          console.warn('Ticketmaster lookup failed for ' + name, err);
+          failed.push(name);
+        }).then(function () {
+          if (run.cancelled) {
+            return null;
+          }
+          setStatus(label, ((index + 1) / names.length) * 100);
+          return delay(REQUEST_DELAY_MS);
+        });
+      });
+    });
+
+    return chain;
+  }
+
+  /**
+   * Stores what a run turned up and reports it. `replace` is for a run that
+   * covered every followed artist: its result is the whole truth, so concerts
+   * that have disappeared from Ticketmaster drop out. A partial run - one that
+   * was cancelled, or a retry of a few artists - is merged into the stored
+   * list instead, and leaves "Last fetched" alone.
+   */
+  function storeRunResult(previous, matches, failed, run, replace) {
+    var concerts = buildConcerts(matches);
+    var newIds = applyPreviousState(concerts, previous);
+
+    if (replace && !run.cancelled) {
+      state = { lastFetchedAt: new Date().toISOString(), concerts: concerts };
+    } else {
+      state = { lastFetchedAt: state.lastFetchedAt, concerts: mergeConcerts(concerts, previous) };
+    }
+
+    saveState();
+    render(newIds);
+    showFailedArtists(failed);
+    showToast(fetchSummaryMessage(concerts, newIds, run.cancelled));
+  }
+
+  /** Shared setup for both kinds of run: nothing else may be in flight. */
+  function startRun() {
     // Re-read storage first: it may have been cleared or replaced from outside
     // this page (browser devtools, another tab, the navbar's Import) since the
     // page loaded, and comparing against a stale in-memory copy would hide
     // concerts that are genuinely new.
     state = loadState();
-    var previous = state.concerts;
-    var failed = [];
-    var matches = [];
-    var run = { cancelled: false, controller: new AbortController() };
-    activeRun = run;
+    activeRun = { cancelled: false, controller: new AbortController() };
 
     els.fetchButton.disabled = true;
     els.fetchButton.textContent = 'Fetching…';
     els.failedNotice.hidden = true;
+    hideToast();
     updateClearButton();
+
+    return activeRun;
+  }
+
+  function endRun(run) {
+    setStatus('');
+    els.fetchButton.disabled = false;
+    els.fetchButton.textContent = 'Fetch concert dates';
+    if (activeRun === run) {
+      activeRun = null;
+    }
+    updateClearButton();
+  }
+
+  function runFetch() {
+    var run = startRun();
+    var previous = state.concerts;
+    var failed = [];
+    var matches = [];
+
     setStatus('Loading your followed artists…', 0);
 
     return MusicHub.spotify.getFollowedArtists().then(function (artists) {
@@ -841,70 +1049,52 @@ window.MusicHub = window.MusicHub || {};
         return null;
       }
 
-      // Sequential, with a small delay between calls, so Ticketmaster's rate
-      // limit is never hit. One failed artist is skipped, not fatal.
-      var chain = Promise.resolve();
-      artists.forEach(function (artist, index) {
-        chain = chain.then(function () {
-          if (run.cancelled) {
-            return null;
-          }
-          setStatus(
-            'Checking concerts for ' + artist.name + ' (' + (index + 1) + '/' + artists.length + ')…',
-            (index / artists.length) * 100,
-          );
-          return fetchConcertsFor(artist.name, run.controller.signal).then(function (data) {
-            (data.events || []).forEach(function (event) {
-              matches.push({ artistName: artist.name, event: event });
-            });
-          }).catch(function (err) {
-            if (run.cancelled) {
-              return;
-            }
-            console.warn('Ticketmaster lookup failed for ' + artist.name, err);
-            failed.push(artist.name);
-          }).then(function () {
-            if (run.cancelled) {
-              return null;
-            }
-            setStatus(
-              'Checking concerts for ' + artist.name + ' (' + (index + 1) + '/' + artists.length + ')…',
-              ((index + 1) / artists.length) * 100,
-            );
-            return delay(REQUEST_DELAY_MS);
-          });
-        });
+      var names = artists.map(function (artist) {
+        return artist.name;
       });
-
-      return chain.then(function () {
-        return artists;
+      return checkArtists(names, run, matches, failed).then(function () {
+        return names;
       });
-    }).then(function (artists) {
-      // Cancelled: keep the previously stored list exactly as it was and
-      // throw this run's partial results away.
-      if (!artists || run.cancelled) {
+    }).then(function (names) {
+      // No artists at all - nothing was ever fetched, so there is nothing to
+      // keep or report.
+      if (!names) {
         return;
       }
-
-      var concerts = buildConcerts(matches);
-      var newIds = applyPreviousState(concerts, previous);
-
-      state = { lastFetchedAt: new Date().toISOString(), concerts: concerts };
-      saveState();
-      render(newIds);
-      showFailedArtists(failed);
+      storeRunResult(previous, matches, failed, run, true);
     }).catch(function (err) {
       if (!run.cancelled) {
         setMessage('Something went wrong: ' + err.message);
       }
     }).then(function () {
-      setStatus('');
-      els.fetchButton.disabled = false;
-      els.fetchButton.textContent = 'Fetch concert dates';
-      if (activeRun === run) {
-        activeRun = null;
+      endRun(run);
+    });
+  }
+
+  /**
+   * Second go at the artists whose lookup failed, from the notice. Only those
+   * are checked, so the result is merged into the stored list rather than
+   * replacing it.
+   */
+  function retryFailedArtists() {
+    if (activeRun || !lastFailed.length) {
+      return Promise.resolve();
+    }
+
+    var names = lastFailed.slice();
+    var run = startRun();
+    var previous = state.concerts;
+    var failed = [];
+    var matches = [];
+
+    return checkArtists(names, run, matches, failed).then(function () {
+      storeRunResult(previous, matches, failed, run, false);
+    }).catch(function (err) {
+      if (!run.cancelled) {
+        setMessage('Something went wrong: ' + err.message);
       }
-      updateClearButton();
+    }).then(function () {
+      endRun(run);
     });
   }
 
@@ -925,8 +1115,11 @@ window.MusicHub = window.MusicHub || {};
     els.filters = document.getElementById('concert-filters');
     els.summary = document.getElementById('concerts-summary');
     els.countdown = document.getElementById('next-attending');
+    eta = MusicHub.progressEta.create(document.getElementById('fetch-eta'));
+    els.toast = document.getElementById('fetch-toast');
     els.failedNotice = document.getElementById('failed-notice');
     els.failedText = document.getElementById('failed-text');
+    els.failedRetry = document.getElementById('failed-retry');
 
     els.fetchButton.addEventListener('click', runFetch);
     document.getElementById('fetch-cancel').addEventListener('click', cancelFetch);
@@ -942,7 +1135,9 @@ window.MusicHub = window.MusicHub || {};
     });
     document.getElementById('failed-dismiss').addEventListener('click', function () {
       els.failedNotice.hidden = true;
+      lastFailed = [];
     });
+    els.failedRetry.addEventListener('click', retryFailedArtists);
 
     state = loadState();
     // Nothing is "new" on a plain page load - that flag only applies to the
@@ -953,9 +1148,12 @@ window.MusicHub = window.MusicHub || {};
   // Exposed for tests.
   MusicHub.concertDateFetcher = {
     cancelFetch: cancelFetch,
+    retryFailedArtists: retryFailedArtists,
     findNextAttending: findNextAttending,
     formatCountdown: formatCountdown,
     summarize: summarize,
+    fetchSummaryMessage: fetchSummaryMessage,
+    mergeConcerts: mergeConcerts,
     applyPreviousState: applyPreviousState,
     filterConcerts: filterConcerts,
     clearStoredData: clearStoredData,

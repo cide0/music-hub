@@ -36,6 +36,8 @@ window.MusicHub = window.MusicHub || {};
   // Which nodes the current filters leave on screen, by id.
   var visibleIds = null;
   var toastTimer = null;
+  // Estimated time left, shown in the progress bar.
+  var eta = null;
   // The node whose connections are being shown on their own, if any.
   var focusedId = null;
   var selection = null;
@@ -292,6 +294,9 @@ window.MusicHub = window.MusicHub || {};
   function setStatus(text, progress) {
     if (!text) {
       els.status.hidden = true;
+      if (eta) {
+        eta.stop();
+      }
       return;
     }
     els.statusText.textContent = text;
@@ -300,6 +305,10 @@ window.MusicHub = window.MusicHub || {};
     var percent = typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : 0;
     els.progress.style.width = percent + '%';
     els.status.setAttribute('aria-valuenow', String(Math.round(percent)));
+
+    if (eta) {
+      eta.update(percent);
+    }
   }
 
   /** A note that fades out on its own, shown over the graph. */
@@ -1817,6 +1826,7 @@ window.MusicHub = window.MusicHub || {};
     els.statusText = document.getElementById('graph-status-text');
     els.progress = document.getElementById('graph-progress');
     els.message = document.getElementById('graph-message');
+    eta = MusicHub.progressEta.create(document.getElementById('graph-eta'));
     els.toast = document.getElementById('graph-toast');
     els.statusSlot = document.getElementById('status-slot');
     els.failedNotice = document.getElementById('graph-failed-notice');

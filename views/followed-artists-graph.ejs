@@ -55,6 +55,7 @@
           <div class="status-bar" id="graph-status" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
             <div class="status-bar__fill" id="graph-progress"></div>
             <span class="status-bar__text" id="graph-status-text"></span>
+          <span class="status-bar__eta" id="graph-eta"></span>
             <button type="button" class="status-bar__cancel" id="graph-cancel" aria-label="Cancel">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -115,7 +116,7 @@
         </div>
 
         <div class="notice" id="graph-failed-notice" hidden>
-          <span id="graph-failed-text"></span>
+          <span class="notice__text" id="graph-failed-text"></span>
           <button type="button" class="notice__dismiss" id="graph-failed-dismiss" aria-label="Dismiss">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -143,6 +144,7 @@
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/spotify.js"></script>
+    <script src="/js/progress.js"></script>
     <script src="/js/followed-artists-graph.js"></script>
   </body>
 </html>

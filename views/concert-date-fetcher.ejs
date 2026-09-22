@@ -35,6 +35,7 @@
         <div class="status-bar" id="fetch-status" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
           <div class="status-bar__fill" id="fetch-progress"></div>
           <span class="status-bar__text" id="fetch-status-text"></span>
+          <span class="status-bar__eta" id="fetch-eta"></span>
           <button type="button" class="status-bar__cancel" id="fetch-cancel" aria-label="Cancel fetching">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -42,8 +43,12 @@
           </button>
         </div>
 
+        <!-- What the last fetch added; fades out on its own. -->
+        <p class="page-toast" id="fetch-toast" hidden></p>
+
         <div class="notice" id="failed-notice" hidden>
-          <span id="failed-text"></span>
+          <span class="notice__text" id="failed-text"></span>
+          <button type="button" class="button button--ghost notice__action" id="failed-retry">Retry</button>
           <button type="button" class="notice__dismiss" id="failed-dismiss" aria-label="Dismiss">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -66,6 +71,7 @@
     <script src="/js/auth.js"></script>
     <script src="/js/spotify.js"></script>
     <script src="/js/google.js"></script>
+    <script src="/js/progress.js"></script>
     <script src="/js/concert-date-fetcher.js"></script>
   </body>
 </html>
