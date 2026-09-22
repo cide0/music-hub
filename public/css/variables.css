@@ -53,6 +53,9 @@
 
   --color-focus: var(--color-primary);
   --color-error: #F2707D;
+  /* Something needs the user's attention but hasn't failed (a setlist song
+     with no Spotify match yet). */
+  --color-warning: #F5C451;
 
   /* Shared layout tokens */
   --font-size-page-title: 1.75rem;

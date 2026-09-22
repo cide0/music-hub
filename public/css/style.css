@@ -368,9 +368,20 @@ button[aria-disabled='true'] {
   margin: 0 0 1rem;
 }
 
+/* Any message that fades out on its own (Setlist Fetcher's notes and
+   errors). */
+.fade-message {
+  transition: opacity 0.6s ease;
+}
+
+.fade-message--fading {
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .graph-toast,
-  .page-toast {
+  .page-toast,
+  .fade-message {
     transition: none;
   }
 }
@@ -1297,7 +1308,8 @@ button[aria-disabled='true'] {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
 }
 
-.concert-card__role {
+.concert-card__role,
+.song__label {
   display: inline-block;
   margin-left: 0.375rem;
   padding: 0.0625rem 0.5rem;
@@ -2145,4 +2157,642 @@ textarea.text-input {
   color: var(--color-text);
   font-size: 0.6875rem;
   font-weight: 700;
+}
+
+/* -------------------------------------------------------- setlist fetcher */
+
+.setlist-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.setlist-search__field {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-width: 320px;
+}
+
+.setlist-search__label {
+  color: var(--color-text-soft);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* A text field with a ✕ inside its right edge that empties it. */
+.input-clear {
+  position: relative;
+  display: flex;
+}
+
+.input-clear .text-input {
+  flex: 1;
+  min-width: 0;
+  padding-right: 2.75rem;
+}
+
+.input-clear__button {
+  position: absolute;
+  top: 50%;
+  right: 0.375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.input-clear__button:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.input-clear__button[hidden] {
+  display: none;
+}
+
+.input-clear__button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.past-shows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.past-show {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+}
+
+.past-show__artists {
+  margin: 0;
+  font-weight: 600;
+}
+
+.past-show__meta {
+  margin: 0.125rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.past-show__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.past-show__fetch {
+  min-height: 40px;
+  padding: 0.375rem 1rem;
+  font-size: 0.875rem;
+}
+
+.setlist {
+  margin-top: 1.5rem;
+  scroll-margin-top: calc(var(--navbar-height) + 1rem);
+}
+
+.setlist__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.375rem 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.setlist__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.setlist__title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.setlist__title-link:hover {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+/* In the search row, pushed to its right-hand end. */
+.setlist__close {
+  display: inline-flex;
+  margin-left: auto;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background-color: transparent;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.setlist__close:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--color-surface-raised);
+  border-color: var(--color-purple-800);
+  color: var(--color-text);
+}
+
+.setlist__close[hidden] {
+  display: none;
+}
+
+.setlist__close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.setlist__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.setlist__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.setlist__toolbar .toolbar__meta {
+  margin: 0;
+}
+
+.setlist__history {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.setlist__history .icon-button:disabled {
+  border-color: var(--color-border);
+  color: var(--color-disabled-text);
+}
+
+.song-list {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: song;
+}
+
+.song {
+  counter-increment: song;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.song__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 56px;
+  padding: 0.5rem 0.25rem 0.5rem 0;
+  transition: background-color 0.15s ease;
+}
+
+/* Numbered by CSS so a removed song renumbers the rest. */
+.song__row::before {
+  content: counter(song);
+  flex: none;
+  width: 1.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  text-align: right;
+}
+
+.song__row--clickable {
+  cursor: pointer;
+}
+
+.song__row--clickable:hover,
+.song--open .song__row {
+  background-color: var(--color-surface-raised);
+}
+
+/* A plain-looking button, so the line reads as text but is reachable and
+   operable from the keyboard. */
+.song__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: inherit;
+}
+
+.song__body:disabled {
+  cursor: default;
+}
+
+.song__title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.song__status {
+  display: flex;
+  /* A medley entry lists one track per line. */
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  margin-top: 0.125rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.song__track {
+  overflow-wrap: anywhere;
+}
+
+.song__warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.song__warning-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.song__remove {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background-color: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.song__remove:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.track-picker {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+}
+
+.track-picker .inline-form .text-input {
+  max-width: none;
+}
+
+.track-picker__results {
+  max-height: 360px;
+}
+
+.track-picker__cover {
+  border-radius: 4px;
+}
+
+.track-picker__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.track-picker__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-picker__meta {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A result row: the track itself (take just this one) plus "+" (add it
+   alongside the tracks already picked, for a medley). */
+.track-option {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.track-option .picker__button {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-option__add {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background-color: transparent;
+  color: var(--color-text-soft);
+  font: inherit;
+  font-size: 1.125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.track-option__add:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--color-surface-raised);
+  border-color: var(--color-purple-800);
+}
+
+.track-option--picked .track-option__add {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.track-option--picked .track-option__add:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--color-primary-hover);
+}
+
+.track-option--picked .track-picker__name {
+  color: var(--color-link);
+}
+
+.track-picker__picked {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.track-picker__picked-title {
+  margin: 0 0 0.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.track-picker__picked-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.track-picker__picked-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+}
+
+.track-picker__picked-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.track-picker__parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+}
+
+.track-picker__part {
+  min-height: 36px;
+  padding: 0.25rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background-color: transparent;
+  color: var(--color-text-soft);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.track-picker__part:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--color-surface-raised);
+  border-color: var(--color-purple-800);
+}
+
+.track-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.playlist-add__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* The playlist dropdown: a button that opens a listbox of covers + names. */
+.playlist-add {
+  margin-top: 1.5rem;
+}
+
+/* Same width as the artist / city fields. */
+.playlist-picker {
+  position: relative;
+  width: min(320px, 100%);
+}
+
+/* Styled like .text-input, plus room for the arrow. */
+.playlist-picker__toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 2.75rem 0.5rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.playlist-picker__toggle::after {
+  content: '▾';
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  transform: translateY(-50%);
+  color: var(--color-text-soft);
+}
+
+.playlist-picker__toggle[aria-expanded='true']::after {
+  content: '▴';
+}
+
+.playlist-picker__current {
+  min-width: 0;
+  color: var(--color-text-muted);
+}
+
+.playlist-picker__current:has(.playlist-option__summary) {
+  color: var(--color-text);
+}
+
+/* The closed field stays input-height: a smaller cover, no song count. */
+.playlist-picker__current .playlist-option__summary {
+  gap: 0.625rem;
+}
+
+.playlist-picker__current .playlist-option__cover {
+  width: 26px;
+  height: 26px;
+  font-size: 0.875rem;
+}
+
+.playlist-picker__current .playlist-option__name {
+  font-weight: 400;
+}
+
+.playlist-picker__current .playlist-option__meta {
+  display: none;
+}
+
+.playlist-picker__list {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  left: 0;
+  z-index: 5;
+  width: 100%;
+  max-height: min(380px, 60vh);
+  margin: 0;
+  padding: 0.375rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
+  list-style: none;
+}
+
+/* Opened upwards when there's no page left below the field. */
+.playlist-picker--up .playlist-picker__list {
+  top: auto;
+  bottom: calc(100% + 0.375rem);
+}
+
+.playlist-picker__list:focus {
+  outline: none;
+}
+
+.playlist-option {
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-card);
+  cursor: pointer;
+}
+
+.playlist-option--active {
+  background-color: var(--color-surface-raised);
+}
+
+.playlist-option[aria-selected='true'] .playlist-option__name {
+  color: var(--color-link);
+}
+
+.playlist-option__summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.playlist-option__cover {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.playlist-option__cover--empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+}
+
+.playlist-option__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.playlist-option__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-option__meta {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 600px) {
+  .setlist-search__field,
+  .playlist-picker {
+    max-width: none;
+    width: 100%;
+  }
+
+  .setlist-search .button {
+    width: 100%;
+  }
 }

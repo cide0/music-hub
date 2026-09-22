@@ -7,10 +7,105 @@
     <%- include('partials/navbar') %>
 
     <main class="page">
-      <h1 class="page__title"><%= pageTitle %></h1>
+      <div class="page__header">
+        <h1 class="page__title"><%= pageTitle %></h1>
+      </div>
 
       <!-- Shown once a valid Spotify login is present. -->
-      <section class="page__content" data-auth-required></section>
+      <section class="page__content" data-auth-required>
+        <form class="setlist-search" id="setlist-search">
+          <div class="setlist-search__field">
+            <label class="setlist-search__label" for="setlist-artist">Artist name</label>
+            <div class="input-clear">
+              <input type="text" id="setlist-artist" class="text-input" autocomplete="off" required />
+              <button type="button" class="input-clear__button" data-clear="setlist-artist" aria-label="Clear artist name" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="setlist-search__field">
+            <label class="setlist-search__label" for="setlist-city">City</label>
+            <div class="input-clear">
+              <input type="text" id="setlist-city" class="text-input" autocomplete="off" required />
+              <button type="button" class="input-clear__button" data-clear="setlist-city" aria-label="Clear city" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <button type="submit" class="button button--primary" id="setlist-search-button">Search setlists</button>
+          <!-- Closes the setlist below; only there while one is open. -->
+          <button type="button" class="setlist__close" id="setlist-close" aria-label="Close this setlist" title="Close this setlist" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </form>
+
+        <!-- Past concerts flagged on Concert Date Fetcher; hidden when there are none. -->
+        <section id="past-shows" hidden>
+          <h2 class="section-title">Shows from Concert Date Fetcher</h2>
+          <ul class="past-shows" id="past-shows-list"></ul>
+        </section>
+
+        <p class="form-error fade-message" id="setlist-error" role="alert" hidden></p>
+        <p class="empty-state" id="setlist-empty" hidden></p>
+
+        <!-- "N songs added to …" after a successful add; fades out on its own. -->
+        <p class="page-toast fade-message" id="setlist-toast" role="status" hidden></p>
+
+        <section class="setlist" id="setlist" hidden>
+          <p class="notice" id="setlist-fallback" hidden></p>
+
+          <div class="setlist__header">
+            <p class="setlist__title" id="setlist-title"></p>
+            <p class="setlist__links">
+              <a id="setlist-artist-link" target="_blank" rel="noopener">All recent shows</a>
+            </p>
+          </div>
+
+          <div class="setlist__toolbar">
+            <p class="toolbar__meta" id="match-status" aria-live="polite"></p>
+            <div class="setlist__history" role="group" aria-label="Edit history">
+              <button type="button" class="icon-button" id="setlist-undo" title="Undo (Ctrl+Z)" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+                </svg>
+                Undo
+              </button>
+              <button type="button" class="icon-button" id="setlist-redo" title="Redo (Ctrl+Shift+Z)" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="15 14 20 9 15 4" /><path d="M4 20v-7a4 4 0 0 1 4-4h12" />
+                </svg>
+                Redo
+              </button>
+            </div>
+          </div>
+          <ol class="song-list" id="song-list"></ol>
+
+          <div class="playlist-add" id="playlist-add">
+            <p class="form-message" id="playlist-message" hidden></p>
+            <div class="playlist-add__controls">
+              <!-- A custom dropdown: a native <select> can't show cover images. -->
+              <div class="playlist-picker" id="playlist-picker" hidden>
+                <span class="visually-hidden" id="playlist-picker-label">Playlist</span>
+                <button type="button" class="playlist-picker__toggle" id="playlist-picker-toggle"
+                  aria-haspopup="listbox" aria-expanded="false" aria-labelledby="playlist-picker-label playlist-picker-toggle">
+                  <span class="playlist-picker__current" id="playlist-picker-current">Choose a playlist…</span>
+                </button>
+                <ul class="playlist-picker__list" id="playlist-picker-list" role="listbox" tabindex="-1"
+                  aria-labelledby="playlist-picker-label" hidden></ul>
+              </div>
+              <button type="button" class="button button--primary" id="playlist-add-button" disabled>Add to playlist</button>
+            </div>
+            <p class="form-message" id="playlist-hint" hidden></p>
+            <p class="form-error fade-message" id="playlist-error" role="alert" hidden></p>
+          </div>
+        </section>
+      </section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->
       <section class="empty-state" data-auth-missing>
@@ -21,5 +116,6 @@
     <script src="/js/storage.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
+    <script src="/js/setlist-fetcher.js"></script>
   </body>
 </html>

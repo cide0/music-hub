@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { eventMatchesArtist } from '../lib/artistMatch.js';
-import { matchCity } from '../lib/cities.js';
+import { citySearchNames, matchCity } from '../lib/cities.js';
 import { requireEnv } from '../lib/oauth.js';
 
 const router = Router();
@@ -201,6 +201,148 @@ router.get('/api/artist-tags', async (req, res) => {
     res.json({ artist, tags });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+const SETLISTFM_URL = 'https://api.setlist.fm/rest/1.0/search/setlists';
+// setlist.fm pages by 20 and usually (not reliably) answers newest first, so a
+// few pages are read and sorted here. Enough to get past placeholder entries
+// without spending much of the 2 requests/second budget.
+const SETLISTFM_MAX_PAGES = 3;
+const SETLISTFM_PAGE_DELAY_MS = 550;
+
+function sameName(a, b) {
+  const fold = (value) => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  return fold(a) === fold(b);
+}
+
+/** setlist.fm dates come as dd-MM-yyyy; ISO sorts and compares as plain text. */
+function isoDate(eventDate) {
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(String(eventDate || ''));
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : null;
+}
+
+/**
+ * Every set (encores included) flattened into one ordered song list.
+ * Nameless entries are unknown songs and can't go on a playlist. Tapes
+ * (intros/outros played from a recording) stay in, flagged so the page can
+ * label them.
+ */
+function flattenSongs(setlist) {
+  const songs = [];
+  for (const set of setlist.sets?.set || []) {
+    for (const song of set.song || []) {
+      const name = String(song?.name || '').trim();
+      if (!name) {
+        continue;
+      }
+      songs.push({ name, coverOf: song.cover?.name || null, tape: Boolean(song.tape) });
+    }
+  }
+  return songs;
+}
+
+function parseSetlist(setlist) {
+  const venue = setlist.venue || {};
+  return {
+    id: setlist.id,
+    eventDate: isoDate(setlist.eventDate),
+    url: setlist.url || null,
+    artistName: setlist.artist?.name || '',
+    artistUrl: setlist.artist?.url || null,
+    venueName: venue.name || '',
+    city: venue.city?.name || '',
+    // The same city as Concert Date Fetcher names it (null outside its
+    // list), so the page can match this show to a stored concert.
+    knownCity: matchCity(venue.city?.name),
+    country: venue.city?.country?.name || '',
+    songs: flattenSongs(setlist),
+  };
+}
+
+async function fetchSetlistPage(params, page) {
+  const response = await fetch(`${SETLISTFM_URL}?${params.toString()}&p=${page}`, {
+    headers: {
+      'x-api-key': requireEnv('SETLISTFM_API_KEY'),
+      Accept: 'application/json',
+    },
+  });
+  // setlist.fm answers "no results" with a 404 rather than an empty list.
+  if (response.status === 404) {
+    return { setlist: [], total: 0, itemsPerPage: 20 };
+  }
+  if (!response.ok) {
+    const error = new Error(`setlist.fm request failed (${response.status})`);
+    error.status = response.status === 429 ? 429 : 502;
+    throw error;
+  }
+  return response.json();
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Up to SETLISTFM_MAX_PAGES pages of raw setlist.fm results. */
+async function searchSetlists(artist, cityName) {
+  const params = new URLSearchParams({ artistName: artist });
+  if (cityName) {
+    params.set('cityName', cityName);
+  }
+
+  const results = [];
+  for (let page = 1; page <= SETLISTFM_MAX_PAGES; page++) {
+    if (page > 1) {
+      await wait(SETLISTFM_PAGE_DELAY_MS);
+    }
+    const data = await fetchSetlistPage(params, page);
+    results.push(...(data.setlist || []));
+    if (page * (data.itemsPerPage || 20) >= (data.total || 0)) {
+      break;
+    }
+  }
+  return results;
+}
+
+/**
+ * Proxies setlist.fm's setlist search so the API key stays server-side.
+ * `city` is optional: without it, it's the artist's shows anywhere.
+ */
+router.get('/api/setlists', async (req, res) => {
+  const artist = String(req.query.artist || '').trim();
+  const city = String(req.query.city || '').trim();
+  if (!artist) {
+    res.status(400).json({ error: 'artist is required' });
+    return;
+  }
+
+  try {
+    // Ticketmaster (and so Concert Date Fetcher) says "Köln" where
+    // setlist.fm may say "Cologne": try the other spellings on a miss.
+    const cityNames = city ? citySearchNames(city) : [null];
+    let results = [];
+    for (const [index, cityName] of cityNames.entries()) {
+      if (index > 0) {
+        await wait(SETLISTFM_PAGE_DELAY_MS);
+      }
+      results = await searchSetlists(artist, cityName);
+      if (results.length) {
+        break;
+      }
+    }
+
+    let setlists = results.map(parseSetlist).filter((setlist) => setlist.eventDate);
+    // The artist search is fuzzy ("Muse" also finds tribute acts), so keep
+    // only the exact artist whenever it's among the results.
+    const exact = setlists.filter((setlist) => sameName(setlist.artistName, artist));
+    if (exact.length) {
+      setlists = exact;
+    }
+    setlists.sort((a, b) => (a.eventDate < b.eventDate ? 1 : a.eventDate > b.eventDate ? -1 : 0));
+
+    res.json({ artist, city: city || null, setlists });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
