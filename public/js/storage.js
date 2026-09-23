@@ -87,6 +87,11 @@ window.MusicHub = window.MusicHub || {};
     return data;
   }
 
+  /** Removes every app-data key; the Spotify / Google logins stay. */
+  function clearAppData() {
+    APP_DATA_KEYS.forEach(remove);
+  }
+
   function exportData() {
     var payload = {
       app: 'music-hub',
@@ -166,6 +171,7 @@ window.MusicHub = window.MusicHub || {};
     getSetting: getSetting,
     setSetting: setSetting,
     collectAppData: collectAppData,
+    clearAppData: clearAppData,
     exportData: exportData,
     importDataFromFile: importDataFromFile,
   };

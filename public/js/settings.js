@@ -1,6 +1,6 @@
 /*
  * Settings: the Google login state, the Setlist Fetcher's default playlist,
- * and the Export / Import data controls. Every choice made here is saved
+ * and the Export / Import / Clear data controls. Every choice made here is saved
  * through MusicHub.storage.setSetting, so it travels with Export / Import.
  */
 window.MusicHub = window.MusicHub || {};
@@ -12,6 +12,7 @@ window.MusicHub = window.MusicHub || {};
     var exportButton = document.getElementById('export-data');
     var importButton = document.getElementById('import-data');
     var fileInput = document.getElementById('import-file');
+    var clearButton = document.getElementById('clear-all-data');
 
     exportButton.addEventListener('click', function () {
       MusicHub.storage.exportData();
@@ -40,6 +41,23 @@ window.MusicHub = window.MusicHub || {};
           // Allow picking the same file again.
           fileInput.value = '';
         });
+    });
+
+    clearButton.addEventListener('click', function () {
+      MusicHub.confirmDialog.open({
+        title: 'Clear all saved data?',
+        text: 'Every page\u2019s saved data is removed from this browser: the concert list, '
+          + 'the artist graph, your concert history, the Discogs releases and these settings. '
+          + 'Your Spotify and Google logins stay. Export your data first if you want to keep '
+          + 'a copy. This cannot be undone.',
+        action: 'Clear all data',
+      }).then(function (confirmed) {
+        if (confirmed) {
+          MusicHub.storage.clearAppData();
+          // Same as after an import: every control re-reads the now empty store.
+          window.location.reload();
+        }
+      });
     });
   }
 

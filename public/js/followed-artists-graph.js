@@ -674,13 +674,20 @@ window.MusicHub = window.MusicHub || {};
 
   /** Sweeps this page's stored graph out of localStorage and resets the view. */
   function clearStoredData() {
-    if (!window.confirm('Delete the saved graph from this browser?\n\n'
-      + 'The cached Last.fm similarity data and the generated connections are '
-      + 'removed, so the next graph is built from scratch. Nothing on Spotify '
-      + 'or Last.fm is affected. This cannot be undone.')) {
-      return;
-    }
+    return MusicHub.confirmDialog.open({
+      title: 'Clear the saved graph?',
+      text: 'The cached Last.fm similarity data and the generated connections are '
+        + 'removed from this browser, so the next graph is built from scratch. '
+        + 'Nothing on Spotify or Last.fm is affected. This cannot be undone.',
+      action: 'Clear data',
+    }).then(function (confirmed) {
+      if (confirmed) {
+        resetStoredGraph();
+      }
+    });
+  }
 
+  function resetStoredGraph() {
     MusicHub.storage.remove(STORAGE_KEY);
     graph = { lastGeneratedAt: null, artists: [], edges: [] };
     recommended = { nodes: [], links: [] };

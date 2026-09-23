@@ -14,17 +14,12 @@ window.MusicHub = window.MusicHub || {};
 
   var CONCERTS_KEY = 'concertDateFetcher';
   var TIMEZONE = 'Europe/Berlin';
-  // Spotify only says it limits over a rolling 30 seconds, per app. A steady
-  // pace keeps a long setlist from tripping its 429s.
+  // A steady pace keeps a long setlist from burning through Spotify's
+  // search limit in one burst.
   var MATCH_DELAY_MS = 250;
-  // On a 429 every search waits until Spotify's Retry-After has passed. The
-  // header isn't always readable from the browser, so without it the wait
-  // doubles per attempt instead (2s, 4s, 8s, ...), up to this many tries.
-  var RATE_LIMIT_RETRIES = 5;
-  var RATE_LIMIT_FALLBACK_S = 2;
-  // Anything longer means Spotify has locked the app out for a while - not
-  // worth keeping the page waiting for.
-  var RATE_LIMIT_MAX_WAIT_S = 120;
+  // Spotify's search limit only resets every 24 hours, so a 429 is never
+  // waited out or retried automatically - the user retries by hand.
+  var RATE_LIMIT_MESSAGE = 'Spotify’s search limit for this app is used up — it resets within 24 hours.';
   var MATCH_CANDIDATES = 5;
   var MANUAL_RESULTS = 10;
   // Spotify accepts at most 100 URIs per add request.
@@ -47,10 +42,9 @@ window.MusicHub = window.MusicHub || {};
   var playlists = null;
   var playlistsLoading = null;
   var adding = false;
-  // No Spotify request goes out before this time (ms) - set by a 429.
-  var rateLimitedUntil = 0;
-  // Ticks the "resuming in Xs" countdown while a pause lasts.
-  var rateLimitTimer = null;
+  // Set when the matching run hit Spotify's search limit; the remaining
+  // songs stay pending until the notice's Retry.
+  var matchPaused = false;
   // How long a fading message stays before it fades, and the fade itself
   // (matches the CSS transition).
   var FADE_AFTER_MS = 6000;
@@ -288,6 +282,8 @@ window.MusicHub = window.MusicHub || {};
     undoStack = [];
     redoStack = [];
     picker.close(false);
+    matchPaused = false;
+    hide(els.matchLimitNotice);
     hide(els.error);
     hide(els.empty);
     hide(els.setlist);
@@ -406,6 +402,8 @@ window.MusicHub = window.MusicHub || {};
     els.artistLink.textContent = 'All recent ' + artistName + ' shows';
 
     hide(els.playlistError);
+    matchPaused = false;
+    hide(els.matchLimitNotice);
     els.songList.textContent = '';
     current.songs.forEach(function (song) {
       song.node = el('li', 'song');
@@ -603,7 +601,7 @@ window.MusicHub = window.MusicHub || {};
     var status = el('span', 'song__status');
 
     if (song.status === 'pending') {
-      status.textContent = 'Matching…';
+      status.textContent = matchPaused ? 'Not matched yet' : 'Matching…';
       return status;
     }
 
@@ -740,7 +738,7 @@ window.MusicHub = window.MusicHub || {};
           : { message: 'No tracks found — try a different search.', tracks: [] };
       })
       .catch(function (err) {
-        song.results = { message: err.message, tracks: [] };
+        song.results = { message: err.message, tracks: [], retry: !!err.rateLimited };
       })
       .then(function () {
         // The line may have been redrawn meanwhile - find the list again.
@@ -759,7 +757,16 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
     if (song.results.message) {
-      list.appendChild(el('li', 'picker__empty', song.results.message));
+      var message = el('li', 'picker__empty', song.results.message);
+      if (song.results.retry) {
+        var retry = el('button', 'button button--ghost picker__retry', 'Retry');
+        retry.type = 'button';
+        retry.addEventListener('click', function () {
+          searchTracksFor(song, song.query);
+        });
+        message.appendChild(retry);
+      }
+      list.appendChild(message);
     }
     song.results.tracks.forEach(function (track) {
       list.appendChild(renderTrackOption(song, track));
@@ -833,62 +840,16 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------ Spotify matching */
 
-  function lockedOutMessage() {
-    var minutes = Math.ceil((rateLimitedUntil - Date.now()) / 60000);
-    return 'Spotify is rate-limiting this app for about ' + minutes
-      + (minutes === 1 ? ' minute' : ' minutes') + ' — try again later.';
-  }
-
-  function isLockedOut() {
-    return rateLimitedUntil - Date.now() > RATE_LIMIT_MAX_WAIT_S * 1000;
-  }
-
-  /** Holds every Spotify request back until `seconds` from now. */
-  function pauseRequests(seconds) {
-    rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + seconds * 1000);
-    if (rateLimitTimer || isLockedOut()) {
-      updateAddState();
-      return;
-    }
-    rateLimitTimer = window.setInterval(function () {
-      if (Date.now() >= rateLimitedUntil) {
-        window.clearInterval(rateLimitTimer);
-        rateLimitTimer = null;
-      }
-      updateAddState();
-    }, 1000);
-    updateAddState();
-  }
-
-  /** Resolves once no pause is in effect; fails while Spotify locks us out. */
-  function waitForRateLimit() {
-    if (isLockedOut()) {
-      return Promise.reject(new Error(lockedOutMessage()));
-    }
-    var wait = rateLimitedUntil - Date.now();
-    return wait > 0 ? delay(wait) : Promise.resolve();
-  }
-
   /**
-   * GET against Spotify. A 429 pauses every request - the whole matching run,
-   * not just this song - so the rolling window actually gets to clear.
+   * GET against Spotify. A 429 fails right away with `rateLimited` set - the
+   * search limit is daily, so waiting and retrying here would get nowhere.
    */
-  function spotifyGet(path, attempt) {
-    attempt = attempt || 0;
-    return waitForRateLimit().then(function () {
-      return MusicHub.auth.spotifyFetch(path);
-    }).then(function (response) {
+  function spotifyGet(path) {
+    return MusicHub.auth.spotifyFetch(path).then(function (response) {
       if (response.status === 429) {
-        var header = Number(response.headers.get('Retry-After'));
-        var seconds = header > 0 ? header : RATE_LIMIT_FALLBACK_S * Math.pow(2, attempt);
-        pauseRequests(seconds);
-        if (isLockedOut()) {
-          throw new Error(lockedOutMessage());
-        }
-        if (attempt + 1 >= RATE_LIMIT_RETRIES) {
-          throw new Error('Spotify kept rate-limiting the search — try again in a minute.');
-        }
-        return spotifyGet(path, attempt + 1);
+        var err = new Error(RATE_LIMIT_MESSAGE);
+        err.rateLimited = true;
+        throw err;
       }
       if (!response.ok) {
         throw new Error('Spotify search failed (' + response.status + ').');
@@ -989,17 +950,28 @@ window.MusicHub = window.MusicHub || {};
         return next();
       }
 
+      var limitHit = false;
       return matchParts(song)
         .then(function (tracks) {
           song.tracks = tracks;
           song.status = tracks.length === song.parts.length ? 'matched' : 'unmatched';
         })
         .catch(function (err) {
+          if (err.rateLimited) {
+            // Every further search would hit the same limit: stop here and
+            // leave this song and the rest pending for a manual retry.
+            limitHit = true;
+            return;
+          }
           console.warn('Could not match "' + song.name + '"', err);
           song.status = 'unmatched';
         })
         .then(function () {
           if (runId !== matchRunId) {
+            return null;
+          }
+          if (limitHit) {
+            pauseMatching();
             return null;
           }
           if (!song.removed) {
@@ -1011,6 +983,34 @@ window.MusicHub = window.MusicHub || {};
     }
 
     return next();
+  }
+
+  /** Stops matching at the search limit and shows the notice with Retry. */
+  function pauseMatching() {
+    matchPaused = true;
+    renderPendingSongs();
+    show(els.matchLimitNotice);
+    updateAddState();
+  }
+
+  /** The notice's Retry: picks the matching run up at the first pending song. */
+  function resumeMatching() {
+    if (!current || !matchPaused) {
+      return;
+    }
+    matchPaused = false;
+    hide(els.matchLimitNotice);
+    renderPendingSongs();
+    updateAddState();
+    matchSongs(matchRunId);
+  }
+
+  function renderPendingSongs() {
+    current.songs.forEach(function (song) {
+      if (song.status === 'pending' && !song.removed) {
+        renderSong(song);
+      }
+    });
   }
 
   /* -------------------------------------------------------------- playlist */
@@ -1068,14 +1068,11 @@ window.MusicHub = window.MusicHub || {};
     var unmatched = songs.filter(function (song) { return song.status === 'unmatched'; }).length;
     var ready = songs.filter(function (song) { return song.status === 'matched'; }).length;
 
-    var pause = rateLimitedUntil - Date.now();
-    if (isLockedOut()) {
-      els.matchStatus.textContent = lockedOutMessage();
-    } else if (!songs.length) {
+    if (!songs.length) {
       els.matchStatus.textContent = 'Every song has been removed.';
-    } else if (pending && pause > 0) {
-      els.matchStatus.textContent = 'Spotify is rate-limiting — resuming in ' + Math.ceil(pause / 1000)
-        + 's… ' + (songs.length - pending) + ' of ' + songs.length;
+    } else if (pending && matchPaused) {
+      els.matchStatus.textContent = 'Matching paused — ' + (songs.length - pending) + ' of ' + songs.length
+        + ' songs done.';
     } else if (pending) {
       els.matchStatus.textContent = 'Matching songs on Spotify… ' + (songs.length - pending) + ' of ' + songs.length;
     } else if (unmatched) {
@@ -1086,7 +1083,9 @@ window.MusicHub = window.MusicHub || {};
     }
 
     var hint = '';
-    if (pending) {
+    if (pending && matchPaused) {
+      hint = 'Retry the matching first.';
+    } else if (pending) {
       hint = 'Still matching songs…';
     } else if (unmatched) {
       hint = 'Resolve the flagged songs first.';
@@ -1191,6 +1190,8 @@ window.MusicHub = window.MusicHub || {};
     els.title = document.getElementById('setlist-title');
     els.artistLink = document.getElementById('setlist-artist-link');
     els.matchStatus = document.getElementById('match-status');
+    els.matchLimitNotice = document.getElementById('match-limit-notice');
+    document.getElementById('match-limit-retry').addEventListener('click', resumeMatching);
     els.songList = document.getElementById('song-list');
     els.playlistMessage = document.getElementById('playlist-message');
     els.picker = document.getElementById('playlist-picker');

@@ -84,6 +84,13 @@
               </button>
             </div>
           </div>
+
+          <!-- Shown when the matching run hits Spotify's daily search limit; no automatic retry. -->
+          <div class="notice" id="match-limit-notice" role="alert" hidden>
+            <span class="notice__text">Spotify’s search limit for this app is used up, so the remaining songs couldn’t be matched. It resets within 24 hours.</span>
+            <button type="button" class="button button--ghost notice__action" id="match-limit-retry">Retry</button>
+          </div>
+
           <ol class="song-list" id="song-list"></ol>
 
           <div class="playlist-add" id="playlist-add">

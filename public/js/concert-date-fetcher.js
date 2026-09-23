@@ -561,22 +561,25 @@ window.MusicHub = window.MusicHub || {};
 
   /** Sweep this page's stored data out of localStorage and reset the view. */
   function clearStoredData() {
-    var confirmed = window.confirm(
-      'Delete this page\u2019s saved concerts from this browser?\n\n'
-        + 'The list, the "Last fetched" time and every "Added to calendar" / '
-        + '"I\u2019m attending" flag are removed. Calendar entries already created in '
-        + 'Google Calendar stay untouched. This cannot be undone.',
-    );
-    if (!confirmed) {
-      return;
-    }
+    return MusicHub.confirmDialog.open({
+      title: 'Clear saved concerts?',
+      text: 'The list, the \u201cLast fetched\u201d time and every \u201cAdded to calendar\u201d / '
+        + '\u201cI\u2019m attending\u201d flag are removed from this browser. Calendar entries '
+        + 'already created in Google Calendar stay untouched. This cannot be undone.',
+      action: 'Clear data',
+    }).then(function (confirmed) {
+      // A fetch can't start while the modal is open, but check anyway.
+      if (!confirmed || activeRun) {
+        return;
+      }
 
-    MusicHub.storage.remove(STORAGE_KEY);
-    state = { lastFetchedAt: null, concerts: [] };
-    activeFilter = 'all';
-    els.failedNotice.hidden = true;
-    hideToast();
-    render([]);
+      MusicHub.storage.remove(STORAGE_KEY);
+      state = { lastFetchedAt: null, concerts: [] };
+      activeFilter = 'all';
+      els.failedNotice.hidden = true;
+      hideToast();
+      render([]);
+    });
   }
 
   function renderLastFetched() {
