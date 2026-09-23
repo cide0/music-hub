@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" class="is-logged-out">
+  <head>
+    <%- include('partials/head') %>
+  </head>
+  <body>
+    <%- include('partials/navbar') %>
+
+    <main class="page">
+      <div class="page__header">
+        <h1 class="page__title"><%= pageTitle %></h1>
+      </div>
+
+      <!-- Shown once a valid Spotify login is present. -->
+      <section class="page__content" data-auth-required>
+        <!-- One of these panels shows at a time - see setView in album-suggester.js. -->
+        <div class="case" id="case" aria-live="polite">
+          <p class="empty-state" id="case-loading">Loading your Spotify library…</p>
+
+          <div class="notice" id="case-error" hidden>
+            <span class="notice__text" id="case-error-text"></span>
+            <a class="button button--ghost notice__action" id="case-relogin" href="/login?from=%2Falbum-suggester" hidden>Log in again</a>
+            <button type="button" class="button button--primary notice__action" id="case-retry">Retry</button>
+          </div>
+
+          <p class="empty-state" id="case-empty" hidden></p>
+
+          <div class="case__idle" id="case-idle" hidden>
+            <p class="case__count" id="case-count"></p>
+            <button type="button" class="button button--primary case__open" id="case-open">Open case</button>
+          </div>
+
+          <!-- The CS:GO-style reel. The window clips the strip; the marker
+               stays put in the middle while the strip slides under it. -->
+          <div class="reel" id="case-reel" hidden>
+            <div class="reel__window" id="reel-window">
+              <div class="reel__strip" id="reel-strip"></div>
+            </div>
+            <div class="reel__marker" aria-hidden="true"></div>
+          </div>
+
+          <div class="reveal" id="case-reveal" hidden>
+            <div class="reveal__cover" id="reveal-cover"></div>
+            <div class="reveal__text">
+              <h2 class="reveal__title" id="reveal-title"></h2>
+              <p class="reveal__artist" id="reveal-artist"></p>
+            </div>
+            <div class="reveal__links">
+              <a class="button button--primary" id="reveal-spotify" href="#">Listen on Spotify</a>
+              <a class="button button--ghost" id="reveal-discogs" href="#" target="_blank" rel="noopener noreferrer">
+                Find vinyl on Discogs
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="16" height="16">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
+            </div>
+            <div class="reveal__actions">
+              <button type="button" class="button button--ghost" id="reveal-reroll">Re-roll</button>
+              <button type="button" class="button button--ghost" id="reveal-not-listened">Mark as not listened</button>
+              <button type="button" class="button button--ghost" id="reveal-listened">Mark as listened</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <h2 class="section-title">Listened history</h2>
+          <!-- Only one sort is active at a time; clicking the active one flips its direction. -->
+          <div class="filter-group" id="history-sort" role="group" aria-label="Sort listened history" hidden>
+            <button type="button" class="filter-button" data-sort="date">Date</button>
+            <button type="button" class="filter-button" data-sort="rating">Rating</button>
+          </div>
+        </div>
+        <p class="empty-state" id="history-empty">Nothing marked as listened yet.</p>
+        <ol class="history-list" id="history-list" hidden></ol>
+      </section>
+
+      <!-- Page-level gating: no Spotify login, no page content. -->
+      <section class="empty-state" data-auth-missing>
+        <p>Please log in to Spotify first</p>
+      </section>
+    </main>
+
+    <dialog class="modal modal--confirm" id="listened-dialog" aria-labelledby="listened-dialog-title" aria-describedby="listened-dialog-text">
+      <form class="modal__form" id="listened-form" novalidate>
+        <h2 class="modal__title" id="listened-dialog-title">Mark as listened?</h2>
+        <p class="modal__hint" id="listened-dialog-text"></p>
+        <label class="rating-field">
+          <span class="rating-field__label">Rating <span class="rating-field__optional">(optional, 1–100)</span></span>
+          <input type="number" class="text-input rating-field__input" id="listened-rating" min="1" max="100" step="1" inputmode="numeric" />
+        </label>
+        <p class="form-error" id="listened-error" role="alert" hidden></p>
+        <div class="modal__actions">
+          <button type="button" class="button button--ghost" id="listened-cancel">Cancel</button>
+          <button type="submit" class="button button--danger" id="listened-submit">Mark as listened</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- The reel's horizontal-only motion blur; its strength is set per frame. -->
+    <svg class="visually-hidden" aria-hidden="true" focusable="false">
+      <filter id="reel-blur" x="0" y="0" width="1" height="1">
+        <feGaussianBlur id="reel-blur-amount" stdDeviation="0 0" />
+      </filter>
+    </svg>
+
+    <script src="/js/storage.js"></script>
+    <script src="/js/navbar.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/album-suggester.js"></script>
+  </body>
+</html>

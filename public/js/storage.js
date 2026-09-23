@@ -14,6 +14,7 @@ window.MusicHub = window.MusicHub || {};
     'followedArtistsGraph',
     'concertHistory',
     'discogsVinylReleases',
+    'albumSuggesterHistory',
     // The user's choices on the Settings page - see getSetting / setSetting.
     'settings',
   ];

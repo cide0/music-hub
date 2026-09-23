@@ -5,6 +5,7 @@ export const tabs = [
   { label: 'Setlist Fetcher', href: '/setlist-fetcher', external: false },
   { label: 'Concert Gallery', href: '/concert-history', external: false },
   { label: 'Discogs', href: '/discogs', external: false },
+  { label: 'Album Suggester', href: '/album-suggester', external: false },
   { label: 'Video Matcher', href: 'https://spotify-video-matcher.onrender.com/', external: true },
   { label: 'Release List', href: 'https://spotifyreleaselist.netlify.app/', external: true },
   { label: 'Listening Stats', href: 'https://stats.fm/user/cide?range=lifetime', external: true },

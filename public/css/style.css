@@ -3490,3 +3490,362 @@ textarea.text-input {
     gap: 0.75rem;
   }
 }
+
+/* --------------------------------------------------------- album suggester */
+
+/* Waiting for a spin: the library size and one big button. */
+.case__idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  text-align: center;
+}
+
+.case__count {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.case__open {
+  min-height: 56px;
+  padding: 0.75rem 2.75rem;
+  font-size: 1.125rem;
+}
+
+/* The CS:GO-style reel. Cover size scales down on phones, so the strip
+   never pushes the page sideways. */
+.reel {
+  --reel-cover: 128px;
+  --reel-gap: 8px;
+  position: relative;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+}
+
+/* Clips the strip; the vertical padding leaves room for the winner to grow.
+   Covers fade out towards both ends, like the case window in the game. */
+.reel__window {
+  overflow: hidden;
+  padding: 1.5rem 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, var(--color-black) 14%, var(--color-black) 86%, transparent);
+  mask-image: linear-gradient(90deg, transparent, var(--color-black) 14%, var(--color-black) 86%, transparent);
+}
+
+.reel__strip {
+  display: flex;
+  gap: var(--reel-gap);
+  width: max-content;
+  will-change: transform;
+}
+
+.reel__item {
+  position: relative;
+  flex: none;
+  width: var(--reel-cover);
+  overflow: hidden;
+  border-radius: 6px;
+  background-color: var(--color-surface-raised);
+}
+
+/* Echoes the rarity bar under each item in CS:GO - the same on every cover,
+   as every album has the same odds. */
+.reel__item::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 5px;
+  background-color: var(--color-primary);
+}
+
+.reel__cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+/* No cover art on Spotify: a plain accent square rather than a broken image. */
+.album-cover--empty {
+  display: block;
+  background-color: var(--color-accent);
+}
+
+.reel__item--winner {
+  z-index: 1;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--color-primary) 80%, transparent);
+  animation: winner-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes winner-pop {
+  from { transform: scale(1); }
+  to { transform: scale(1.14); }
+}
+
+/* The fixed line the reel stops under, with a notch top and bottom. */
+.reel__marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  z-index: 2;
+  width: 3px;
+  transform: translateX(-50%);
+  background-color: var(--color-purple-100);
+  box-shadow: 0 0 10px var(--color-purple-300);
+  pointer-events: none;
+}
+
+.reel__marker::before,
+.reel__marker::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  border: 8px solid transparent;
+  transform: translateX(-50%);
+}
+
+.reel__marker::before {
+  top: 0;
+  border-top-color: var(--color-purple-100);
+}
+
+.reel__marker::after {
+  bottom: 0;
+  border-bottom-color: var(--color-purple-100);
+}
+
+/* The flourish when the reel stops: a screen-wide flash of purple light and
+   a burst of particles from the winning cover (album-suggester.js). */
+.case-pulse {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--color-primary) 45%, transparent), transparent 70%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.case-burst {
+  position: fixed;
+  z-index: 51;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.case-burst__particle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background-color: var(--color-primary);
+}
+
+.case-burst__particle--1 {
+  border-radius: 50%;
+  background-color: var(--color-accent);
+}
+
+.case-burst__particle--2 {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-purple-300);
+}
+
+/* The big reveal. */
+.reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 2rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  text-align: center;
+  animation: reveal-in 0.35s ease-out;
+}
+
+@keyframes reveal-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.reveal__cover {
+  width: min(320px, 72vw);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface-raised);
+  box-shadow: 0 0 40px color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
+.reveal__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.reveal__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* Focused only so screen readers announce the result - not a control. */
+.reveal__title:focus {
+  outline: none;
+}
+
+.reveal__artist {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-soft);
+  font-size: 1.0625rem;
+}
+
+.reveal__links,
+.reveal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.reveal__actions {
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* The optional rating in the "Mark as listened" dialog. */
+.rating-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.rating-field__label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.rating-field__optional {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.rating-field__input {
+  width: 8rem;
+}
+
+.history-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.625rem 0.875rem 0.625rem 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+}
+
+.history-item__cover {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.history-item__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item__title,
+.history-item__artist,
+.history-item__date {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item__title {
+  font-weight: 600;
+}
+
+.history-item__artist {
+  color: var(--color-text-soft);
+  font-size: 0.9375rem;
+}
+
+.history-item__date {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.history-item__rating {
+  flex: none;
+  min-width: 3rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-purple-800);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.history-item__rating--none {
+  border: 1px solid var(--color-border);
+  background-color: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+@media (max-width: 600px) {
+  .reel {
+    --reel-cover: 88px;
+    --reel-gap: 6px;
+  }
+
+  .reveal {
+    padding: 1.5rem 1rem;
+  }
+
+  .reveal__title {
+    font-size: 1.25rem;
+  }
+
+  /* Full-width, thumb-sized buttons on a phone. */
+  .reveal__links .button,
+  .reveal__actions .button {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+}

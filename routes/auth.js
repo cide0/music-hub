@@ -24,6 +24,9 @@ const SCOPES = [
   'playlist-read-collaborative',
   'playlist-modify-private',
   'playlist-modify-public',
+  // Album Suggester: read the Saved Albums, unsave one once it's listened to.
+  'user-library-read',
+  'user-library-modify',
 ].join(' ');
 
 function basicAuthHeader() {
