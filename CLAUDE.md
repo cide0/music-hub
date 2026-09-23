@@ -43,7 +43,8 @@ lib/cities.js        Allowed cities for Concert Date Fetcher + name matching
 routes/auth.js       Spotify: /login, /callback, POST /api/spotify/refresh
 routes/google.js     Google: /auth/google(/callback), POST /api/google/refresh
 routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
-                     GET /api/similar-artists (Last.fm)
+                     GET /api/similar-artists (Last.fm),
+                     GET /api/discogs/releases + /random-collection-item
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
 views/               EJS pages + partials/ (head, navbar)
 public/css/          variables.css (palette) + style.css

@@ -7,10 +7,84 @@
     <%- include('partials/navbar') %>
 
     <main class="page">
-      <h1 class="page__title"><%= pageTitle %></h1>
+      <div class="page__header">
+        <h1 class="page__title"><%= pageTitle %></h1>
+        <!-- Points at the username saved on the Settings page; hidden until one is. -->
+        <p class="page__summary" id="collection-link-wrap" data-auth-required hidden>
+          <a class="external-link" id="collection-link" target="_blank" rel="noopener noreferrer">
+            Your Discogs collection
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="14" height="14">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
+        </p>
+      </div>
 
       <!-- Shown once a valid Spotify login is present. -->
-      <section class="page__content" data-auth-required></section>
+      <section class="page__content" data-auth-required>
+        <h2 class="section-title section-title--first">Pick of the Day</h2>
+        <div class="pick-card" id="pick-of-the-day" aria-live="polite">
+          <p class="pick-card__message">Picking something from your collection…</p>
+        </div>
+
+        <div class="section-header">
+          <h2 class="section-title">New releases</h2>
+          <!-- One label, so both parts share a size and a line: when the list
+               was checked, and how many releases it holds (or a running count
+               during a check). -->
+          <span class="toolbar__meta check-meta">
+            <span id="last-checked" hidden></span><span id="releases-summary" hidden></span>
+          </span>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="button button--primary" id="check-releases">Check for new releases</button>
+          <button type="button" class="button button--ghost" id="clear-releases" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18">
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+            Clear saved data
+          </button>
+
+          <div class="toolbar__end release-search-wrap" id="releases-search-wrap" hidden>
+            <label class="visually-hidden" for="releases-search">Search releases</label>
+            <div class="input-clear release-search">
+              <input type="text" id="releases-search" class="text-input" placeholder="Search artist or album"
+                autocomplete="off" spellcheck="false" />
+              <button type="button" class="input-clear__button" id="releases-search-clear" aria-label="Clear search" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="status-bar" id="check-status" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+          <div class="status-bar__fill" id="check-progress"></div>
+          <span class="status-bar__text" id="check-status-text"></span>
+          <span class="status-bar__eta" id="check-eta"></span>
+          <button type="button" class="status-bar__cancel" id="check-cancel" aria-label="Cancel checking">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- What the last check found; fades out on its own. -->
+        <p class="page-toast" id="check-toast" hidden></p>
+
+        <div class="notice" id="failed-notice" hidden>
+          <span class="notice__text" id="failed-text"></span>
+          <button type="button" class="notice__dismiss" id="failed-dismiss" aria-label="Dismiss">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="empty-state" id="releases-message" hidden></p>
+        <div class="release-grid" id="releases-list"></div>
+      </section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->
       <section class="empty-state" data-auth-missing>
@@ -21,5 +95,9 @@
     <script src="/js/storage.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
+    <script src="/js/spotify.js"></script>
+    <script src="/js/progress.js"></script>
+    <script src="/js/confirm-dialog.js"></script>
+    <script src="/js/discogs.js"></script>
   </body>
 </html>

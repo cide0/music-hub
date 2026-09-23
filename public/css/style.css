@@ -3035,3 +3035,209 @@ textarea.text-input {
     flex: 1;
   }
 }
+
+/* ----------------------------------------------------------------- discogs */
+
+/* The page opens on a section heading, so it doesn't need the gap above. */
+.section-title--first {
+  margin-top: 0;
+}
+
+/* A section heading with a note on the right of the same line, which drops
+   below the heading when there isn't room. */
+.section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin: 2rem 0 0.75rem;
+}
+
+.section-header .section-title {
+  margin: 0;
+}
+
+/* "Last checked: … · 739 new releases across 196 artists" - the dot only
+   when both parts are showing. */
+.check-meta > span:not([hidden]) ~ span:not([hidden])::before {
+  content: '\00b7';
+  margin: 0 0.5rem;
+}
+
+/* Filters the release list as you type. */
+.release-search {
+  width: min(280px, 100%);
+}
+
+@media (max-width: 600px) {
+  /* Its own full-width row under the button on a phone. */
+  .release-search-wrap {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .release-search {
+    width: 100%;
+  }
+}
+
+/* A plain text link out of the app, marked with the usual arrow-box icon. */
+.external-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 44px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.external-link:hover {
+  text-decoration: underline;
+}
+
+.pick-card {
+  max-width: 560px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+}
+
+.pick-card__link {
+  display: flex;
+  align-items: stretch;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.pick-card__link:hover {
+  background-color: var(--color-surface-raised);
+}
+
+.pick-card__cover {
+  flex: none;
+  width: 160px;
+  aspect-ratio: 1;
+  background-color: var(--color-surface-raised);
+}
+
+.pick-card__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pick-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 1rem 1.25rem;
+}
+
+.pick-card__eyebrow {
+  margin: 0;
+  color: var(--color-purple-300);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pick-card__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.pick-card__artist {
+  margin: 0;
+  color: var(--color-text-soft);
+}
+
+.pick-card__meta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* Loading, failed or an empty collection - the card keeps its place. */
+.pick-card__message {
+  margin: 0;
+  padding: 1.5rem 1.25rem;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 480px) {
+  .pick-card__cover {
+    width: 112px;
+  }
+
+  .pick-card__body {
+    padding: 0.75rem 1rem;
+  }
+}
+
+.release-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+/* The whole card is the link to the release on Discogs. The card itself -
+   border, lift, glow and the foil sheen on hover - comes from .concert-card /
+   .concert-card--linked, so both pages' cards behave exactly alike. */
+.release-card {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Covers are square; the box holds the space while an image loads or when
+   Discogs has none. */
+.release-card__cover {
+  aspect-ratio: 1;
+  background-color: var(--color-surface-raised);
+}
+
+.release-card__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.release-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+}
+
+.release-card__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.release-card__artist {
+  margin: 0;
+  color: var(--color-text-soft);
+  font-size: 0.9375rem;
+}
+
+.release-card__meta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 400px) {
+  .release-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+}

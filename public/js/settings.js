@@ -1,6 +1,6 @@
 /*
  * Settings: the Google login state, the Setlist Fetcher's default playlist,
- * and the Export / Import / Clear data controls. Every choice made here is saved
+ * the Discogs username, and the Export / Import / Clear data controls. Every choice made here is saved
  * through MusicHub.storage.setSetting, so it travels with Export / Import.
  */
 window.MusicHub = window.MusicHub || {};
@@ -161,9 +161,76 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  var DISCOGS_USERNAME_SETTING = 'discogsUsername';
+
+  /**
+   * The username typed in, or taken from a pasted profile / collection link
+   * ("https://www.discogs.com/user/name/collection"). Null if it can't be one.
+   */
+  function parseDiscogsUsername(value) {
+    var text = String(value || '').trim();
+    var fromUrl = /discogs\.com\/(?:[a-z]{2}\/)?user\/([^/?#\s]+)/i.exec(text);
+    if (fromUrl) {
+      try {
+        text = decodeURIComponent(fromUrl[1]);
+      } catch (err) {
+        return null;
+      }
+    }
+    return text && !/[\s/?#]/.test(text) ? text : null;
+  }
+
+  function initDiscogsUsername() {
+    var form = document.getElementById('discogs-username-form');
+    var input = document.getElementById('discogs-username');
+    var clearButton = document.getElementById('discogs-username-clear');
+    var error = document.getElementById('discogs-username-error');
+    var saved = document.getElementById('discogs-username-saved');
+    var savedTimer = null;
+
+    function confirmSaved(text) {
+      error.hidden = true;
+      saved.textContent = text;
+      saved.hidden = false;
+      window.clearTimeout(savedTimer);
+      savedTimer = window.setTimeout(function () {
+        saved.hidden = true;
+      }, SAVED_MESSAGE_MS);
+    }
+
+    var current = MusicHub.storage.getSetting(DISCOGS_USERNAME_SETTING, null);
+    input.value = current || '';
+    clearButton.hidden = !current;
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var username = parseDiscogsUsername(input.value);
+      if (!username) {
+        saved.hidden = true;
+        error.textContent = input.value.trim()
+          ? 'That doesn’t look like a Discogs username.'
+          : 'Enter your Discogs username first.';
+        error.hidden = false;
+        return;
+      }
+      MusicHub.storage.setSetting(DISCOGS_USERNAME_SETTING, username);
+      input.value = username;
+      clearButton.hidden = false;
+      confirmSaved('Saved — using the Discogs collection of “' + username + '”.');
+    });
+
+    clearButton.addEventListener('click', function () {
+      MusicHub.storage.setSetting(DISCOGS_USERNAME_SETTING, null);
+      input.value = '';
+      clearButton.hidden = true;
+      confirmSaved('Saved — no Discogs username.');
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     initGoogleControls();
     initDefaultPlaylist();
+    initDiscogsUsername();
     initDataControls();
   });
 })(window.MusicHub);

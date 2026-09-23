@@ -183,7 +183,7 @@ Scope of the first implementation step:
    - `GET /login` — generates a PKCE code verifier + challenge, HMAC-signs the verifier (using `SESSION_SECRET`) into the `state` query param sent to Spotify's `/authorize` endpoint, and redirects the browser there.
    - `GET /callback` — receives the authorization code and the signed `state`; verifies the HMAC signature (rejects if invalid or tampered) and extracts the verifier directly from `state` — no server-side lookup needed. Exchanges the code + verifier for an access + refresh token at `https://accounts.spotify.com/api/token` (using the client secret, server-side only), then returns a small HTML page whose inline script writes the tokens (and expiry) into `localStorage` and redirects back to the page the user started from (or home).
    - The navbar's login button reflects login state by checking `localStorage` on page load (e.g. swap "Login with Spotify" for the user's display name/avatar once a valid token is present).
-   - **Page-level gating:** every internal page (all except Spotify Video Matcher and Spotify Release List) checks Spotify login state on load. If the user isn't logged in, the page renders an empty state with the message "Please log in to Spotify first" instead of its normal content/controls — so a page's own buttons (e.g. Concert Date Fetcher's "Fetch concert dates") are simply not shown until the user has logged in. The Settings page (opened from the navbar's gear icon, to the right of the login button / user profile) is gated the same way; it holds the Export/Import data controls.
+   - **Page-level gating:** every internal page (all except Spotify Video Matcher and Spotify Release List) checks Spotify login state on load. If the user isn't logged in, the page renders an empty state with the message "Please log in to Spotify first" instead of its normal content/controls — so a page's own buttons (e.g. Concert Date Fetcher's "Fetch concert dates") are simply not shown until the user has logged in. The Settings page (opened from the navbar's gear icon, to the right of the login button / user profile) is gated the same way; it holds the Export/Import data controls and the per-user settings (e.g. the Discogs username).
 8. The server listens on `process.env.PORT` (falling back to the `.env` value, e.g. `8080`, for local dev) — Render assigns its own port to the web service in production, so it can't be hardcoded.
 9. Each internal tab (all except Spotify Video Matcher and Spotify Release List) renders an empty page body for now, beyond the login-gating and navbar behavior above — just the navbar plus a blank content area. Page content follows in later implementation steps as each page is specced out below.
 
@@ -483,12 +483,14 @@ Route: `/concert-history`.
 
 Route: `/discogs`.
 
-**Discogs profile link:** a plain link labeled "Discogs" pointing to `https://www.discogs.com/user/ci_de/collection`, shown near the top of the page. (The username `ci_de`, taken from that URL, is hardcoded — same as the other fixed personal links in this plan, like Spotify Video Matcher's and Spotify Release List's URLs — not an environment variable.)
+**Discogs username:** nothing is hardcoded — each user saves their own Discogs username on the Settings page (a "Discogs" section with a text field, Save and Remove; a pasted profile or collection link is accepted too and reduced to the username). It's stored like every other setting, as `discogsUsername` under the `settings` key in `localStorage`, so it travels with Export/Import. Everything on this page that needs a username reads it from there. The collection has to be public on Discogs, since requests go out with the app's own token, not the user's.
+
+**Discogs collection link:** a plain link labeled "Your Discogs collection" pointing to `https://www.discogs.com/user/<username>/collection`, shown in the page header's top-right corner. Hidden while no username is saved.
 
 **Pick of the Day:** the page's other feature, shown at the top, above "Check for new releases" below. On every page load — no button, nothing cached — the app picks one random item from the user's Discogs collection and suggests it as something to listen to today; reloading the page picks again.
 
-- A backend endpoint — `GET /api/discogs/random-collection-item` — proxies this efficiently rather than downloading the whole collection on every load: it first requests a single item (`GET https://api.discogs.com/users/ci_de/collection/folders/0/releases?per_page=1&page=1`, folder `0` being Discogs's built-in "All" folder) purely to read the total item count from the response's `pagination.items`, picks a random index between 1 and that count, converts it to a page number + position using a fixed page size (e.g. `per_page=50`), then makes one more request for that specific page and returns just the item at that position (title, artist, cover image, and a link to that entry on Discogs).
-- Rendered as a small card: cover image, title, artist, and a link that opens that item on Discogs in a new tab. While it's loading (both requests need to complete first), the card shows a small loading state rather than staying blank. If the lookup fails (rate limit, network error) or the collection turns out to be empty, the card shows a short message instead (e.g. "Couldn't load a pick for today" or "Your Discogs collection is empty") rather than an empty space.
+- A backend endpoint — `GET /api/discogs/random-collection-item?username=<username>` — proxies this efficiently rather than downloading the whole collection on every load: it first requests a single item (`GET https://api.discogs.com/users/<username>/collection/folders/0/releases?per_page=1&page=1`, folder `0` being Discogs's built-in "All" folder) purely to read the total item count from the response's `pagination.items`, picks a random index between 1 and that count, converts it to a page number + position using a fixed page size (e.g. `per_page=50`), then makes one more request for that specific page and returns just the item at that position (title, artist, cover image, and a link to that entry on Discogs).
+- Rendered as a small card: cover image, title, artist, and a link that opens that item on Discogs in a new tab. While it's loading (both requests need to complete first), the card shows a small loading state rather than staying blank. If the lookup fails (rate limit, network error) or the collection turns out to be empty, the card shows a short message instead (e.g. "Couldn't load a pick for today" or "Your Discogs collection is empty") rather than an empty space. An unknown username (Discogs answers 404) and a private collection (401/403) get their own messages. With no username saved, no request is made and the card points to Settings instead.
 - Not persisted anywhere in `localStorage` — this is intentionally ephemeral, changing every time the page loads, per the request. It's still subject to the same page-level Spotify-login gating as the rest of the page, even though it doesn't itself use any Spotify data, for consistency with every other internal page.
 
 **Initial state:** on page load, "Pick of the Day" (above) loads automatically per its own description, and below it just a **"Check for new releases"** button — both subject to the usual page-level Spotify-login gating from Step 1.
@@ -496,15 +498,19 @@ Route: `/discogs`.
 **Flow, triggered by the button:**
 
 1. Fetch all followed artists via the same `GET /me/following?type=artist` call (paginated) used elsewhere. If the user follows no artists at all, show "You don't follow any artists on Spotify yet."
-2. Determine the cutoff: if the page has never checked before (no `lastCheckedAt` stored yet), use `2026-01-01` as the cutoff; otherwise use the stored `lastCheckedAt` from the previous check. Capture the current time as `checkStartedAt` before making any Discogs calls — this becomes the new `lastCheckedAt` once the check completes, so nothing released while the check itself is running gets missed on the next run.
-3. For each followed artist, call a backend endpoint — `GET /api/discogs/releases?artist=<name>&since=<cutoff ISO date>` — that proxies the Discogs API server-side (the Discogs token stays server-side, same reasoning as every other third-party key in this project):
-   - Searches `GET https://api.discogs.com/database/search?type=release&artist=<name>&sort=year&sort_order=desc` (with an `Authorization: Discogs token=<DISCOGS_TOKEN>` header and a descriptive `User-Agent` header — both required by Discogs), walking result pages newest-year-first and stopping as soon as a page's results drop below the cutoff's year — no need to page through an artist's entire back catalog every time.
-   - For each candidate release whose year is at or after the cutoff's year, fetches its full detail (`GET https://api.discogs.com/releases/<id>`) to get the exact `released` date — search results only give a coarse year, not a full date — then keeps only the ones whose exact release date is after the cutoff. Candidates missing a year or a release date entirely (incomplete Discogs catalog entries happen) are skipped, since there's no way to tell if they're actually new.
+2. Determine the look-back window: it starts on the first day of the month six months back (e.g. a check on 2026-09-23 covers everything released since 2026-03-01, plus future-dated pre-orders). The window is fixed rather than moving with each check because Discogs often lists a record days or weeks after its release date: a cutoff at the last check's time would rule such a late entry out for good. What's *new* is decided in step 6 by the release ids already shown, not by the date.
+3. For each followed artist, call a backend endpoint — `GET /api/discogs/releases?artist=<name>&since=<window start ISO date>` — that proxies the Discogs API server-side (the Discogs token stays server-side, same reasoning as every other third-party key in this project):
+   - Searches `GET https://api.discogs.com/database/search?type=release&format=Vinyl&artist=<name>&sort=year&sort_order=desc` — vinyl only (bootlegs included); every other format would cost a detail fetch per pressing for no use (with an `Authorization: Discogs token=<DISCOGS_TOKEN>` header and a descriptive `User-Agent` header — both required by Discogs), walking result pages newest-year-first and stopping as soon as a page's results drop below the window start's year — no need to page through an artist's entire back catalog every time.
+   - For each candidate release whose year is at or after the window start's year, fetches its full detail (`GET https://api.discogs.com/releases/<id>`) to get the exact `released` date — search results only give a coarse year, not a full date — then keeps only the ones whose exact release date is on or after the window start (a month-only date, `YYYY-MM`, is compared at month precision). Candidates missing a year or a release date entirely (incomplete Discogs catalog entries happen) are skipped for now; once someone adds the date on Discogs, a later check picks them up, since they were never marked as seen.
    - Returns the filtered list (id, title, artist, Discogs release URL, cover image, exact release date) as JSON.
-4. These calls (search and detail fetches together) are made sequentially with a small fixed delay between each (e.g. \~1100ms, keeping well under Discogs's 60-requests-per-minute limit for authenticated requests). While this runs, the button is disabled and shows a "Checking…" state, with a progress bar/count similar to Followed Artists Graph's Last.fm fetch. Any single artist's failed lookup (rate limit, network error) is skipped and recorded, continuing with the rest rather than aborting the whole thing.
+4. The page asks about one artist after another with no pause of its own; the backend paces the Discogs requests themselves. Every request the server makes (search, detail, Pick of the Day) takes the next slot on one shared clock, one every \~1050ms measured from when requests *start* (so Discogs's response time doesn't add to the gap), just under Discogs's 60-requests-per-minute limit for authenticated requests. Discogs's `X-Discogs-Ratelimit-Remaining` header adds a short pause when its window is nearly used up, and a 429 a longer one.
+
+   **Known releases:** so that later checks don't pay for the same detail fetches again, the page keeps, per followed artist, every release id already looked at in detail (`known`) and sends that artist's list as `skip=<id>,<id>,…`; the backend leaves those out before fetching details. Besides the releases it returns, the backend reports the ones it ruled out (`rejected`: id → release date, or the search year when the detail credits other artists) and the ones Discogs only dates by year (`undated`); the page adds all of them to `known`. Undated entries are only skipped for 30 days and then looked at again, in case Discogs has added a full date since; dated entries are dropped once their year falls out of the window (the search stops returning them anyway). A finished check also drops artists no longer followed. With this, a follow-up check costs about one search request per artist plus whatever is genuinely new — a few minutes for a few hundred artists, instead of repeating the whole first check.
+
+   While this runs, the button is disabled and shows a "Checking…" state, with a progress bar/count similar to Followed Artists Graph's Last.fm fetch. Any single artist's failed lookup (rate limit, network error) is skipped and recorded, continuing with the rest rather than aborting the whole thing.
 5. Once the check finishes, if any artists' Discogs lookups failed, show a small dismissible notice listing them (e.g. "Couldn't check Discogs for: Artist A, Artist B"), mirroring the same pattern used on Concert Date Fetcher and Followed Artists Graph.
-6. Dedupe the newly found releases (by Discogs release id, in case two followed artists both turn up on the same release) and sort them descending by release date (most recent first).
-7. Render this run's release list and save it to `localStorage`, **replacing** whatever was stored before — previously found releases are not carried forward or merged; every check only ever shows what's newly found since the last one, and anything from before gets removed from storage as part of that overwrite. If nothing new turned up, show "No new releases found since your last check." instead of an empty area. `lastCheckedAt` only advances to `checkStartedAt` if the check had **zero** failed artist lookups; if any artist failed, the cutoff is left where it was, so the next check re-covers the same window rather than risking a permanently missed release from whichever artist failed.
+6. Dedupe the found releases (by Discogs release id, in case two followed artists both turn up on the same release) and sort them descending by release date (most recent first). Keep only the ones whose id isn't in the stored `seen` map yet — those are this check's new releases. Then add every found release to `seen` (id → release date), and drop entries whose release date has left the window, since the backend won't return those again anyway.
+7. Render this run's new releases and save them to `localStorage`, **replacing** the previously shown list — every check only ever shows what's newly found since the last one. If nothing new turned up, show "No new releases found since your last check." instead of an empty area. A failed artist lookup needs no special handling: that artist's releases just aren't marked as seen, so the next check that gets through to them still shows them. A cancelled check still shows and stores the new releases it found up to that point, handled exactly like a finished check — the artists it never got to aren't marked as seen, so the next check covers them. If it hadn't found anything new yet, the previous list stays as it was. After every check, finished or cancelled, a short note under the progress bar says what it found — worded and fading out exactly like Concert Date Fetcher's ("Found 12 new releases for 8 artists." / "No new releases found." / "Check cancelled — found 3 new releases for 2 artists."): shown for 6 seconds, then faded out over 0.6 seconds, and hidden straight away when the next check starts.
 
 **Each release item shows:**
 
@@ -512,32 +518,52 @@ Route: `/discogs`.
 - Release title
 - Artist name
 - Release date
+- Format, written the way Discogs does, colour/variant included (e.g. "Vinyl, LP, Album, Limited Edition, Pink Marble"). The colour is the format's free-text part, which only the release detail carries, so it's built from the detail fetched for the date anyway; it also tells apart the separate Discogs releases of one album's pressings.
 - A link to the release's Discogs page, opens in a new tab
-- Card styling: rounded corners with a plain grayish border, consistent with the rest of the app. There's no new-vs-old distinction here (unlike Concert Date Fetcher and Followed Artists Graph) — since every render only ever contains the current check's fresh finds, there's nothing "old" left on screen to distinguish from.
+- Card styling: rounded corners with a plain grayish border, and exactly the concert cards' hover (lift, purple glow, and the foil sheen that follows the cursor) — the release cards reuse the `.concert-card` / `.concert-card--linked` classes rather than a copy of them. There's no new-vs-old distinction here (unlike Concert Date Fetcher and Followed Artists Graph) — since every render only ever contains the current check's fresh finds, there's nothing "old" left on screen to distinguish from.
 
-**Persistence:** on page load, if `localStorage` already holds a result from the last check, render it immediately, along with a small "Last checked: \<timestamp>" label near the button, so closing and reopening the page keeps showing the last run's finds. The button always triggers a fresh check, and its result **fully replaces** whatever was stored — nothing accumulates across checks, unlike Concert Date Fetcher or Followed Artists Graph. Stored under a `discogsVinylReleases` key:
+**Release count:** in the same label as "Last checked" (same size, same line, separated by a dot), the heading line shows how many releases the list holds, e.g. "12 new releases across 8 artists" (hidden while the list is empty). While a check runs it becomes a running count, "5 new releases found so far", updated after each artist.
+
+**Search:** once there are releases, a search field sits at the right end of the toolbar (its own full-width row on phones) and filters the cards as you type. It matches artist name and release title, ignoring case and accents ("bjork" finds "Björk"); several words must all match, in any order. While searching, the header count reads "3 of 12 new releases", and no matches shows "No releases match "…"." instead of an empty grid. The search term isn't stored.
+
+**Persistence:** on page load, if `localStorage` already holds a result from the last check, render it immediately, along with a small "Last checked: \<timestamp>" label at the right end of the "New releases" heading line (below the heading on narrow screens), so closing and reopening the page keeps showing the last run's finds. The button always triggers a fresh check, and its new releases **fully replace** the shown list — nothing accumulates on screen across checks, unlike Concert Date Fetcher or Followed Artists Graph. Only the `seen` map carries over between checks. Stored under a `discogsVinylReleases` key:
 
 ```
 {
-  lastCheckedAt: "2026-09-20T10:00:00Z",
-  releases: [
+  checkedAt: "2026-09-20T10:00:00Z",   // when the shown list was found
+  since: "2026-03-01",                  // the window start that check used
+  releases: [                           // that check's new releases
     {
       id: "...",
       title: "...",
       artist: "...",
       imageUrl: "...",
       releaseUrl: "...",
-      releasedDate: "2026-08-15"
+      releasedDate: "2026-08-15",       // or "2026-08" if Discogs has no day
+      format: "Vinyl, LP, Album"
     }
-  ]
+  ],
+  known: {                              // per artist: every release already looked at in detail
+    "Taylor Swift": {
+      "37653978": "2026-06-19",         // shown, or ruled out: its release date (or year)
+      "37368645": "?2026-09-23"         // Discogs only knows the year: looked at on this day
+    }
+  },
+  seen: {                               // every release id shown so far
+    "12345678": "2026-08-15"
+  }
 }
 ```
 
-**Backend endpoint needed:** `GET /api/discogs/releases?artist=<name>&since=<ISO date>` — proxies the Discogs search + detail-fetch logic above and returns the filtered release list as JSON.
+**Clear saved data:** a "Clear saved data" button next to "Check for new releases", the same as Concert Date Fetcher's (trash icon, the app's confirm dialog). It removes the `discogsVinylReleases` key — the list, "Last checked", `seen` and `known` — so the next check starts from scratch, showing the whole window again at the cost of a first check. The Discogs username in Settings stays. Disabled while a check runs or when nothing is saved.
+
+**Backend endpoint needed:** `GET /api/discogs/releases?artist=<name>&since=<window start ISO date>` — proxies the Discogs search + detail-fetch logic above and returns the filtered release list as JSON.
 
 **New environment variable:** `DISCOGS_TOKEN` — a personal access token generated in Discogs' account settings (Settings → Developers), not a full OAuth app; the simplest option for a single-user project, same shape as the other simple-key integrations (Ticketmaster, setlist.fm, Last.fm). Added to `.env` / `.env.example`.
 
 **Known limitation:** matching relies on searching Discogs by the artist's name text, and Discogs's naming conventions occasionally differ from Spotify's (e.g. articles moved to the end — "Beatles, The" instead of "The Beatles"), which can cause an occasional artist to be missed or mismatched. Same category of limitation as the Last.fm name-matching on Followed Artists Graph — not something to engineer around, just worth knowing.
+
+**Known limitation:** a record Discogs lists more than the six-month window after its release date is still missed. The window length is a single constant (`WINDOW_MONTHS` in `public/js/discogs.js`); a longer one costs more detail fetches per check. A new browser without imported data (or after clearing it) has an empty `seen` map, so its first check shows the whole window once.
 
 ## Deployment
 

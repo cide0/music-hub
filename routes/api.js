@@ -346,4 +346,335 @@ router.get('/api/setlists', async (req, res) => {
   }
 });
 
+const DISCOGS_URL = 'https://api.discogs.com';
+// Discogs rejects requests without a descriptive User-Agent.
+const DISCOGS_USER_AGENT = 'MusicHub/1.0 +https://music-hub-r9w6.onrender.com';
+// Discogs allows 60 authenticated requests in any 60 seconds. Every request
+// this server makes - whichever page or artist it's for - takes the next free
+// slot on one shared clock, spaced from when requests *start*, so the time
+// Discogs takes to answer doesn't add to the gap. Slightly over a second
+// leaves a little room in Discogs's moving window.
+const DISCOGS_REQUEST_INTERVAL_MS = 1050;
+// When Discogs's own count says the window is (nearly) used up, the next
+// request waits a little longer; after a 429, a lot longer.
+const DISCOGS_LOW_REMAINING = 1;
+const DISCOGS_LOW_REMAINING_PAUSE_MS = 2000;
+const DISCOGS_RATE_LIMITED_PAUSE_MS = 10000;
+const DISCOGS_SEARCH_PAGE_SIZE = 100;
+// Newest-year-first, so a few pages always reach back past the cutoff year;
+// this only caps artists with an unusually large current-year catalog.
+const DISCOGS_MAX_SEARCH_PAGES = 5;
+const DISCOGS_COLLECTION_PAGE_SIZE = 50;
+
+let discogsNextSlotAt = 0;
+
+function pushBackDiscogsSlot(ms) {
+  discogsNextSlotAt = Math.max(discogsNextSlotAt, Date.now() + ms);
+}
+
+/** Waits for, and takes, the next free request slot. */
+async function waitForDiscogsSlot() {
+  const now = Date.now();
+  const startAt = Math.max(now, discogsNextSlotAt);
+  discogsNextSlotAt = startAt + DISCOGS_REQUEST_INTERVAL_MS;
+  if (startAt > now) {
+    await wait(startAt - now);
+  }
+}
+
+async function discogsJson(pathAndQuery, signal) {
+  await waitForDiscogsSlot();
+  if (signal?.aborted) {
+    throw new Error('aborted');
+  }
+  const response = await fetch(`${DISCOGS_URL}${pathAndQuery}`, {
+    headers: {
+      Authorization: `Discogs token=${requireEnv('DISCOGS_TOKEN')}`,
+      'User-Agent': DISCOGS_USER_AGENT,
+      Accept: 'application/json',
+    },
+    signal,
+  });
+
+  const remaining = Number(response.headers.get('x-discogs-ratelimit-remaining'));
+  if (response.status === 429) {
+    pushBackDiscogsSlot(DISCOGS_RATE_LIMITED_PAUSE_MS);
+  } else if (response.headers.has('x-discogs-ratelimit-remaining') && remaining <= DISCOGS_LOW_REMAINING) {
+    pushBackDiscogsSlot(DISCOGS_LOW_REMAINING_PAUSE_MS);
+  }
+
+  if (!response.ok) {
+    const error = new Error(`Discogs request failed (${response.status})`);
+    error.status = response.status === 429 ? 429 : 502;
+    error.upstreamStatus = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+/** Discogs tells same-named artists apart as "Name (2)" and marks name variations with "*". */
+function cleanDiscogsName(name) {
+  return String(name || '').replace(/\s+\(\d+\)$/, '').replace(/\*$/, '').trim();
+}
+
+/** "Artist A & Artist B", from a release's credited artists and their join words. */
+function joinDiscogsArtists(artists) {
+  return (artists || []).map((artist, index, list) => {
+    const name = cleanDiscogsName(artist.name);
+    const join = String(artist.join || '').trim();
+    if (index === list.length - 1) {
+      return name;
+    }
+    return join === ',' ? `${name}, ` : `${name} ${join || '&'} `;
+  }).join('');
+}
+
+/** Folded for comparison, with a leading or Discogs-style trailing "The" dropped. */
+function foldArtistName(value) {
+  return cleanDiscogsName(value)
+    .toLowerCase()
+    .replace(/^the\s+/, '')
+    .replace(/,\s*the$/, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+/**
+ * Whether a search result's credit text may include the followed artist - a
+ * cheap first pass before spending a detail request on it. Discogs's artist
+ * search is loose ("Low" also finds "Low Roar"). Collaborations are split on
+ * the usual joiners, and the whole credit is tried too so acts like
+ * "Simon & Garfunkel" match; the release detail's artist list settles it.
+ */
+function creditMatchesArtist(credit, artist) {
+  const wanted = foldArtistName(artist);
+  if (!wanted) {
+    return false;
+  }
+  const parts = [credit, ...String(credit).split(/\s*(?:,|&|\+|\/|\bfeat\.?|\bft\.?|\bfeaturing\b|\bvs\.?|\band\b|\bwith\b|\bx\b)\s*/i)];
+  return parts.some((part) => foldArtistName(part) === wanted);
+}
+
+/**
+ * A release's formats the way Discogs writes them, e.g. "Vinyl, LP, Album,
+ * Limited Edition, Red Translucent". The colour / variant ("Red Translucent")
+ * is the format's free-text part, which only the release detail carries -
+ * the search results leave it out.
+ */
+function describeFormats(formats) {
+  return (formats || []).map((format) => {
+    const qty = Number(format.qty) || 1;
+    const name = qty > 1 ? `${qty} × ${format.name}` : format.name;
+    return [name, ...(format.descriptions || []), format.text]
+      .map((part) => String(part || '').trim())
+      .filter(Boolean)
+      .join(', ');
+  }).filter(Boolean).join(' + ');
+}
+
+/**
+ * A release's `released` field as 'YYYY-MM-DD', or 'YYYY-MM' when Discogs
+ * only knows the month (it writes the unknown day as "00"). Year-only and
+ * missing dates give null: there's no telling whether those are new.
+ */
+function parseReleased(released) {
+  const match = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(String(released || ''));
+  if (!match || match[2] === '00') {
+    return null;
+  }
+  return match[3] && match[3] !== '00'
+    ? `${match[1]}-${match[2]}-${match[3]}`
+    : `${match[1]}-${match[2]}`;
+}
+
+/**
+ * Compared at the release date's own precision, so a month-only date counts
+ * as long as its month reaches the cutoff's.
+ */
+function releasedSince(released, cutoffDay) {
+  return released >= cutoffDay.slice(0, released.length);
+}
+
+/**
+ * Proxies Discogs's database search + release details so the token stays
+ * server-side: every vinyl release (bootlegs included) credited to `artist`
+ * whose exact release date is on or after `since` (the start of the page's
+ * look-back window; which of these are new is the page's call). Search
+ * results only carry a year, so each candidate from the cutoff year on needs
+ * its detail fetched for the date - which is why other formats are dropped
+ * at the search stage already.
+ *
+ * `skip` lists release ids (comma-separated) the page already checked for
+ * this artist on an earlier run - shown, or ruled out - so they don't cost a
+ * detail request again. The ones ruled out this time come back in `rejected`
+ * (id -> release date, or the search year when the detail named other
+ * artists), for the page to add to its list. Releases Discogs only dates
+ * by year come back in `undated`: the page skips those for a while, then has
+ * them looked at again in case a full date has been added since.
+ */
+router.get('/api/discogs/releases', async (req, res) => {
+  const artist = String(req.query.artist || '').trim();
+  const since = String(req.query.since || '').trim();
+  if (!artist || !/^\d{4}-\d{2}-\d{2}/.test(since)) {
+    res.status(400).json({ error: 'artist and since (an ISO date) are required' });
+    return;
+  }
+
+  const cutoffDay = since.slice(0, 10);
+  const cutoffYear = Number(cutoffDay.slice(0, 4));
+  const skip = new Set(String(req.query.skip || '').split(',').filter((id) => /^\d+$/.test(id)));
+
+  // The page cancelled its check: stop spending the rate limit on it.
+  const controller = new AbortController();
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      controller.abort();
+    }
+  });
+
+  try {
+    const candidates = [];
+    const seen = new Set();
+    for (let page = 1; page <= DISCOGS_MAX_SEARCH_PAGES; page++) {
+      const params = new URLSearchParams({
+        type: 'release',
+        format: 'Vinyl',
+        artist,
+        sort: 'year',
+        sort_order: 'desc',
+        per_page: String(DISCOGS_SEARCH_PAGE_SIZE),
+        page: String(page),
+      });
+      const data = await discogsJson(`/database/search?${params.toString()}`, controller.signal);
+      const results = data.results || [];
+
+      let reachedOlder = false;
+      for (const result of results) {
+        const year = Number(result.year);
+        if (!year) {
+          continue;
+        }
+        if (year < cutoffYear) {
+          reachedOlder = true;
+          continue;
+        }
+        // Search titles read "Artist - Title".
+        const credit = String(result.title || '').split(' - ')[0];
+        if (seen.has(result.id) || skip.has(String(result.id)) || !creditMatchesArtist(credit, artist)) {
+          continue;
+        }
+        seen.add(result.id);
+        candidates.push(result);
+      }
+
+      if (reachedOlder || !results.length || page >= (data.pagination?.pages || 0)) {
+        break;
+      }
+    }
+
+    const releases = [];
+    const rejected = {};
+    const undated = [];
+    for (const candidate of candidates) {
+      const detail = await discogsJson(`/releases/${encodeURIComponent(candidate.id)}`, controller.signal);
+      const releasedDate = parseReleased(detail.released);
+      if (!releasedDate) {
+        undated.push(String(candidate.id));
+        continue;
+      }
+      // The search title only told us the credit text; the detail names the
+      // actual artists, so the duo "Fresh & Low" doesn't count for "Low".
+      if (detail.artists?.length && !detail.artists.some((credited) => foldArtistName(credited.name) === foldArtistName(artist))) {
+        rejected[candidate.id] = String(candidate.year);
+        continue;
+      }
+      if (!releasedSince(releasedDate, cutoffDay)) {
+        rejected[candidate.id] = releasedDate;
+        continue;
+      }
+      const [creditTitle, ...titleParts] = String(candidate.title || '').split(' - ');
+      releases.push({
+        id: String(detail.id || candidate.id),
+        title: detail.title || titleParts.join(' - ') || creditTitle,
+        artist: joinDiscogsArtists(detail.artists) || cleanDiscogsName(creditTitle),
+        imageUrl: candidate.cover_image || candidate.thumb || null,
+        releaseUrl: detail.uri || `https://www.discogs.com/release/${candidate.id}`,
+        releasedDate,
+        // Several pressings of one album are separate releases on Discogs,
+        // so the format - colour included - tells their cards apart.
+        format: describeFormats(detail.formats)
+          || (Array.isArray(candidate.format) ? [...new Set(candidate.format)].join(', ') : ''),
+      });
+    }
+
+    res.json({ artist, since: cutoffDay, releases, rejected, undated });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      return;
+    }
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * One random item from `username`'s Discogs collection (the one saved on the
+ * Settings page), without downloading all of it: a one-item page just to read
+ * the total, then the single page of DISCOGS_COLLECTION_PAGE_SIZE that holds
+ * the randomly picked position. The request goes out with this app's token,
+ * so another user's collection is only readable if they've made it public.
+ */
+router.get('/api/discogs/random-collection-item', async (req, res) => {
+  const username = String(req.query.username || '').trim();
+  if (!username) {
+    res.status(400).json({ error: 'username is required' });
+    return;
+  }
+  const collectionPath = `/users/${encodeURIComponent(username)}/collection/folders/0/releases`;
+
+  try {
+    const first = await discogsJson(`${collectionPath}?per_page=1&page=1`);
+    const total = Number(first.pagination?.items) || 0;
+    if (!total) {
+      res.json({ item: null });
+      return;
+    }
+
+    const index = Math.floor(Math.random() * total);
+    const page = Math.floor(index / DISCOGS_COLLECTION_PAGE_SIZE) + 1;
+    const data = await discogsJson(
+      `${collectionPath}?per_page=${DISCOGS_COLLECTION_PAGE_SIZE}&page=${page}`,
+    );
+    const releases = data.releases || [];
+    const entry = releases[index % DISCOGS_COLLECTION_PAGE_SIZE] || releases[releases.length - 1];
+    if (!entry) {
+      res.json({ item: null });
+      return;
+    }
+
+    const info = entry.basic_information || {};
+    const id = info.id || entry.id;
+    res.json({
+      item: {
+        id: String(id),
+        title: info.title || '',
+        artist: joinDiscogsArtists(info.artists),
+        imageUrl: info.cover_image || info.thumb || null,
+        year: Number(info.year) || null,
+        url: `https://www.discogs.com/release/${id}`,
+      },
+    });
+  } catch (err) {
+    // "No such user" and "collection not public" get their own answers, so
+    // the page can say which one it is.
+    if (err.upstreamStatus === 404) {
+      res.status(404).json({ error: 'unknown Discogs user' });
+      return;
+    }
+    if (err.upstreamStatus === 401 || err.upstreamStatus === 403) {
+      res.status(403).json({ error: 'collection is private' });
+      return;
+    }
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 export default router;

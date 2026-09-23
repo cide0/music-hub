@@ -87,6 +87,23 @@
           </div>
           <p class="form-message" id="default-playlist-saved" role="status" hidden></p>
         </section>
+
+        <section class="settings-section" aria-labelledby="settings-discogs-title">
+          <h2 class="settings-section__title" id="settings-discogs-title">Discogs</h2>
+          <p class="settings-section__text">
+            Your Discogs username, for the Pick of the Day from your collection and the link
+            to it on the Discogs page. Your collection needs to be public on Discogs.
+          </p>
+          <form class="inline-form" id="discogs-username-form" novalidate>
+            <label class="visually-hidden" for="discogs-username">Discogs username</label>
+            <input type="text" class="text-input" id="discogs-username" name="discogs-username"
+              placeholder="Discogs username" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="200" />
+            <button type="submit" class="button button--ghost">Save</button>
+            <button type="button" class="button button--ghost" id="discogs-username-clear" hidden>Remove</button>
+          </form>
+          <p class="form-error" id="discogs-username-error" role="alert" hidden></p>
+          <p class="form-message" id="discogs-username-saved" role="status" hidden></p>
+        </section>
       </section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->
