@@ -51,6 +51,7 @@ public/css/          variables.css (palette) + style.css
 public/js/           storage.js, navbar.js, auth.js (every page),
                      spotify.js + google.js (shared API helpers),
                      playlist-picker.js (shared playlist dropdown),
+                     vinyl.js (Discogs format -> CSS-drawn record),
                      <page-name>.js per page
 ```
 

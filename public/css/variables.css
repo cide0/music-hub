@@ -57,6 +57,37 @@
      with no Spotify match yet). */
   --color-warning: #F5C451;
 
+  /* Record colours for the Discogs page's vinyl, picked out of Discogs's
+     format text ("Oxblood", "Coke Bottle Clear", ...) by public/js/vinyl.js.
+     Real-world pressing colours rather than the app palette, so a red
+     record looks red. Slightly lifted black, so grooves still show. */
+  --vinyl-black: #141414;
+  --vinyl-white: #F2F2EE;
+  --vinyl-cream: #EADFC4;
+  --vinyl-grey: #8E8E8E;
+  --vinyl-silver: #C8CDD3;
+  --vinyl-gold: #D6AE3B;
+  --vinyl-bronze: #B06D38;
+  --vinyl-red: #D7263D;
+  --vinyl-oxblood: #6E1423;
+  --vinyl-orange: #F28A24;
+  --vinyl-yellow: #F5D12C;
+  --vinyl-green: #2E9E4F;
+  --vinyl-lime: #A8E22E;
+  --vinyl-mint: #9FE5C3;
+  --vinyl-olive: #7A7F3A;
+  --vinyl-teal: #1FA3A6;
+  --vinyl-blue: #2F6DE0;
+  --vinyl-navy: #1C2A5C;
+  --vinyl-sky: #8CC7F2;
+  --vinyl-purple: #7C3EC6;
+  --vinyl-lilac: #C4A6E9;
+  --vinyl-pink: #F38DB2;
+  --vinyl-magenta: #D6247F;
+  --vinyl-brown: #6B4226;
+  --vinyl-clear: #DCE7EC;
+  --vinyl-glow: #C9FF9C;
+
   /* Google's own logo colours, for the "G" on the Settings page - a brand
      mark, so it keeps them rather than taking the palette's. */
   --color-google-blue: #4285F4;

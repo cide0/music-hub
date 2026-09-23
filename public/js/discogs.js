@@ -356,29 +356,138 @@ window.MusicHub = window.MusicHub || {};
       : core.charAt(0).toUpperCase() + core.slice(1);
   }
 
+  // Touch screens never hover, so there every card shows a sliver of its
+  // record - drawn once the card comes near the screen, not all at once.
+  var NO_HOVER = window.matchMedia && window.matchMedia('(hover: none)').matches;
+  var recordObserver = null;
+
+  function drawRecordWhenVisible(card, cover, release) {
+    if (!('IntersectionObserver' in window)) {
+      addRecord(card, cover, release);
+      return;
+    }
+    if (!recordObserver) {
+      recordObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            recordObserver.unobserve(entry.target);
+            entry.target.drawRecord();
+          }
+        });
+      }, { rootMargin: '300px 0px' });
+    }
+    card.drawRecord = function () {
+      addRecord(card, cover, release);
+    };
+    recordObserver.observe(card);
+  }
+
+  /**
+   * Adds the release's record - drawn from its format by vinyl.js - behind
+   * the sleeve, and gives the card the record's colours to glow in. Done on
+   * first hover rather than up front, so a long list stays light.
+   */
+  function addRecord(card, cover, release) {
+    if (card.record) {
+      return card.record;
+    }
+    var spec = MusicHub.vinyl.describe(release.format);
+    var options = { imageUrl: release.imageUrl, seed: release.id };
+    card.record = MusicHub.vinyl.render(spec, options);
+    cover.insertBefore(card.record, cover.firstChild);
+    // Still until the record is out.
+    MusicHub.vinyl.setPlaying(card.record, false);
+
+    // The text below the cover takes on the record's pattern too.
+    var body = card.querySelector('.release-card__body');
+    if (body) {
+      body.insertBefore(MusicHub.vinyl.backdrop(spec, options), body.firstChild);
+    }
+
+    var colors = MusicHub.vinyl.glowColors(spec);
+    card.style.setProperty('--record-glow', colors.glow);
+    card.style.setProperty('--record-accent', colors.accent);
+    return card.record;
+  }
+
+  /**
+   * Hover or keyboard focus pulls the record out and spins it. The class
+   * goes on a frame after a freshly built record is in place, so it
+   * slides out rather than appearing already out.
+   */
+  function bindRecord(card, cover, release) {
+    var pending = 0;
+
+    function play() {
+      var fresh = !card.record;
+      addRecord(card, cover, release);
+      window.cancelAnimationFrame(pending);
+      if (!fresh) {
+        start();
+        return;
+      }
+      pending = window.requestAnimationFrame(function () {
+        pending = window.requestAnimationFrame(start);
+      });
+    }
+
+    function start() {
+      card.classList.add('release-card--playing');
+      MusicHub.vinyl.setPlaying(card.record, true);
+    }
+
+    function stop() {
+      window.cancelAnimationFrame(pending);
+      card.classList.remove('release-card--playing');
+      if (card.record) {
+        MusicHub.vinyl.setPlaying(card.record, false);
+      }
+    }
+
+    card.addEventListener('pointerenter', function (event) {
+      if (event.pointerType !== 'touch') {
+        play();
+      }
+    });
+    card.addEventListener('pointerleave', stop);
+    card.addEventListener('focus', play);
+    card.addEventListener('blur', stop);
+
+    // The highlight on the record follows the cursor.
+    card.addEventListener('pointermove', function (event) {
+      if (!card.record) {
+        return;
+      }
+      var rect = card.record.getBoundingClientRect();
+      card.record.style.setProperty('--light-x', ((event.clientX - rect.left) / rect.width * 100) + '%');
+      card.record.style.setProperty('--light-y', ((event.clientY - rect.top) / rect.height * 100) + '%');
+    });
+  }
+
   function renderCard(release) {
-    // The concert cards' look and hover, foil sheen included.
-    var card = el('a', 'concert-card concert-card--linked release-card');
+    var card = el('a', 'release-card');
     card.href = release.releaseUrl;
     card.target = '_blank';
     card.rel = 'noopener noreferrer';
 
-    // Feeds the foil sheen the pointer position, as percentages of the card.
-    card.addEventListener('pointermove', function (event) {
-      var rect = card.getBoundingClientRect();
-      card.style.setProperty('--foil-x', ((event.clientX - rect.left) / rect.width * 100) + '%');
-      card.style.setProperty('--foil-y', ((event.clientY - rect.top) / rect.height * 100) + '%');
-    });
-
     var cover = el('div', 'release-card__cover');
+    // The sleeve hides the record until it slides aside, cover art or not.
+    var sleeve = el('div', 'release-card__sleeve');
     if (release.imageUrl) {
       var image = el('img', 'release-card__image');
       image.src = release.imageUrl;
       image.alt = '';
       image.loading = 'lazy';
-      cover.appendChild(image);
+      sleeve.appendChild(image);
     }
+    cover.appendChild(sleeve);
     card.appendChild(cover);
+
+    if (NO_HOVER) {
+      drawRecordWhenVisible(card, cover, release);
+    } else {
+      bindRecord(card, cover, release);
+    }
 
     var body = el('div', 'release-card__body');
     body.appendChild(el('h3', 'release-card__title', release.title));
@@ -438,6 +547,10 @@ window.MusicHub = window.MusicHub || {};
 
   function render() {
     els.list.textContent = '';
+    // The cards just removed don't need their records drawn any more.
+    if (recordObserver) {
+      recordObserver.disconnect();
+    }
     updateClearButton();
     els.searchWrap.hidden = !state.releases.length;
     renderSummary();
