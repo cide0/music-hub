@@ -57,10 +57,11 @@ window.MusicHub = window.MusicHub || {};
     ['zoetrope', /zoetrope/],
     ['picture', /\bpicture\b|\bpic disc\b/],
     ['peppermint', /peppermint|candy[- ]?cane|candy[- ]?stripe/],
+    ['lava', /\blava\b|lava[- ]?lamp|molten|magma/],
     ['splatter', /splatter|splash|speckle|spotted|\bspots?\b|confetti|\bpaint/],
     ['smash', /smash|smush|\bblob|\bmerge/],
     ['marble', /marble|marbling/],
-    ['swirl', /swirl|galaxy|nebula|vortex|tie[- ]?dye|psychedelic|\blava\b/],
+    ['swirl', /swirl|galaxy|nebula|vortex|tie[- ]?dye|psychedelic/],
     ['split', /half[- ]?(?:and|&|n|'n')[- ]?half|\bsplit\b|side[- ]by[- ]side|\bhalf\b/],
     ['stripe', /stripe|tri[- ]?colou?r|segment|pinwheel/],
     // "Yellow In Clear": one colour poured inside the other.
@@ -368,6 +369,79 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * A lava lamp: soft blobs of wax rising and sinking through the base,
+   * swelling and shrinking as they go. Blobs of one colour share a "goo"
+   * filter - blurred, then cut back to a hard edge - so two that drift into
+   * each other melt into one and pull apart again. When `animate` is set
+   * they move (paused and resumed by setPlaying()); otherwise they hold one
+   * moment of it, e.g. for the card backdrop.
+   */
+  function lavaArt(base, waxes, random, animate) {
+    var svg = svgCanvas();
+    svg.appendChild(svgNode('rect', { x: 0, y: 0, width: 200, height: 200 }, { fill: base }));
+
+    // A warm glow where the lamp's bulb would be.
+    var glow = svgNode('radialGradient', { id: 'vinyl-lava-' + (++filterCount), cx: '50%', cy: '50%', r: '55%' });
+    glow.appendChild(svgNode('stop', { offset: '0%' }, { stopColor: waxes[0], stopOpacity: '0.35' }));
+    glow.appendChild(svgNode('stop', { offset: '100%' }, { stopColor: waxes[0], stopOpacity: '0' }));
+    var glowDefs = svgNode('defs');
+    glowDefs.appendChild(glow);
+    svg.appendChild(glowDefs);
+    svg.appendChild(svgNode('rect', { x: 0, y: 0, width: 200, height: 200, fill: 'url(#' + glow.id + ')' }));
+
+    var goo = addFilter(svg, function (filter) {
+      filter.appendChild(svgNode('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: '6', result: 'blur' }));
+      // Alpha x22 - 9: the blurred halo between two close blobs becomes solid.
+      filter.appendChild(svgNode('feColorMatrix', {
+        in: 'blur', type: 'matrix', values: '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9',
+      }));
+    });
+
+    // Around a dozen blobs whatever the number of colours.
+    var perWax = Math.max(3, Math.round(12 / waxes.length));
+    waxes.forEach(function (wax) {
+      var group = svgNode('g', { filter: goo }, { fill: wax });
+      for (var index = 0; index < perWax; index++) {
+        var radius = between(random, 11, 26);
+        var low = between(random, 140, 185);
+        var high = between(random, 15, 60);
+        // Half start at the bottom and rise, half the other way round.
+        var from = random() < 0.5 ? low : high;
+        var to = from === low ? high : low;
+        var x = between(random, 25, 175);
+        var blob = svgNode('circle', {
+          cx: x.toFixed(1),
+          cy: between(random, high, low).toFixed(1),
+          r: radius.toFixed(1),
+        });
+        if (animate) {
+          // Each blob on its own slow clock, started part-way through, so
+          // they never move in step.
+          var duration = between(random, 7, 15);
+          var begin = (-random() * duration).toFixed(2) + 's';
+          var ease = { calcMode: 'spline', keyTimes: '0;0.5;1', keySplines: '0.45 0 0.55 1;0.45 0 0.55 1', repeatCount: 'indefinite', begin: begin };
+          blob.appendChild(svgNode('animate', Object.assign({
+            attributeName: 'cy', values: [from, to, from].map(function (v) { return v.toFixed(1); }).join(';'),
+            dur: duration.toFixed(2) + 's',
+          }, ease)));
+          blob.appendChild(svgNode('animate', Object.assign({
+            attributeName: 'cx', values: [x, x + between(random, -18, 18), x].map(function (v) { return v.toFixed(1); }).join(';'),
+            dur: (duration * between(random, 0.6, 0.9)).toFixed(2) + 's',
+          }, ease)));
+          // Stretched thin in the middle of the trip, round at either end.
+          blob.appendChild(svgNode('animate', Object.assign({
+            attributeName: 'r', values: [radius, radius * between(random, 0.65, 0.85), radius].map(function (v) { return v.toFixed(1); }).join(';'),
+            dur: (duration / 2).toFixed(2) + 's',
+          }, ease)));
+        }
+        group.appendChild(blob);
+      }
+      svg.appendChild(group);
+    });
+    return svg;
+  }
+
+  /**
    * A zoetrope: rings of frames, each drawn a little further along. The CSS
    * spins this disc in steps of exactly one frame slot - what a strobe light
    * does to a real one - so every position on screen shows the next frame
@@ -407,6 +481,129 @@ window.MusicHub = window.MusicHub || {};
       propeller.appendChild(svgNode('rect', { x: -7.5, y: -1.8, width: 15, height: 3.6, rx: 1.8 }, { fill: colors[2] }));
       propeller.appendChild(svgNode('rect', { x: -1.8, y: -7.5, width: 3.6, height: 15, rx: 1.8 }, { fill: colors[2] }));
       frame.appendChild(propeller);
+
+      svg.appendChild(frame);
+    }
+    return svg;
+  }
+
+  /*
+   * The zoetrope's moves for pieces of the cover art. Each takes the frame's
+   * place in the loop (t, 0 to 1) and says which point of the cover sits in
+   * the window (u, v), how far zoomed in, turned, pushed outwards and
+   * squashed. All of them end where they start, so the loop is seamless.
+   */
+  var COVER_MOVES = {
+    // The window glides around a loop over the cover.
+    pan: function (t, p) {
+      return { u: p.u + p.reach * Math.cos(2 * Math.PI * t * p.dir), v: p.v + p.reach * Math.sin(2 * Math.PI * t * p.dir), zoom: p.zoom };
+    },
+    // Pushes in on one spot of the cover and back out.
+    zoom: function (t, p) {
+      return { u: p.u, v: p.v, zoom: p.zoom * (1 + 0.9 * (0.5 - 0.5 * Math.cos(2 * Math.PI * t))) };
+    },
+    // The piece turns a full circle in its window.
+    spin: function (t, p) {
+      return { u: p.u, v: p.v, zoom: p.zoom, turn: p.dir * 360 * t };
+    },
+    // The piece bounces outwards and lands squashed, like the classic ball.
+    bounce: function (t, p) {
+      var height = Math.abs(Math.sin(Math.PI * t));
+      return {
+        u: p.u, v: p.v, zoom: p.zoom,
+        lift: 13 * height,
+        squash: height < 0.25 ? 1 - (0.25 - height) * 1.6 : 1,
+      };
+    },
+  };
+
+  /**
+   * A zoetrope made from the release's own cover art: two rings of windows,
+   * each showing a piece of the cover, moved a little further along from
+   * frame to frame. Which pieces, which moves, window shapes, zoom and
+   * direction all come from the release's seed - no two releases animate
+   * alike, and the same release always does. Frames run backwards like the
+   * drawn figures below.
+   */
+  function coverZoetropeArt(colors, random, angle, imageUrl) {
+    var svg = svgCanvas();
+    svg.appendChild(svgNode('rect', { x: 0, y: 0, width: 200, height: 200 }, { fill: colors[0] }));
+
+    // A printed rule between the two rings.
+    svg.appendChild(svgNode('circle', { cx: 100, cy: 100, r: 62.5, 'stroke-width': '0.8' }, {
+      fill: 'none',
+      stroke: seeThrough('var(--color-text)', 25),
+    }));
+
+    // Shuffle the moves with the seed; each ring takes a different one.
+    var moves = Object.keys(COVER_MOVES).map(function (name) {
+      return { name: name, order: random() };
+    }).sort(function (a, b) {
+      return a.order - b.order;
+    });
+
+    var defs = svgNode('defs');
+    svg.appendChild(defs);
+
+    // Inner ring clears the run-out groove; outer stays inside the rim.
+    var rings = [
+      { distance: 51, size: 17, move: moves[0].name, outline: colors[2] },
+      { distance: 73, size: 21, move: moves[1].name, outline: colors[1] },
+    ].map(function (ring) {
+      var round = random() < 0.5;
+      var half = ring.size / 2;
+      var clip = svgNode('clipPath', { id: 'vinyl-clip-' + (++filterCount) });
+      clip.appendChild(round
+        ? svgNode('circle', { cx: 0, cy: 0, r: half })
+        : svgNode('rect', { x: -half, y: -half, width: ring.size, height: ring.size, rx: (ring.size * 0.18).toFixed(1) }));
+      defs.appendChild(clip);
+      ring.round = round;
+      ring.clip = 'url(#' + clip.id + ')';
+      ring.params = {
+        u: between(random, 0.3, 0.7),
+        v: between(random, 0.3, 0.7),
+        zoom: between(random, 2.2, 4),
+        reach: between(random, 0.1, 0.2),
+        dir: random() < 0.5 ? 1 : -1,
+      };
+      return ring;
+    });
+
+    for (var slot = 0; slot < ZOETROPE_FRAMES; slot++) {
+      var t = ((ZOETROPE_FRAMES - slot) % ZOETROPE_FRAMES) / ZOETROPE_FRAMES;
+      var frame = svgNode('g', { transform: 'rotate(' + (angle + slot * 360 / ZOETROPE_FRAMES).toFixed(1) + ' 100 100)' });
+
+      rings.forEach(function (ring) {
+        var pose = COVER_MOVES[ring.move](t, ring.params);
+        var squash = pose.squash || 1;
+        var place = 'translate(100 ' + (100 - ring.distance - (pose.lift || 0)).toFixed(2) + ')'
+          + ' rotate(' + (pose.turn || 0).toFixed(1) + ')'
+          + ' scale(' + (1 / squash).toFixed(3) + ' ' + squash.toFixed(3) + ')';
+
+        // The whole cover, scaled so the window shows 1/zoom of it, with the
+        // chosen point in the middle - kept from sliding past the cover's edge.
+        var cover = ring.size * pose.zoom;
+        var margin = 0.5 / pose.zoom;
+        var u = Math.min(1 - margin, Math.max(margin, pose.u));
+        var v = Math.min(1 - margin, Math.max(margin, pose.v));
+        var porthole = svgNode('g', { transform: place, 'clip-path': ring.clip });
+        porthole.appendChild(svgNode('image', {
+          href: imageUrl,
+          x: (-u * cover).toFixed(2),
+          y: (-v * cover).toFixed(2),
+          width: cover.toFixed(2),
+          height: cover.toFixed(2),
+          preserveAspectRatio: 'xMidYMid slice',
+        }));
+        frame.appendChild(porthole);
+
+        // A thin printed frame around the window.
+        var half = ring.size / 2;
+        frame.appendChild(svgNode(ring.round ? 'circle' : 'rect', ring.round
+          ? { cx: 0, cy: 0, r: half, transform: place, 'stroke-width': '1' }
+          : { x: -half, y: -half, width: ring.size, height: ring.size, rx: (ring.size * 0.18).toFixed(1), transform: place, 'stroke-width': '1' },
+        { fill: 'none', stroke: ring.outline }));
+      });
 
       svg.appendChild(frame);
     }
@@ -534,11 +731,39 @@ window.MusicHub = window.MusicHub || {};
       case 'zoetrope': {
         // Black unless named, with figures that stand out from it.
         var light = LIGHT_COLORS.indexOf(spec.colors[0]) !== -1;
-        drawing.art = zoetropeArt([
+        var figures = [
           c1,
           colors[1] || token(light ? 'red' : 'yellow'),
           colors[2] || token(light ? 'blue' : 'pink'),
-        ], random, angle);
+        ];
+        // With cover art, the frames are made from it; without, drawn figures.
+        drawing.art = imageUrl
+          ? coverZoetropeArt(figures, random, angle, imageUrl)
+          : zoetropeArt(figures, random, angle);
+        break;
+      }
+
+      case 'lava': {
+        var waxes;
+        var lamp;
+        if (rainbowOnly) {
+          // "Rainbow Lava": every colour on black.
+          lamp = token('black');
+          waxes = spectrum;
+        } else if (colors.length > 1) {
+          // "Black & Orange Lava": the first colour is the lamp, the rest wax.
+          lamp = c1;
+          waxes = colors.slice(1);
+        } else if (spec.named) {
+          // "Red Lava": red wax in a deep red lamp.
+          lamp = darker(c1, 65);
+          waxes = [c1, lighter(c1, 30)];
+        } else {
+          // Plain "Lava": the classic orange and red on black.
+          lamp = token('black');
+          waxes = [token('orange'), token('red')];
+        }
+        drawing.art = lavaArt(lamp, waxes, random, animate);
         break;
       }
 
@@ -708,7 +933,8 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
-   * Starts or pauses a record's SVG animation (the peppermint twist). CSS
+   * Starts or pauses a record's SVG animations (the peppermint twist, the
+   * smash, the lava lamp). CSS
    * handles the spin; this is for the shape animations CSS can't reach.
    * Reduced motion keeps them still.
    */

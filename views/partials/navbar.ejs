@@ -18,22 +18,43 @@
     </a>
 
     <nav class="navbar__tabs" id="navbar-tabs" aria-label="Pages">
-      <% tabs.forEach(function (tab) { %>
-        <% if (tab.external) { %>
-          <a class="navbar__tab" href="<%= tab.href %>" target="_blank" rel="noopener noreferrer">
-            <%= tab.label %>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-          </a>
-        <% } else { %>
-          <a
-            class="navbar__tab<%= tab.href === activePath ? ' navbar__tab--active' : '' %>"
-            href="<%= tab.href %>"
-            <%- tab.href === activePath ? 'aria-current="page"' : '' %>
-          ><%= tab.label %></a>
-        <% } %>
+      <% tabs.filter(function (tab) { return !tab.external; }).forEach(function (tab) { %>
+        <a
+          class="navbar__tab<%= tab.href === activePath ? ' navbar__tab--active' : '' %>"
+          href="<%= tab.href %>"
+          <%- tab.href === activePath ? 'aria-current="page"' : '' %>
+        ><%= tab.label %></a>
       <% }); %>
+
+      <% var externalTabs = tabs.filter(function (tab) { return tab.external; }); %>
+      <% if (externalTabs.length) { %>
+        <div class="navbar__dropdown" id="external-tools">
+          <button
+            type="button"
+            class="navbar__tab navbar__dropdown-toggle"
+            id="external-tools-toggle"
+            aria-controls="external-tools-menu"
+            aria-expanded="false"
+          >
+            External Tools
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          <ul class="navbar__menu" id="external-tools-menu" hidden>
+            <% externalTabs.forEach(function (tab) { %>
+              <li>
+                <a class="navbar__menu-item" href="<%= tab.href %>" target="_blank" rel="noopener noreferrer">
+                  <%= tab.label %>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                </a>
+              </li>
+            <% }); %>
+          </ul>
+        </div>
+      <% } %>
     </nav>
 
     <div class="navbar__actions">

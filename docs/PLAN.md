@@ -179,6 +179,9 @@ Scope of the first implementation step:
      | Video Matcher | https://spotify-video-matcher.onrender.com/ | external app — opens that URL directly, not a page of Music Hub |
      | Release List | https://spotifyreleaselist.netlify.app/ | external app — opens that URL directly, not a page of Music Hub |
      | Listening Stats | https://stats.fm/user/cide?range=lifetime | external link — opens that URL directly, not a page of Music Hub |
+     | Song Downloader | https://spotmate.online/en1 | external link — opens that URL directly, not a page of Music Hub |
+
+     The external links don't get tabs of their own: they're grouped under one **"External Tools"** navbar item, after the internal tabs, which opens a dropdown listing them (each opening in a new browser tab). In the mobile hamburger menu that dropdown expands in place as an indented sub-list.
 7. Implement the real Spotify OAuth login now (Authorization Code Flow with PKCE), **stateless** — no server-side storage of the verifier, so it survives restarts and multiple instances:
    - `GET /login` — generates a PKCE code verifier + challenge, HMAC-signs the verifier (using `SESSION_SECRET`) into the `state` query param sent to Spotify's `/authorize` endpoint, and redirects the browser there.
    - `GET /callback` — receives the authorization code and the signed `state`; verifies the HMAC signature (rejects if invalid or tampered) and extracts the verifier directly from `state` — no server-side lookup needed. Exchanges the code + verifier for an access + refresh token at `https://accounts.spotify.com/api/token` (using the client secret, server-side only), then returns a small HTML page whose inline script writes the tokens (and expiry) into `localStorage` and redirects back to the page the user started from (or home).
@@ -258,6 +261,7 @@ The following pages make up Music Hub. Each is detailed here as it's specced out
 | Spotify Video Matcher | external link only — https://spotify-video-matcher.onrender.com/, no page content within this app |
 | Spotify Release List | external link only — https://spotifyreleaselist.netlify.app/, no page content within this app |
 | Spotify Listening Stats | external link only — https://stats.fm/user/cide?range=lifetime, no page content within this app |
+| Song Downloader | external link only — https://spotmate.online/en1, no page content within this app |
 
 ### Concert Date Fetcher
 

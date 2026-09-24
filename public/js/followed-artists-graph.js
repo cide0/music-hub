@@ -45,6 +45,11 @@ window.MusicHub = window.MusicHub || {};
   var revealTimer = null;
   // The running move into (or out of) the genre layout, if any.
   var layoutTween = null;
+  // Maps an artist's raw Last.fm tags to merged genre names; rebuilt from the
+  // whole library whenever the graph is (re)drawn. Stored tags stay raw.
+  var mergeGenres = function (genres) {
+    return genres || [];
+  };
 
   function startRun(kind) {
     activeRun = { kind: kind, cancelled: false, controller: new AbortController() };
@@ -169,6 +174,135 @@ window.MusicHub = window.MusicHub || {};
     });
 
     return pool;
+  }
+
+  // Node sizes in graph units: followed artists a little bigger than the
+  // recommendations around them.
+  var FOLLOWED_RADIUS = 44;
+  var RECOMMENDED_RADIUS = 34;
+
+  /* -------------------------------------------------------- genre merging */
+
+  /*
+   * Last.fm tags are user-typed, so one genre turns up under several names:
+   * "hip hop" / "hip-hop" / "hiphop", or "usa" / "united states" / "american".
+   * Spelling variants collapse on their own once case, accents, spaces and
+   * punctuation are squashed out (see genreKey); true synonyms need listing.
+   * Each row: the label shown, then every squashed spelling that means it.
+   */
+  var GENRE_SYNONYMS = [
+    ['USA', 'usa', 'us', 'unitedstates', 'unitedstatesofamerica', 'america', 'american'],
+    ['UK', 'uk', 'unitedkingdom', 'greatbritain', 'britain', 'british', 'england', 'english'],
+    ['Germany', 'germany', 'german', 'deutsch', 'deutschland'],
+    ['Austria', 'austria', 'austrian', 'osterreich'],
+    ['Switzerland', 'switzerland', 'swiss', 'schweiz'],
+    ['France', 'france', 'french'],
+    ['Italy', 'italy', 'italian'],
+    ['Spain', 'spain', 'spanish'],
+    ['Netherlands', 'netherlands', 'dutch', 'holland'],
+    ['Belgium', 'belgium', 'belgian'],
+    ['Ireland', 'ireland', 'irish'],
+    ['Scotland', 'scotland', 'scottish'],
+    ['Sweden', 'sweden', 'swedish'],
+    ['Norway', 'norway', 'norwegian'],
+    ['Denmark', 'denmark', 'danish'],
+    ['Finland', 'finland', 'finnish'],
+    ['Iceland', 'iceland', 'icelandic'],
+    ['Poland', 'poland', 'polish'],
+    ['Canada', 'canada', 'canadian'],
+    ['Australia', 'australia', 'australian'],
+    ['New Zealand', 'newzealand', 'nz'],
+    ['Japan', 'japan', 'japanese'],
+    ['South Korea', 'southkorea', 'korea', 'korean'],
+    ['Brazil', 'brazil', 'brazilian'],
+    ['Mexico', 'mexico', 'mexican'],
+    ['german hip hop', 'germanhiphop', 'germanrap', 'deutschrap', 'deutscherrap',
+      'deutschhiphop', 'deutscherhiphop'],
+    ['R&B', 'randb', 'rnb', 'rhythmandblues'],
+    ['drum and bass', 'drumandbass', 'dnb', 'dandb'],
+    ['rock and roll', 'rockandroll', 'rocknroll'],
+    ['EDM', 'edm', 'electronicdancemusic'],
+    ['electronic', 'electronic', 'electronica'],
+    ['alternative', 'alternative', 'alt'],
+    ['alternative rock', 'alternativerock', 'altrock'],
+    ['soundtrack', 'soundtrack', 'soundtracks', 'ost'],
+    ['60s', '60s', '1960s', 'sixties'],
+    ['70s', '70s', '1970s', 'seventies'],
+    ['80s', '80s', '1980s', 'eighties'],
+    ['90s', '90s', '1990s', 'nineties'],
+    ['2000s', '2000s', '00s', 'noughties'],
+    ['2010s', '2010s', '10s'],
+  ];
+
+  // Squashed spelling -> its synonym row's first spelling, and that -> label.
+  var GENRE_ALIAS = {};
+  var GENRE_LABEL = {};
+  GENRE_SYNONYMS.forEach(function (row) {
+    GENRE_LABEL[row[1]] = row[0];
+    row.slice(1).forEach(function (key) {
+      GENRE_ALIAS[key] = row[1];
+    });
+  });
+
+  /**
+   * A genre with everything that only varies in spelling squashed out:
+   * lowercased, accents dropped, "&" and a lone "n" read as "and", then
+   * every space, hyphen and other punctuation removed. So "Hip-Hop",
+   * "hip hop" and "hiphop" all come out as "hiphop", and "Drum 'n' Bass"
+   * as "drumandbass".
+   */
+  function genreKey(name) {
+    var key = String(name || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/&/g, ' and ')
+      .replace(/(^|[^a-z0-9])n(?=[^a-z0-9]|$)/g, '$1and')
+      .replace(/[^a-z0-9]/g, '');
+    return GENRE_ALIAS[key] || key;
+  }
+
+  /**
+   * Returns a function that turns an artist's genre list into merged,
+   * de-duplicated labels, keeping the order (strongest tag first). A listed
+   * synonym gets its fixed label; any other genre is shown in whichever
+   * spelling the library uses most, so every artist agrees on one name.
+   */
+  function genreMerger(artists) {
+    var spellings = {};
+    (artists || []).forEach(function (artist) {
+      (artist.genres || []).forEach(function (genre) {
+        var key = genreKey(genre);
+        if (!key) {
+          return;
+        }
+        var name = String(genre).trim();
+        spellings[key] = spellings[key] || {};
+        spellings[key][name] = (spellings[key][name] || 0) + 1;
+      });
+    });
+
+    var labels = {};
+    Object.keys(spellings).forEach(function (key) {
+      labels[key] = GENRE_LABEL[key] || Object.keys(spellings[key]).sort(function (a, b) {
+        // Most used first; ties settled alphabetically so it's stable.
+        return spellings[key][b] - spellings[key][a] || (a < b ? -1 : a > b ? 1 : 0);
+      })[0];
+    });
+
+    return function (genres) {
+      var seen = {};
+      var merged = [];
+      (genres || []).forEach(function (genre) {
+        var key = genreKey(genre);
+        if (!key || seen[key]) {
+          return;
+        }
+        seen[key] = true;
+        merged.push(labels[key] || GENRE_LABEL[key] || String(genre).trim());
+      });
+      return merged;
+    };
   }
 
   /**
@@ -942,10 +1076,10 @@ window.MusicHub = window.MusicHub || {};
 
   /* -------------------------------------------------------- genre outlines */
 
-  var HULL_PADDING = 90;
+  var HULL_PADDING = 110;
   // Room one artist takes up inside a genre cluster, and the empty space
   // kept between neighbouring clusters.
-  var GENRE_NODE_AREA = 90 * 90;
+  var GENRE_NODE_AREA = 115 * 115;
   var GENRE_GAP = 140;
 
   // Colours for the genres currently outlined, by genre name.
@@ -1231,7 +1365,7 @@ window.MusicHub = window.MusicHub || {};
         .force('charge', window.d3.forceManyBody()
           .strength(dense ? -3600 : -7000).distanceMax(5000))
         .force('collide', window.d3.forceCollide(function (d) {
-          return (d.followed ? 28 : 22) + 160;
+          return nodeRadius(d) + 160;
         }).iterations(2));
       view.simulation.force('link').strength(0.12).distance(dense ? 380 : 560);
       moveToLayout(0.5);
@@ -1289,7 +1423,7 @@ window.MusicHub = window.MusicHub || {};
       // collapsing onto itself - similarity links don't move anything here.
       .force('charge', window.d3.forceManyBody().strength(-40).distanceMax(400))
       .force('collide', window.d3.forceCollide(function (d) {
-        return (d.followed ? 28 : 22) + 14;
+        return nodeRadius(d) + 14;
       }).iterations(2))
       .force('genreX', window.d3.forceX(function (node) {
         return anchorFor(node).x;
@@ -1546,6 +1680,7 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function render() {
+    mergeGenres = genreMerger(graph.artists);
     if (!graph.artists.length) {
       setGraphVisible(false);
       drawGraph([], []);
@@ -1599,7 +1734,7 @@ window.MusicHub = window.MusicHub || {};
       id: artist.spotifyArtistId,
       name: artist.name,
       imageUrl: artist.imageUrl,
-      genres: artist.genres || [],
+      genres: mergeGenres(artist.genres),
       followed: true,
       concerts: counts[artist.spotifyArtistId] || 0,
     };
@@ -1638,6 +1773,7 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
 
+    mergeGenres = genreMerger(graph.artists);
     var counts = concertCounts(MusicHub.storage.read(HISTORY_KEY, null));
     var wanted = {};
     graph.artists.forEach(function (artist) {
@@ -1654,7 +1790,7 @@ window.MusicHub = window.MusicHub || {};
     view.nodes.concat(view.pending).forEach(function (node) {
       present[node.id] = true;
       // Genres may have been fetched in this run.
-      node.genres = wanted[node.id].genres || [];
+      node.genres = mergeGenres(wanted[node.id].genres);
       node.name = wanted[node.id].name;
     });
     graph.artists.forEach(function (artist) {
@@ -1764,7 +1900,7 @@ window.MusicHub = window.MusicHub || {};
       .force('x', window.d3.forceX(width / 2).strength(0.004))
       .force('y', window.d3.forceY(height / 2).strength(0.008))
       .force('collide', window.d3.forceCollide(function (d) {
-        return (d.followed ? 28 : 22) + 160;
+        return nodeRadius(d) + 160;
       }).iterations(2))
       .on('tick', drawPositions);
 
@@ -1907,7 +2043,7 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function nodeRadius(d) {
-    return d.followed ? 28 : 22;
+    return d.followed ? FOLLOWED_RADIUS : RECOMMENDED_RADIUS;
   }
 
   function ensurePattern(node) {
@@ -1932,7 +2068,11 @@ window.MusicHub = window.MusicHub || {};
   function appendBadge(nodes) {
     var badge = nodes.append('g')
       .attr('class', 'graph-badge')
-      .attr('transform', 'translate(20, -20)')
+      // On the circle's upper-right edge, whatever the node's size.
+      .attr('transform', function (d) {
+        var offset = Math.round(nodeRadius(d) * 0.72);
+        return 'translate(' + offset + ', ' + -offset + ')';
+      })
       .on('click', function (event, d) {
         event.stopPropagation();
         window.location.href = '/concert-history?artist=' + encodeURIComponent(d.id);
@@ -1941,7 +2081,7 @@ window.MusicHub = window.MusicHub || {};
     // An inner group so the badge can scale on hover without losing the
     // translate that positions it on the node.
     var badgeInner = badge.append('g').attr('class', 'graph-badge__inner');
-    badgeInner.append('circle').attr('r', 11);
+    badgeInner.append('circle').attr('r', 14);
     badgeInner.append('text')
       .attr('text-anchor', 'middle')
       .attr('dy', '0.35em')
@@ -2009,7 +2149,7 @@ window.MusicHub = window.MusicHub || {};
       .attr('class', 'graph-node__label')
       .attr('text-anchor', 'middle')
       .attr('y', function (d) {
-        return nodeRadius(d) + 16;
+        return nodeRadius(d) + 20;
       })
       .text(function (d) {
         return d.name;
@@ -2448,6 +2588,8 @@ window.MusicHub = window.MusicHub || {};
     cancelRun: cancelRun,
     normalizeArtistName: normalizeArtistName,
     normalizeGraph: normalizeGraph,
+    genreKey: genreKey,
+    genreMerger: genreMerger,
     computeEdges: computeEdges,
     buildRecommendationPool: buildRecommendationPool,
     pickWeighted: pickWeighted,

@@ -10,7 +10,11 @@
       <div class="page__header">
         <h1 class="page__title"><%= pageTitle %></h1>
         <p class="page__countdown" id="next-attending" data-auth-required hidden></p>
-        <p class="page__summary" id="concerts-summary" data-auth-required hidden></p>
+        <!-- Totals over the "Last fetched" time, together no taller than the title. -->
+        <div class="page__meta" data-auth-required>
+          <p class="page__summary" id="concerts-summary" hidden></p>
+          <p class="page__summary" id="last-fetched" hidden></p>
+        </div>
       </div>
 
       <!-- Shown once a valid Spotify login is present. -->
@@ -23,12 +27,26 @@
             </svg>
             Clear saved data
           </button>
-          <span class="toolbar__meta" id="last-fetched" hidden></span>
 
-          <div class="filter-group" id="concert-filters" role="group" aria-label="Filter concerts" hidden>
-            <button type="button" class="filter-button filter-button--active" data-filter="all" aria-pressed="true">All</button>
-            <button type="button" class="filter-button" data-filter="attending" aria-pressed="false">I&rsquo;m attending</button>
-            <button type="button" class="filter-button" data-filter="new" aria-pressed="false" disabled>New</button>
+          <div class="toolbar__end concert-controls" id="concert-controls" hidden>
+            <div class="concert-search">
+              <label class="visually-hidden" for="concert-search">Search concerts</label>
+              <div class="input-clear">
+                <input type="text" id="concert-search" class="text-input" placeholder="Search artist, venue, city…"
+                  autocomplete="off" spellcheck="false" />
+                <button type="button" class="input-clear__button" id="concert-search-clear" aria-label="Clear search" hidden>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="filter-group" id="concert-filters" role="group" aria-label="Filter concerts">
+              <button type="button" class="filter-button filter-button--active" data-filter="all" aria-pressed="true">All</button>
+              <button type="button" class="filter-button" data-filter="attending" aria-pressed="false">I&rsquo;m attending</button>
+              <button type="button" class="filter-button" data-filter="new" aria-pressed="false" disabled>New</button>
+            </div>
           </div>
         </div>
 

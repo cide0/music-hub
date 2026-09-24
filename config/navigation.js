@@ -1,4 +1,6 @@
 // Single source of truth for the navbar tabs, used by every page route.
+// External links don't get tabs of their own - the navbar gathers them into
+// one "External Tools" dropdown after the internal pages.
 export const tabs = [
   { label: 'Concerts', title: 'Upcoming concerts', href: '/concert-date-fetcher', external: false },
   { label: 'Artist Graph', href: '/followed-artists-graph', external: false },
@@ -9,6 +11,7 @@ export const tabs = [
   { label: 'Video Matcher', href: 'https://spotify-video-matcher.onrender.com/', external: true },
   { label: 'Release List', href: 'https://spotifyreleaselist.netlify.app/', external: true },
   { label: 'Listening Stats', href: 'https://stats.fm/user/cide?range=lifetime', external: true },
+  { label: 'Song Downloader', href: 'https://spotmate.online/en1', external: true },
 ];
 
 // Every internal page renders from a view of the same name. A tab can carry

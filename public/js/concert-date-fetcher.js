@@ -21,6 +21,8 @@ window.MusicHub = window.MusicHub || {};
   // turned up, and it isn't persisted.
   var activeFilter = 'all';
   var lastNewIds = [];
+  // What's typed into the card search - only for this visit, not stored.
+  var searchQuery = '';
   // The fetch currently in flight, if any - so it can be cancelled.
   var activeRun = null;
   // Ticking countdown to the next concert the user is attending.
@@ -380,6 +382,32 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /** Lowercased and without accents, so "bjork" finds "Björk". */
+  function fold(text) {
+    return String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+
+  /**
+   * The concerts whose card text contains every word of the search, in any
+   * order ("muse berlin" finds Muse at the Uber Arena, Berlin).
+   */
+  function searchConcerts(concerts, search) {
+    var words = fold(search).split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      return concerts;
+    }
+    return concerts.filter(function (concert) {
+      var haystack = fold([]
+        .concat(concert.artists || [], concert.supportArtists || [])
+        .concat([concert.eventName, concert.venueName, concert.city, formatConcertDate(concert)])
+        .filter(Boolean)
+        .join(' '));
+      return words.every(function (word) {
+        return haystack.indexOf(word) !== -1;
+      });
+    });
+  }
+
   /* ------------------------------------------------------------- countdown */
 
   // A show still counts as "happening now" for a few hours after doors.
@@ -521,6 +549,16 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function emptyFilterMessage() {
+    if (searchQuery.trim()) {
+      var quoted = '“' + searchQuery.trim() + '”';
+      if (activeFilter === 'attending') {
+        return 'None of the concerts you’re attending match ' + quoted + '.';
+      }
+      if (activeFilter === 'new') {
+        return 'None of the new concerts match ' + quoted + '.';
+      }
+      return 'No upcoming concerts match ' + quoted + '.';
+    }
     if (activeFilter === 'attending') {
       return "You haven't marked any upcoming concerts as attending yet.";
     }
@@ -535,8 +573,8 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
 
-    // Filters are pointless with nothing to filter.
-    els.filters.hidden = !upcomingCount;
+    // Filters and search are pointless with nothing to filter.
+    els.controls.hidden = !upcomingCount;
 
     var newButton = els.filters.querySelector('[data-filter="new"]');
     newButton.disabled = !lastNewIds.length;
@@ -576,10 +614,17 @@ window.MusicHub = window.MusicHub || {};
       MusicHub.storage.remove(STORAGE_KEY);
       state = { lastFetchedAt: null, concerts: [] };
       activeFilter = 'all';
+      setSearch('');
       els.failedNotice.hidden = true;
       hideToast();
       render([]);
     });
+  }
+
+  function setSearch(value) {
+    searchQuery = value;
+    els.search.value = value;
+    els.searchClear.hidden = !value;
   }
 
   function renderLastFetched() {
@@ -825,7 +870,7 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
 
-    var visible = filterConcerts(upcoming, activeFilter, lastNewIds);
+    var visible = searchConcerts(filterConcerts(upcoming, activeFilter, lastNewIds), searchQuery);
     updateSummary(visible);
 
     if (!visible.length) {
@@ -1115,7 +1160,10 @@ window.MusicHub = window.MusicHub || {};
     els.list = document.getElementById('concerts-list');
     els.lastFetched = document.getElementById('last-fetched');
     els.clearButton = document.getElementById('clear-concerts');
+    els.controls = document.getElementById('concert-controls');
     els.filters = document.getElementById('concert-filters');
+    els.search = document.getElementById('concert-search');
+    els.searchClear = document.getElementById('concert-search-clear');
     els.summary = document.getElementById('concerts-summary');
     els.countdown = document.getElementById('next-attending');
     eta = MusicHub.progressEta.create(document.getElementById('fetch-eta'));
@@ -1135,6 +1183,22 @@ window.MusicHub = window.MusicHub || {};
       }
       activeFilter = button.getAttribute('data-filter');
       render(lastNewIds);
+    });
+    els.search.addEventListener('input', function () {
+      setSearch(els.search.value);
+      render(lastNewIds);
+    });
+    els.search.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' || !searchQuery) {
+        return;
+      }
+      setSearch('');
+      render(lastNewIds);
+    });
+    els.searchClear.addEventListener('click', function () {
+      setSearch('');
+      render(lastNewIds);
+      els.search.focus();
     });
     document.getElementById('failed-dismiss').addEventListener('click', function () {
       els.failedNotice.hidden = true;
@@ -1159,6 +1223,7 @@ window.MusicHub = window.MusicHub || {};
     mergeConcerts: mergeConcerts,
     applyPreviousState: applyPreviousState,
     filterConcerts: filterConcerts,
+    searchConcerts: searchConcerts,
     clearStoredData: clearStoredData,
     pickRepresentative: pickRepresentative,
     buildConcerts: buildConcerts,

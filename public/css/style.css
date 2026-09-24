@@ -228,6 +228,86 @@ button[aria-disabled='true'] {
   height: 14px;
 }
 
+/* "External Tools": one tab that drops down the links to other apps. The
+   wrapper stays unpositioned so the menu resolves against .navbar (sticky,
+   so positioned) and isn't clipped by the scrolling tab strip; navbar.js
+   lines it up under the button. */
+.navbar__dropdown {
+  display: flex;
+}
+
+.navbar__dropdown-toggle {
+  border: none;
+  background-color: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.navbar__dropdown-toggle[aria-expanded='true'] {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.navbar__dropdown-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.navbar__dropdown-toggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.navbar__menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  z-index: 1;
+  min-width: 200px;
+  margin: 0;
+  padding: 0.375rem;
+  list-style: none;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55);
+}
+
+/* An invisible strip over the gap up to the button, so moving the mouse
+   from the button into the menu keeps it hovered. */
+.navbar__menu::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 1.25rem;
+}
+
+.navbar__menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 40px;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.navbar__menu-item:hover,
+.navbar__menu-item:focus-visible {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.navbar__menu-item svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
 .navbar__actions {
   display: flex;
   flex: none;
@@ -726,6 +806,23 @@ button[aria-disabled='true'] {
   text-align: right;
 }
 
+/* Two short lines stacked in the totals' spot, centred against the title
+   instead of hanging below its baseline. */
+.page__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  grid-column: 3;
+  justify-self: end;
+  align-self: center;
+  gap: 0.125rem;
+}
+
+.page__meta .page__summary {
+  font-size: 0.875rem;
+  line-height: 1.25;
+}
+
 @media (max-width: 700px) {
   /* Too narrow for three columns: stack them, all left-aligned. */
   .page__header {
@@ -733,10 +830,15 @@ button[aria-disabled='true'] {
   }
 
   .page__countdown,
-  .page__summary {
+  .page__summary,
+  .page__meta {
     grid-column: 1;
     justify-self: start;
     text-align: left;
+  }
+
+  .page__meta {
+    align-items: flex-start;
   }
 
   /* A full-size countdown would wrap over several lines on a phone. */
@@ -810,6 +912,31 @@ button[aria-disabled='true'] {
   }
 
   .navbar__tab {
+    min-height: 44px;
+    justify-content: flex-start;
+  }
+
+  /* Inside the hamburger menu the dropdown opens in place, as an indented
+     sub-list under its button, rather than floating. */
+  .navbar__dropdown {
+    flex-direction: column;
+  }
+
+  .navbar__menu {
+    position: static;
+    min-width: 0;
+    padding: 0.125rem 0 0 1rem;
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .navbar__menu::before {
+    content: none;
+  }
+
+  .navbar__menu-item {
     min-height: 44px;
     justify-content: flex-start;
   }
@@ -1864,6 +1991,29 @@ textarea.text-input {
   margin-left: 0;
 }
 
+/* Filters the concert cards as you type, left of the filter tabs. A fixed
+   width capped by max-width rather than min(260px, 100%): the percentage
+   can't resolve while the toolbar group sizes itself, so the field's native
+   width would be reserved instead, leaving a gap at the right-hand edge. */
+.concert-search {
+  width: 260px;
+  max-width: 100%;
+}
+
+@media (max-width: 600px) {
+  /* The whole group gets its own row, and the field a full-width row below
+     the tabs. */
+  .concert-controls {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .concert-search {
+    order: 1;
+    width: 100%;
+  }
+}
+
 /* The native dropdown arrow can't be positioned, so it's replaced with one we
    can place properly. */
 .select-wrap {
@@ -2152,11 +2302,11 @@ textarea.text-input {
 
 .graph-node__label {
   fill: var(--color-text-soft);
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   paint-order: stroke;
   stroke: var(--color-bg);
-  stroke-width: 3px;
+  stroke-width: 4px;
   /* The name is the link to Spotify, so it has to be clickable. */
   cursor: pointer;
 }
@@ -2217,7 +2367,7 @@ textarea.text-input {
 
 .graph-badge text {
   fill: var(--color-text);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
   pointer-events: none;
 }
@@ -3065,9 +3215,11 @@ textarea.text-input {
   margin: 0 0.5rem;
 }
 
-/* Filters the release list as you type. */
+/* Filters the release list as you type. Sized like .concert-search, for
+   the same reason. */
 .release-search {
-  width: min(280px, 100%);
+  width: 280px;
+  max-width: 100%;
 }
 
 @media (max-width: 600px) {
@@ -3213,6 +3365,12 @@ textarea.text-input {
   color: inherit;
   text-decoration: none;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  /* Cards off screen skip layout and painting, so a long list stays quick to
+     filter. Safe here: the card already clips its content, and its glow is
+     its own box-shadow, which this doesn't clip. The height is a stand-in
+     until a card has rendered once; `auto` then remembers its real one. */
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 420px;
 }
 
 /* The same lift as the concert cards, glowing in the record's own colours. */

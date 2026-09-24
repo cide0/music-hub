@@ -37,6 +37,14 @@ window.MusicHub = window.MusicHub || {};
   var toastTimer = null;
   // What's typed into the release search - only for this visit, not stored.
   var query = '';
+  // Every card built so far, by release id: { release, card, text }. Cards
+  // are built once and kept, so searching only shows and hides them instead
+  // of rebuilding the list - and redrawing every record - on each keystroke.
+  var cards = {};
+  // How many cards the current search leaves showing.
+  var visibleCount = 0;
+  // The search waiting for the next frame, so fast typing filters once per frame.
+  var searchFrame = 0;
 
   function el(tag, className, text) {
     var node = document.createElement(tag);
@@ -231,19 +239,40 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
-   * The releases whose artist or title contain every word of the search, in
-   * any order ("swift ophelia" finds "Taylor Swift - The Fate Of Ophelia").
+   * The text lines under a card's cover, in order. The search reads the same
+   * lines, so whatever a card shows can be searched for.
+   */
+  function cardLines(release) {
+    return [release.title, release.artist, formatReleaseDate(release.releasedDate), release.format];
+  }
+
+  /**
+   * The releases whose card text contains every word of the search, in any
+   * order ("swift ophelia" finds "Taylor Swift - The Fate Of Ophelia", "splatter
+   * 2026" every splatter vinyl out this year).
    */
   function filterReleases(releases, search) {
-    var words = fold(search).split(/\s+/).filter(Boolean);
+    var words = searchWords(search);
     if (!words.length) {
       return releases;
     }
     return releases.filter(function (release) {
-      var haystack = fold(release.artist + ' ' + release.title);
-      return words.every(function (word) {
-        return haystack.indexOf(word) !== -1;
-      });
+      return matches(searchText(release), words);
+    });
+  }
+
+  function searchWords(search) {
+    return fold(search).split(/\s+/).filter(Boolean);
+  }
+
+  /** Everything a card shows, folded once - the raw date too, so "2026-08" works. */
+  function searchText(release) {
+    return fold(cardLines(release).concat(release.releasedDate).filter(Boolean).join(' '));
+  }
+
+  function matches(text, words) {
+    return words.every(function (word) {
+      return text.indexOf(word) !== -1;
     });
   }
 
@@ -490,12 +519,13 @@ window.MusicHub = window.MusicHub || {};
     }
 
     var body = el('div', 'release-card__body');
+    var lines = cardLines(release);
     body.appendChild(el('h3', 'release-card__title', release.title));
     body.appendChild(el('p', 'release-card__artist', release.artist));
-    body.appendChild(el('p', 'release-card__meta', formatReleaseDate(release.releasedDate)));
-    if (release.format) {
-      body.appendChild(el('p', 'release-card__meta', release.format));
-    }
+    // Date and format: whatever cardLines() adds after the first two.
+    lines.slice(2).filter(Boolean).forEach(function (line) {
+      body.appendChild(el('p', 'release-card__meta', line));
+    });
     card.appendChild(body);
 
     return card;
@@ -507,7 +537,7 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function renderSummary() {
-    setSummary(summaryText(state.releases, filterReleases(state.releases, query).length, query));
+    setSummary(summaryText(state.releases, visibleCount, query));
   }
 
   function hasSavedData() {
@@ -545,14 +575,75 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  function render() {
-    els.list.textContent = '';
-    // The cards just removed don't need their records drawn any more.
-    if (recordObserver) {
-      recordObserver.disconnect();
+  /**
+   * The card for a release: the one already built, unless the release has
+   * been replaced since (a new check brings fresh objects).
+   */
+  function cardFor(release) {
+    var entry = cards[release.id];
+    if (!entry || entry.release !== release) {
+      entry = { release: release, card: renderCard(release), text: searchText(release) };
+      cards[release.id] = entry;
     }
+    return entry;
+  }
+
+  /** Drops the cards of releases no longer in the list. */
+  function pruneCards() {
+    var current = {};
+    state.releases.forEach(function (release) {
+      current[release.id] = release;
+    });
+    Object.keys(cards).forEach(function (id) {
+      if (current[id] !== cards[id].release) {
+        if (recordObserver) {
+          recordObserver.unobserve(cards[id].card);
+        }
+        delete cards[id];
+      }
+    });
+  }
+
+  /**
+   * Shows the cards matching the search and hides the rest - no cards are
+   * built or removed, so the records already drawn stay drawn.
+   */
+  function applySearch() {
+    window.cancelAnimationFrame(searchFrame);
+    var words = searchWords(query);
+    visibleCount = 0;
+    state.releases.forEach(function (release) {
+      var entry = cards[release.id];
+      if (!entry) {
+        return;
+      }
+      var show = !words.length || matches(entry.text, words);
+      if (entry.card.hidden === show) {
+        entry.card.hidden = !show;
+      }
+      if (show) {
+        visibleCount++;
+      }
+    });
+    renderSummary();
+
+    if (state.checkedAt && state.releases.length) {
+      setMessage(visibleCount ? '' : 'No releases match \u201c' + query.trim() + '\u201d.');
+    }
+  }
+
+  /** Filters on the next frame, once, however many keys came in before it. */
+  function scheduleSearch() {
+    window.cancelAnimationFrame(searchFrame);
+    searchFrame = window.requestAnimationFrame(applySearch);
+  }
+
+  function render() {
+    pruneCards();
+    els.list.textContent = '';
     updateClearButton();
     els.searchWrap.hidden = !state.releases.length;
+    visibleCount = state.releases.length;
     renderSummary();
 
     if (state.checkedAt) {
@@ -572,16 +663,14 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
 
-    var visible = filterReleases(state.releases, query);
-    if (!visible.length) {
-      setMessage('No releases match \u201c' + query.trim() + '\u201d.');
-      return;
-    }
-
-    setMessage('');
-    visible.forEach(function (release) {
-      els.list.appendChild(renderCard(release));
+    // Every card goes in, in order, in one go; the search then hides the
+    // ones it rules out.
+    var fragment = document.createDocumentFragment();
+    state.releases.forEach(function (release) {
+      fragment.appendChild(cardFor(release).card);
     });
+    els.list.appendChild(fragment);
+    applySearch();
   }
 
   /* ------------------------------------------------------ pick of the day */
@@ -888,13 +977,13 @@ window.MusicHub = window.MusicHub || {};
     els.search.addEventListener('input', function () {
       query = els.search.value;
       els.searchClear.hidden = !query;
-      render();
+      scheduleSearch();
     });
     els.searchClear.addEventListener('click', function () {
       els.search.value = '';
       query = '';
       els.searchClear.hidden = true;
-      render();
+      applySearch();
       els.search.focus();
     });
 
