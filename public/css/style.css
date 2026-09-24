@@ -3634,12 +3634,6 @@ textarea.text-input {
   color: var(--color-text-muted);
 }
 
-.case__open {
-  min-height: 56px;
-  padding: 0.75rem 2.75rem;
-  font-size: 1.125rem;
-}
-
 /* The CS:GO-style reel. Cover size scales down on phones, so the strip
    never pushes the page sideways. */
 .reel {
@@ -4142,8 +4136,8 @@ textarea.text-input {
       transparent 214deg);
 }
 
-/* A round power button with the power symbol: dim while off, pressed in and
-   lit - symbol and ring glowing - as the platter starts. */
+/* A round power button with the power symbol: black while off, pressed in
+   and lit - symbol and ring glowing - as the platter starts. */
 .turntable__power {
   position: absolute;
   right: 3.5%;
@@ -4164,7 +4158,8 @@ textarea.text-input {
   grid-area: 1 / 1;
   width: 55%;
   height: 55%;
-  color: var(--color-purple-700);
+  /* Unlit: plain black until the power comes on. */
+  color: var(--color-black);
 }
 
 .turntable__power-on {
