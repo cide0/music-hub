@@ -7,19 +7,25 @@
     <%- include('partials/navbar') %>
 
     <main class="page">
-      <div class="page__header">
-        <h1 class="page__title"><%= pageTitle %></h1>
-      </div>
-
       <!-- Shown once a valid Spotify login is present. -->
       <section class="page__content" data-auth-required>
         <nav class="breadcrumb" id="breadcrumb" aria-label="Breadcrumb"></nav>
 
         <!-- Level 1: artist folders -->
         <section id="view-artists">
-          <div class="toolbar">
-            <div class="add-artist" id="add-artist">
-              <button type="button" class="button button--primary" id="add-artist-toggle">+ Add artist</button>
+          <p class="empty-state" id="artists-empty" hidden></p>
+          <div class="folder-grid" id="artists-grid">
+            <!-- Always the first card: renderArtists keeps it and rebuilds the rest. -->
+            <div class="folder-card folder-card--add folder-card--add-artist" id="add-artist">
+              <svg class="folder-card__dashes" aria-hidden="true"><rect width="100%" height="100%" rx="12" /></svg>
+              <button type="button" class="folder-card__open" id="add-artist-toggle"
+                aria-expanded="false" aria-controls="add-artist-panel">
+                <svg class="folder-card__icon folder-card__icon--add" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span class="folder-card__name">Add artist</span>
+                <span class="folder-card__meta">From the artists you follow</span>
+              </button>
 
               <div class="add-panel" id="add-artist-panel" hidden>
                 <label class="visually-hidden" for="artist-search">Search your followed artists</label>
@@ -29,9 +35,6 @@
               </div>
             </div>
           </div>
-
-          <p class="empty-state" id="artists-empty" hidden></p>
-          <div class="folder-grid" id="artists-grid"></div>
         </section>
 
         <!-- Everything hearted, across every artist and concert -->
@@ -42,12 +45,18 @@
 
         <!-- Level 2: concert subfolders -->
         <section id="view-concerts" hidden>
-          <div class="toolbar">
-            <button type="button" class="button button--primary" id="add-concert">+ Add concert</button>
-          </div>
-
           <p class="empty-state" id="concerts-empty" hidden></p>
-          <ul class="folder-grid folder-grid--tiles" id="concerts-list"></ul>
+          <ul class="folder-grid folder-grid--tiles" id="concerts-list">
+            <!-- Always the first tile: renderConcerts keeps it and rebuilds the rest. -->
+            <li class="folder-card folder-card--concert folder-card--add" id="add-concert-tile">
+              <button type="button" class="folder-card__open" id="add-concert">
+                <svg class="folder-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span class="folder-card__name">Add concert</span>
+              </button>
+            </li>
+          </ul>
         </section>
 
         <!-- Level 3: the images and videos of one concert -->

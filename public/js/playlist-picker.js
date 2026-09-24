@@ -1,6 +1,6 @@
 /*
  * The playlist dropdown: a custom listbox, since a native <select> can't show
- * cover images. Used by Setlist Fetcher and by the Settings page's default
+ * cover images. Used by Setlists and by the Settings page's default
  * playlist. Markup it expects inside `root`:
  *
  *   .playlist-picker__toggle > .playlist-picker__current

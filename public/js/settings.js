@@ -1,5 +1,5 @@
 /*
- * Settings: the Google login state, the Setlist Fetcher's default playlist,
+ * Settings: the Google login state, the Setlists page's default playlist,
  * the Discogs username, and the Export / Import / Clear data controls. Every choice made here is saved
  * through MusicHub.storage.setSetting, so it travels with Export / Import.
  */

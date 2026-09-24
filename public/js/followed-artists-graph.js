@@ -2378,7 +2378,7 @@ window.MusicHub = window.MusicHub || {};
     concertsOnly = enabled;
     var shown = applyVisibility();
     if (enabled && !shown) {
-      setMessage('No artists with concerts in Concert Gallery yet.');
+      setMessage('No artists with concerts in the Gallery yet.');
     }
   }
 

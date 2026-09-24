@@ -7,17 +7,12 @@
     <%- include('partials/navbar') %>
 
     <main class="page">
-      <div class="page__header">
-        <h1 class="page__title"><%= pageTitle %></h1>
-      </div>
-
       <!-- Shown once a valid Spotify login is present. -->
       <section class="page__content" data-auth-required>
         <form class="setlist-search" id="setlist-search">
           <div class="setlist-search__field">
-            <label class="setlist-search__label" for="setlist-artist">Artist name</label>
             <div class="input-clear">
-              <input type="text" id="setlist-artist" class="text-input" autocomplete="off" required />
+              <input type="text" id="setlist-artist" class="text-input" placeholder="Artist name" aria-label="Artist name" autocomplete="off" required />
               <button type="button" class="input-clear__button" data-clear="setlist-artist" aria-label="Clear artist name" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -26,9 +21,8 @@
             </div>
           </div>
           <div class="setlist-search__field">
-            <label class="setlist-search__label" for="setlist-city">City</label>
             <div class="input-clear">
-              <input type="text" id="setlist-city" class="text-input" autocomplete="off" required />
+              <input type="text" id="setlist-city" class="text-input" placeholder="City" aria-label="City" autocomplete="off" required />
               <button type="button" class="input-clear__button" data-clear="setlist-city" aria-label="Clear city" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -47,7 +41,7 @@
 
         <!-- Past concerts flagged on Concert Date Fetcher; hidden when there are none. -->
         <section id="past-shows" hidden>
-          <h2 class="section-title">Shows from Concert Date Fetcher</h2>
+          <h2 class="section-title">Past concerts</h2>
           <ul class="past-shows" id="past-shows-list"></ul>
         </section>
 
@@ -112,6 +106,19 @@
             <p class="form-error fade-message" id="playlist-error" role="alert" hidden></p>
           </div>
         </section>
+
+        <!-- Asks before a past concert is forgotten (see confirmRemoveShow). -->
+        <dialog class="modal modal--confirm" id="remove-show-dialog" aria-labelledby="remove-show-dialog-title"
+          aria-describedby="remove-show-dialog-text">
+          <form class="modal__form" id="remove-show-form">
+            <h2 class="modal__title" id="remove-show-dialog-title">Remove this concert?</h2>
+            <p class="modal__hint" id="remove-show-dialog-text"></p>
+            <div class="modal__actions">
+              <button type="button" class="button button--ghost" id="remove-show-cancel">Cancel</button>
+              <button type="submit" class="button button--danger">Remove</button>
+            </div>
+          </form>
+        </dialog>
       </section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->

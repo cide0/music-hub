@@ -209,7 +209,33 @@ const SETLISTFM_URL = 'https://api.setlist.fm/rest/1.0/search/setlists';
 // few pages are read and sorted here. Enough to get past placeholder entries
 // without spending much of the 2 requests/second budget.
 const SETLISTFM_MAX_PAGES = 3;
-const SETLISTFM_PAGE_DELAY_MS = 550;
+// setlist.fm allows 2 requests a second. Every request this server makes -
+// whichever search or page it's for - takes the next free slot on one shared
+// clock: the page's follow-up search (the artist's shows anywhere, when the
+// city's newest setlist is empty) arrives the moment the first one answers,
+// so gaps inside a single search aren't enough. The gap also counts from when
+// the previous answer came back, not just from when it was sent - a slow
+// request can reach setlist.fm late and leave the next one right behind it.
+// Cached answers (setlist.fm caches each query for 60s) don't count.
+const SETLISTFM_REQUEST_INTERVAL_MS = 550;
+// setlist.fm's throttling is looser than that on some runs and stricter on
+// others - a request well over a second after the last one can still get a
+// 429. Nothing was served then, so it's retried, each time after a longer
+// pause (1.5s, then 3s).
+const SETLISTFM_MAX_RETRIES = 2;
+const SETLISTFM_RATE_LIMITED_PAUSE_MS = 1500;
+
+let setlistfmNextSlotAt = 0;
+
+/** Waits for, and takes, the next free setlist.fm request slot. */
+async function waitForSetlistfmSlot() {
+  const now = Date.now();
+  const startAt = Math.max(now, setlistfmNextSlotAt);
+  setlistfmNextSlotAt = startAt + SETLISTFM_REQUEST_INTERVAL_MS;
+  if (startAt > now) {
+    await wait(startAt - now);
+  }
+}
 
 function sameName(a, b) {
   const fold = (value) => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
@@ -260,16 +286,23 @@ function parseSetlist(setlist) {
   };
 }
 
-async function fetchSetlistPage(params, page) {
+async function fetchSetlistPage(params, page, attempt = 0) {
+  await waitForSetlistfmSlot();
   const response = await fetch(`${SETLISTFM_URL}?${params.toString()}&p=${page}`, {
     headers: {
       'x-api-key': requireEnv('SETLISTFM_API_KEY'),
       Accept: 'application/json',
     },
   });
+  setlistfmNextSlotAt = Math.max(setlistfmNextSlotAt, Date.now() + SETLISTFM_REQUEST_INTERVAL_MS);
   // setlist.fm answers "no results" with a 404 rather than an empty list.
   if (response.status === 404) {
     return { setlist: [], total: 0, itemsPerPage: 20 };
+  }
+  if (response.status === 429 && attempt < SETLISTFM_MAX_RETRIES) {
+    const pause = SETLISTFM_RATE_LIMITED_PAUSE_MS * (attempt + 1);
+    setlistfmNextSlotAt = Math.max(setlistfmNextSlotAt, Date.now() + pause);
+    return fetchSetlistPage(params, page, attempt + 1);
   }
   if (!response.ok) {
     const error = new Error(`setlist.fm request failed (${response.status})`);
@@ -292,9 +325,6 @@ async function searchSetlists(artist, cityName) {
 
   const results = [];
   for (let page = 1; page <= SETLISTFM_MAX_PAGES; page++) {
-    if (page > 1) {
-      await wait(SETLISTFM_PAGE_DELAY_MS);
-    }
     const data = await fetchSetlistPage(params, page);
     results.push(...(data.setlist || []));
     if (page * (data.itemsPerPage || 20) >= (data.total || 0)) {
@@ -321,10 +351,7 @@ router.get('/api/setlists', async (req, res) => {
     // setlist.fm may say "Cologne": try the other spellings on a miss.
     const cityNames = city ? citySearchNames(city) : [null];
     let results = [];
-    for (const [index, cityName] of cityNames.entries()) {
-      if (index > 0) {
-        await wait(SETLISTFM_PAGE_DELAY_MS);
-      }
+    for (const cityName of cityNames) {
       results = await searchSetlists(artist, cityName);
       if (results.length) {
         break;

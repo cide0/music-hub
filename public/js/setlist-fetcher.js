@@ -1,5 +1,5 @@
 /*
- * Setlist Fetcher: finds an artist's newest setlist in a city via the
+ * Setlists: finds an artist's newest setlist in a city via the
  * backend's setlist.fm proxy, lets the user trim it, matches every song to a
  * Spotify track and appends the result to one of their playlists.
  *
@@ -27,6 +27,8 @@ window.MusicHub = window.MusicHub || {};
 
   var els = {};
   var searching = false;
+  // The past concert the remove dialog is asking about, while it's open.
+  var pendingRemoval = null;
   // The setlist on screen: { setlist, songs, source } - or null.
   var current = null;
   // Bumped whenever the song list is replaced, so a matching run that is
@@ -152,39 +154,103 @@ window.MusicHub = window.MusicHub || {};
   function renderPastShows() {
     var shows = pastShows();
     els.pastList.textContent = '';
-    els.pastSection.hidden = shows.length === 0;
 
     shows.forEach(function (concert) {
-      var item = el('li', 'past-show');
-      var info = el('div', 'past-show__info');
-      info.appendChild(el('p', 'past-show__artists', concert.artists.join(', ')));
-      info.appendChild(el('p', 'past-show__meta',
-        formatDate(concert.localDate) + ' · ' + place(concert.venueName, concert.city)));
-      item.appendChild(info);
-
-      // setlist.fm searches by one artist, so a shared bill gets one
-      // button per artist.
-      var actions = el('div', 'past-show__actions');
-      var merged = concert.artists.length > 1;
+      // setlist.fm searches by one artist, so a shared bill gets one row
+      // per artist.
       concert.artists.forEach(function (artist) {
-        var button = el('button', 'button button--ghost past-show__fetch',
-          merged ? 'Fetch setlist · ' + artist : 'Fetch setlist');
-        button.type = 'button';
-        button.setAttribute('data-fetch-setlist', '');
-        button.setAttribute('data-label', button.textContent);
-        button.disabled = searching;
-        button.addEventListener('click', function () {
+        var when = formatDate(concert.localDate) + ' · ' + place(concert.venueName, concert.city);
+        var item = el('li', 'past-show');
+        var info = el('div', 'past-show__info');
+        info.appendChild(el('span', 'past-show__artists', artist));
+        info.appendChild(el('span', 'past-show__meta', when));
+        var status = el('span', 'past-show__status', 'Searching…');
+        status.hidden = true;
+        info.appendChild(status);
+        item.appendChild(info);
+
+        // The whole row fetches the setlist: an overlay button covers it,
+        // while the remove button sits above the overlay.
+        var open = el('button', 'past-show__open');
+        open.type = 'button';
+        open.setAttribute('data-fetch-setlist', '');
+        open.setAttribute('aria-label', 'Fetch the setlist of ' + artist + ', ' + when);
+        open.disabled = searching;
+        open.addEventListener('click', function () {
           els.artistInput.value = artist;
           els.cityInput.value = concert.city || '';
           updateClearButtons();
-          runSearch(artist, concert.city || '', button, { concertId: concert.id, artist: artist });
+          runSearch(artist, concert.city || '', open, { concertId: concert.id, artist: artist });
         });
-        actions.appendChild(button);
-      });
-      item.appendChild(actions);
+        item.appendChild(open);
 
-      els.pastList.appendChild(item);
+        var remove = el('button', 'icon-button past-show__remove');
+        remove.type = 'button';
+        remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+          + 'stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" />'
+          + '<line x1="6" y1="6" x2="18" y2="18" /></svg>';
+        remove.title = 'Remove';
+        remove.setAttribute('aria-label', 'Remove ' + artist + ', ' + when);
+        remove.disabled = searching;
+        remove.addEventListener('click', function () {
+          confirmRemoveShow(concert.id, artist, when);
+        });
+        item.appendChild(remove);
+
+        // Feeds the foil sheen the pointer position, as on the Concerts page.
+        item.addEventListener('pointermove', function (event) {
+          var rect = item.getBoundingClientRect();
+          item.style.setProperty('--foil-x', ((event.clientX - rect.left) / rect.width * 100) + '%');
+          item.style.setProperty('--foil-y', ((event.clientY - rect.top) / rect.height * 100) + '%');
+        });
+
+        els.pastList.appendChild(item);
+      });
     });
+    updatePastShowsVisibility();
+  }
+
+  /** Past concerts give way to an open setlist, and come back once it closes. */
+  function updatePastShowsVisibility() {
+    els.pastSection.hidden = !els.pastList.children.length || !els.setlist.hidden;
+  }
+
+  /**
+   * Asks, in the page's own dialog, before a past concert is forgotten.
+   * A shared bill only loses this one artist's row.
+   */
+  function confirmRemoveShow(concertId, artist, when) {
+    pendingRemoval = { concertId: concertId, artist: artist };
+    els.removeText.textContent = artist + ' (' + when + ') will be removed from your stored past concerts. '
+      + "This can't be undone.";
+    els.removeDialog.showModal();
+    // Cancel is the safe default for Enter.
+    els.removeCancel.focus();
+  }
+
+  /** Takes the artist off the stored concert, and the concert once none are left. */
+  function removeShow(concertId, artist) {
+    var data = readConcertData();
+    if (!data) {
+      return;
+    }
+    var name = fold(artist);
+    data.concerts = data.concerts.filter(function (concert) {
+      if (concert.id !== concertId || !Array.isArray(concert.artists)) {
+        return true;
+      }
+      concert.artists = concert.artists.filter(function (other) {
+        return fold(other) !== name;
+      });
+      if (Array.isArray(concert.supportArtists)) {
+        concert.supportArtists = concert.supportArtists.filter(function (other) {
+          return fold(other) !== name;
+        });
+      }
+      return concert.artists.length > 0;
+    });
+    MusicHub.storage.write(CONCERTS_KEY, data);
+    renderPastShows();
   }
 
   /**
@@ -240,14 +306,19 @@ window.MusicHub = window.MusicHub || {};
 
   function setSearching(on, activeButton) {
     searching = on;
-    var buttons = [els.searchButton].concat(
-      Array.prototype.slice.call(els.pastList.querySelectorAll('[data-fetch-setlist]')),
-    );
-    buttons.forEach(function (button) {
-      button.disabled = on;
-      button.textContent = on && button === activeButton
-        ? 'Searching…'
-        : button.getAttribute('data-label');
+    els.searchButton.disabled = on;
+    els.searchButton.textContent = on && activeButton === els.searchButton
+      ? 'Searching…'
+      : els.searchButton.getAttribute('data-label');
+    // A past show keeps its text and gets a "Searching…" line instead.
+    els.pastList.classList.toggle('past-shows--busy', on);
+    els.pastList.querySelectorAll('.past-show').forEach(function (item) {
+      var active = on && item.contains(activeButton);
+      item.classList.toggle('past-show--searching', active);
+      item.querySelector('.past-show__status').hidden = !active;
+      item.querySelectorAll('button').forEach(function (button) {
+        button.disabled = on;
+      });
     });
   }
 
@@ -289,6 +360,7 @@ window.MusicHub = window.MusicHub || {};
     hide(els.setlist);
     hide(els.closeButton);
     els.songList.textContent = '';
+    updatePastShowsVisibility();
   }
 
   /**
@@ -413,6 +485,7 @@ window.MusicHub = window.MusicHub || {};
 
     show(els.setlist);
     show(els.closeButton);
+    updatePastShowsVisibility();
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     els.setlist.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
 
@@ -1199,6 +1272,37 @@ window.MusicHub = window.MusicHub || {};
     els.playlistHint = document.getElementById('playlist-hint');
     els.playlistError = document.getElementById('playlist-error');
     els.toast = document.getElementById('setlist-toast');
+    els.removeDialog = document.getElementById('remove-show-dialog');
+    els.removeText = document.getElementById('remove-show-dialog-text');
+    els.removeCancel = document.getElementById('remove-show-cancel');
+
+    document.getElementById('remove-show-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      var removal = pendingRemoval;
+      els.removeDialog.close();
+      if (removal) {
+        removeShow(removal.concertId, removal.artist);
+      }
+    });
+    els.removeCancel.addEventListener('click', function () {
+      els.removeDialog.close();
+    });
+    // A click on the backdrop, outside the dialog box, closes it too.
+    els.removeDialog.addEventListener('click', function (event) {
+      if (event.target !== els.removeDialog) {
+        return;
+      }
+      var rect = els.removeDialog.getBoundingClientRect();
+      var inside = event.clientX >= rect.left && event.clientX <= rect.right
+        && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      if (!inside) {
+        els.removeDialog.close();
+      }
+    });
+    // However it closes - Cancel, Escape, the backdrop - nothing is removed.
+    els.removeDialog.addEventListener('close', function () {
+      pendingRemoval = null;
+    });
 
     els.form.addEventListener('input', updateClearButtons);
     els.form.addEventListener('click', function (event) {

@@ -7,22 +7,20 @@
     <%- include('partials/navbar') %>
 
     <main class="page">
-      <div class="page__header">
-        <h1 class="page__title"><%= pageTitle %></h1>
-        <!-- Points at the username saved on the Settings page; hidden until one is. -->
-        <p class="page__summary" id="collection-link-wrap" data-auth-required hidden>
-          <a class="external-link" id="collection-link" target="_blank" rel="noopener noreferrer">
-            Your Discogs collection
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="14" height="14">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-          </a>
-        </p>
-      </div>
-
       <!-- Shown once a valid Spotify login is present. -->
       <section class="page__content" data-auth-required>
-        <h2 class="section-title section-title--first">Pick of the Day</h2>
+        <div class="section-header section-header--first">
+          <h2 class="section-title">Pick of the Day</h2>
+          <!-- Points at the username saved on the Settings page; hidden until one is. -->
+          <p class="section-header__link" id="collection-link-wrap" hidden>
+            <a class="external-link" id="collection-link" target="_blank" rel="noopener noreferrer">
+              Your Discogs collection
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="14" height="14">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </a>
+          </p>
+        </div>
         <div class="pick-card" id="pick-of-the-day" aria-live="polite">
           <p class="pick-card__message">Picking something from your collection…</p>
         </div>

@@ -548,12 +548,22 @@ window.MusicHub = window.MusicHub || {};
     els.artistsGrid.appendChild(card);
   }
 
+  /**
+   * Empties a folder grid except for its "add" card, which stays first. It is
+   * never taken out of the page, so an open artist picker in it stays as is.
+   */
+  function clearGrid(grid, addCard) {
+    while (addCard.nextSibling) {
+      grid.removeChild(addCard.nextSibling);
+    }
+  }
+
   function renderArtists() {
-    els.artistsGrid.textContent = '';
+    clearGrid(els.artistsGrid, els.addArtistCard);
     renderFavoritesFolder();
 
     if (!data.artists.length) {
-      els.artistsEmpty.textContent = "No artists yet — use '+ Add artist' to get started";
+      els.artistsEmpty.textContent = 'No artists yet — use Add artist to get started';
       els.artistsEmpty.hidden = false;
       return;
     }
@@ -604,7 +614,7 @@ window.MusicHub = window.MusicHub || {};
 
   function renderConcerts() {
     var artist = findArtist(data, currentView.artistId);
-    els.concertsList.textContent = '';
+    clearGrid(els.concertsList, els.addConcertTile);
     if (!artist) {
       go({ view: 'artists' }, 'replace');
       return;
@@ -612,7 +622,7 @@ window.MusicHub = window.MusicHub || {};
 
     var concerts = sortedConcerts(artist);
     if (!concerts.length) {
-      els.concertsEmpty.textContent = "No concerts yet — add one with '+ Add concert'";
+      els.concertsEmpty.textContent = 'No concerts yet — add one with Add concert';
       els.concertsEmpty.hidden = false;
       return;
     }
@@ -980,6 +990,7 @@ window.MusicHub = window.MusicHub || {};
   function closeArtistPicker() {
     if (els.artistPanel) {
       els.artistPanel.hidden = true;
+      els.addArtistToggle.setAttribute('aria-expanded', 'false');
     }
   }
 
@@ -1044,6 +1055,7 @@ window.MusicHub = window.MusicHub || {};
 
   function openArtistPicker() {
     els.artistPanel.hidden = false;
+    els.addArtistToggle.setAttribute('aria-expanded', 'true');
     els.artistSearch.value = '';
     els.artistSearch.focus();
     renderArtistPicker();
@@ -1215,8 +1227,11 @@ window.MusicHub = window.MusicHub || {};
     els.viewConcerts = document.getElementById('view-concerts');
     els.viewMedia = document.getElementById('view-media');
     els.artistsGrid = document.getElementById('artists-grid');
+    els.addArtistCard = document.getElementById('add-artist');
+    els.addArtistToggle = document.getElementById('add-artist-toggle');
     els.artistsEmpty = document.getElementById('artists-empty');
     els.concertsList = document.getElementById('concerts-list');
+    els.addConcertTile = document.getElementById('add-concert-tile');
     els.concertsEmpty = document.getElementById('concerts-empty');
     els.imagesGrid = document.getElementById('images-grid');
     els.videosList = document.getElementById('videos-list');
@@ -1247,7 +1262,7 @@ window.MusicHub = window.MusicHub || {};
 
     data = load();
 
-    document.getElementById('add-artist-toggle').addEventListener('click', function () {
+    els.addArtistToggle.addEventListener('click', function () {
       if (els.artistPanel.hidden) {
         openArtistPicker();
       } else {
