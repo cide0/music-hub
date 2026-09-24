@@ -1170,8 +1170,10 @@ button[aria-disabled='true'] {
 }
 
 /* Holographic foil sheen: a light source that follows the cursor, over a
-   shifting colour wash. Purely decorative, so it never takes pointer events. */
-.concert-card::after {
+   shifting colour wash. Purely decorative, so it never takes pointer events.
+   Shared with the Album Suggester's history entries. */
+.concert-card::after,
+.history-item::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1929,7 +1931,6 @@ textarea.text-input {
   margin: 0;
   padding: 0.625rem 0.875rem;
   border: 1px solid var(--color-border);
-  border-left-width: 3px;
   border-radius: var(--radius-card);
   background-color: var(--color-surface-raised);
 }
@@ -2012,49 +2013,6 @@ textarea.text-input {
     order: 1;
     width: 100%;
   }
-}
-
-/* The native dropdown arrow can't be positioned, so it's replaced with one we
-   can place properly. */
-.select-wrap {
-  position: relative;
-  display: inline-flex;
-}
-
-/* Points down for newest-first, up for oldest-first. */
-.select-wrap::after {
-  content: '▾';
-  position: absolute;
-  top: 50%;
-  right: 1rem;
-  transform: translateY(-50%);
-  color: var(--color-text-soft);
-  pointer-events: none;
-}
-
-.select-wrap--asc::after {
-  content: '▴';
-}
-
-.select-input {
-  appearance: none;
-  -webkit-appearance: none;
-  min-height: 44px;
-  padding: 0.5rem 2.75rem 0.5rem 1.25rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background-color: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  cursor: pointer;
-}
-
-/* Browsers treat a click on a <select> as keyboard focus, so the global focus
-   ring would linger after every click. The border marks focus instead. */
-.select-input:focus,
-.select-input:focus-visible {
-  outline: none;
-  border-color: var(--color-primary);
 }
 
 /* Stacked under the delete button in the top-left corner. */
@@ -3651,6 +3609,13 @@ textarea.text-input {
 
 /* --------------------------------------------------------- album suggester */
 
+/* Cover size on the reel, shared with the turntable that sets each spin up
+   so the two fill the same frame. Smaller on phones (see below). */
+.case {
+  --reel-cover: 168px;
+  --reel-gap: 10px;
+}
+
 /* Waiting for a spin: the library size and one big button. */
 .case__idle {
   display: flex;
@@ -3678,19 +3643,25 @@ textarea.text-input {
 /* The CS:GO-style reel. Cover size scales down on phones, so the strip
    never pushes the page sideways. */
 .reel {
-  --reel-cover: 128px;
-  --reel-gap: 8px;
   position: relative;
-  border: 1px solid var(--color-border);
+  /* Its own stacking context, so the gold rays sit behind the covers but
+     above the reel's background - and, raised, above the page after it, as
+     they spill past the reel's edges. */
+  z-index: 1;
+  /* Lit like the marker line: its colour, and its neon glow both ways. */
+  border: 2px solid var(--color-purple-100);
   border-radius: var(--radius-card);
   background-color: var(--color-surface);
+  box-shadow:
+    0 0 10px var(--color-purple-300),
+    inset 0 0 10px var(--color-purple-300);
 }
 
 /* Clips the strip; the vertical padding leaves room for the winner to grow.
    Covers fade out towards both ends, like the case window in the game. */
 .reel__window {
   overflow: hidden;
-  padding: 1.5rem 0;
+  padding: 2.25rem 0;
   -webkit-mask-image: linear-gradient(90deg, transparent, var(--color-black) 14%, var(--color-black) 86%, transparent);
   mask-image: linear-gradient(90deg, transparent, var(--color-black) 14%, var(--color-black) 86%, transparent);
 }
@@ -3709,18 +3680,41 @@ textarea.text-input {
   overflow: hidden;
   border-radius: 6px;
   background-color: var(--color-surface-raised);
+  transition: opacity 0.5s ease;
 }
 
-/* Echoes the rarity bar under each item in CS:GO - the same on every cover,
-   as every album has the same odds. */
+/* An album's rarity tier comes from how long it has been saved
+   (album-suggester.js). --rarity colours the bar under each reel item, as in
+   CS:GO, and the glow around the winner and the revealed cover. */
+[data-rarity] {
+  --rarity: var(--rarity-blue);
+}
+
+[data-rarity="purple"] {
+  --rarity: var(--rarity-purple);
+}
+
+[data-rarity="pink"] {
+  --rarity: var(--rarity-pink);
+}
+
+[data-rarity="red"] {
+  --rarity: var(--rarity-red);
+}
+
+[data-rarity="gold"] {
+  --rarity: var(--rarity-gold);
+}
+
 .reel__item::after {
   content: '';
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
+  z-index: 4;
   height: 5px;
-  background-color: var(--color-primary);
+  background-color: var(--rarity);
 }
 
 .reel__cover {
@@ -3736,15 +3730,229 @@ textarea.text-input {
   background-color: var(--color-accent);
 }
 
+/* A solid ring in the tier's colour plus a big glow lightened towards white,
+   so even purple and red stand out against the dark purple reel. */
 .reel__item--winner {
   z-index: 1;
-  box-shadow: 0 0 24px color-mix(in srgb, var(--color-primary) 80%, transparent);
+  box-shadow:
+    0 0 0 3px var(--rarity),
+    0 0 22px 6px color-mix(in srgb, var(--rarity) 75%, var(--color-text)),
+    0 0 48px 14px color-mix(in srgb, var(--rarity) 70%, transparent);
   animation: winner-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 @keyframes winner-pop {
   from { transform: scale(1); }
   to { transform: scale(1.14); }
+}
+
+/* ---- Gold: a framed, glowing, glinting cover (album-suggester.js adds the
+   frame and sparkle elements). Layers, back to front: the spinning frame
+   gradient, the inset cover, the shine, the sparkles, the bar. */
+
+.reel__item[data-rarity="gold"] {
+  padding: 3px;
+  background-color: var(--rarity-gold-deep);
+  animation: gold-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes gold-glow {
+  0%, 100% { box-shadow: 0 0 12px 1px color-mix(in srgb, var(--rarity-gold) 60%, transparent); }
+  50% { box-shadow: 0 0 28px 7px color-mix(in srgb, var(--rarity-gold-bright) 85%, transparent); }
+}
+
+.reel__item[data-rarity="gold"] .reel__cover {
+  position: relative;
+  z-index: 1;
+  border-radius: 4px;
+}
+
+/* Only the ring left around the inset cover shows; the two highlights in
+   the gradient are the light that circles the edge. */
+.gold-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 160%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: conic-gradient(
+    var(--rarity-gold-deep),
+    var(--rarity-gold) 18%,
+    var(--rarity-gold-shine) 25%,
+    var(--rarity-gold) 32%,
+    var(--rarity-gold-deep) 50%,
+    var(--rarity-gold) 68%,
+    var(--rarity-gold-shine) 75%,
+    var(--rarity-gold) 82%,
+    var(--rarity-gold-deep)
+  );
+  pointer-events: none;
+  animation: gold-spin 2.2s linear infinite;
+}
+
+@keyframes gold-spin {
+  to { rotate: 1turn; }
+}
+
+/* A warm wash over the cover plus a bright band of light sweeping across
+   it, then a short rest before the next pass. */
+.reel__item[data-rarity="gold"]::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  z-index: 2;
+  border-radius: 4px;
+  background:
+    linear-gradient(115deg,
+      transparent 35%,
+      color-mix(in srgb, var(--rarity-gold-shine) 95%, transparent) 48%,
+      var(--rarity-gold-shine) 50%,
+      color-mix(in srgb, var(--rarity-gold-shine) 95%, transparent) 52%,
+      transparent 65%)
+    no-repeat,
+    color-mix(in srgb, var(--rarity-gold) 24%, transparent);
+  background-size: 250% 100%, auto;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: gold-shine 1.5s ease-in-out infinite;
+}
+
+@keyframes gold-shine {
+  0% { background-position: 150% 0, 0 0; }
+  65%, 100% { background-position: -50% 0, 0 0; }
+}
+
+/* Four-pointed sparkles that twinkle in turn. Sized in %, so they scale
+   with the cover - the reel's and the reveal's alike. */
+.gold-sparkle {
+  position: absolute;
+  z-index: 3;
+  width: 11%;
+  aspect-ratio: 1;
+  background-color: var(--rarity-gold-shine);
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  opacity: 0;
+  pointer-events: none;
+  animation: gold-twinkle 1.6s ease-in-out infinite;
+}
+
+.gold-sparkle--0 { top: 9%; left: 12%; }
+.gold-sparkle--1 { top: 22%; right: 10%; width: 8%; animation-delay: 0.4s; }
+.gold-sparkle--2 { bottom: 14%; left: 22%; width: 7%; animation-delay: 0.8s; }
+.gold-sparkle--3 { right: 20%; bottom: 26%; animation-delay: 1.2s; }
+
+@keyframes gold-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.2) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(45deg); }
+}
+
+/* The bar underneath shimmers too. */
+.reel__item[data-rarity="gold"]::after {
+  background: linear-gradient(90deg,
+    var(--rarity-gold-deep),
+    var(--rarity-gold),
+    var(--rarity-gold-shine),
+    var(--rarity-gold),
+    var(--rarity-gold-deep));
+  background-size: 200% 100%;
+  animation: gold-bar 1.2s linear infinite;
+}
+
+@keyframes gold-bar {
+  from { background-position: 200% 0; }
+  to { background-position: 0 0; }
+}
+
+/* ---- A gold win: the rest of the reel dims, rays spin up behind the
+   winner and it pops bigger than any other tier. */
+
+.reel--gold .reel__item:not(.reel__item--winner) {
+  opacity: 0.25;
+}
+
+.reel__item[data-rarity="gold"].reel__item--winner-gold {
+  animation:
+    gold-pop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+    gold-glow-win 1.2s ease-in-out infinite;
+}
+
+@keyframes gold-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.34); }
+  70% { transform: scale(1.22); }
+  100% { transform: scale(1.28); }
+}
+
+@keyframes gold-glow-win {
+  0%, 100% { box-shadow: 0 0 30px 6px color-mix(in srgb, var(--rarity-gold) 80%, transparent); }
+  50% { box-shadow: 0 0 56px 16px color-mix(in srgb, var(--rarity-gold-bright) 95%, transparent); }
+}
+
+/* Light rays behind a gold cover, fading out from the middle. The circle
+   itself stays still and clips a turning layer inside it: a turning box
+   grows by up to 41% at 45deg, which would push a phone's page sideways. */
+.gold-rays {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  overflow: hidden;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  -webkit-mask-image: radial-gradient(closest-side, var(--color-black) 15%, transparent 100%);
+  mask-image: radial-gradient(closest-side, var(--color-black) 15%, transparent 100%);
+  pointer-events: none;
+}
+
+.gold-rays__spin {
+  position: absolute;
+  inset: -21%;
+  background: repeating-conic-gradient(
+    color-mix(in srgb, var(--rarity-gold-bright) 60%, transparent) 0deg 6deg,
+    transparent 6deg 18deg
+  );
+}
+
+.gold-rays--reel {
+  /* Never wider than the screen, so a phone doesn't scroll sideways. */
+  width: min(calc(var(--reel-cover) * 4.5), 100vw);
+  animation: gold-rays-in 0.6s ease-out both;
+}
+
+.gold-rays--reel .gold-rays__spin {
+  animation: gold-spin 9s linear infinite;
+}
+
+@keyframes gold-rays-in {
+  from { opacity: 0; scale: 0.3; }
+  to { opacity: 1; scale: 1; }
+}
+
+/* No motion: gold keeps its frame and a steady glow. */
+@media (prefers-reduced-motion: reduce) {
+  .reel__item[data-rarity="gold"],
+  .reel__item[data-rarity="gold"]::before,
+  .reel__item[data-rarity="gold"]::after,
+  .gold-frame,
+  .gold-rays,
+  .gold-rays__spin {
+    animation: none;
+  }
+
+  .reel__item[data-rarity="gold"],
+  .reel__item--winner-gold {
+    box-shadow: 0 0 24px 4px color-mix(in srgb, var(--rarity-gold) 80%, transparent);
+  }
+
+  .reel__item[data-rarity="gold"]::before {
+    background-position: 150% 0, 0 0;
+  }
+
+  .gold-sparkle {
+    display: none;
+  }
 }
 
 /* The fixed line the reel stops under, with a notch top and bottom. */
@@ -3780,13 +3988,266 @@ textarea.text-input {
   border-bottom-color: var(--color-purple-100);
 }
 
-/* The flourish when the reel stops: a screen-wide flash of purple light and
-   a burst of particles from the winning cover (album-suggester.js). */
+/* ---- The turntable that sets up each spin (album-suggester.js): laid over
+   the reel inside its neon frame, then faded out over the rolling covers.
+   Sized off the plinth's height; everything inside is in % of the plinth,
+   so it scales with the reel on phones. */
+
+.turntable {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: inherit;
+  background-color: var(--color-surface);
+  pointer-events: none;
+}
+
+.turntable__plinth {
+  position: relative;
+  height: calc(var(--reel-cover) + 1.5rem);
+  aspect-ratio: 1.45;
+  border: 1px solid var(--color-purple-800);
+  border-radius: 14px;
+  background: linear-gradient(160deg, var(--color-purple-900), var(--color-purple-950));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-text) 8%, transparent),
+    0 10px 30px color-mix(in srgb, var(--color-black) 60%, transparent);
+}
+
+/* The platter, and the record on it, share one square on the left. */
+.turntable__platter,
+.turntable__record {
+  position: absolute;
+  top: 6%;
+  left: 4%;
+  height: 88%;
+  aspect-ratio: 1;
+}
+
+/* A dark mat with a thin metal ring, inside a metal rim. */
+.turntable__platter {
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    var(--color-purple-950) 0 60%,
+    color-mix(in srgb, var(--vinyl-silver) 30%, var(--color-purple-950)) 61% 63%,
+    var(--color-purple-950) 64% 95%,
+    color-mix(in srgb, var(--vinyl-silver) 55%, var(--color-purple-900)) 96% 100%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-black) 50%, transparent);
+}
+
+.turntable__record .vinyl {
+  inset: 5%;
+}
+
+/* Polished metal in the colour of the rarest tier the library has (its
+   data-rarity): its grooves, but no brushed-metal bands - a pulsing glow
+   behind it, its still reflection tinted to match, and a band of light
+   sweeping across (.turntable__glint). --record-bright is the glow,
+   --record-shine the highlights; gold has its own shades for both. */
+.turntable__record {
+  --record-bright: color-mix(in srgb, var(--rarity) 75%, var(--color-text));
+  --record-shine: color-mix(in srgb, var(--rarity) 25%, var(--color-text));
+}
+
+.turntable__record[data-rarity="gold"] {
+  --record-bright: var(--rarity-gold-bright);
+  --record-shine: var(--rarity-gold-shine);
+}
+
+.turntable__record .vinyl__finish {
+  display: none;
+}
+
+/* Over vinyl.js's own inline colour for the record. */
+.turntable__record .vinyl__surface {
+  background: radial-gradient(circle at 50% 50%,
+    color-mix(in srgb, var(--rarity) 88%, var(--color-text)),
+    var(--rarity) 55%,
+    color-mix(in srgb, var(--rarity) 78%, var(--color-black))) !important;
+}
+
+.turntable__record::before {
+  content: '';
+  position: absolute;
+  inset: -6%;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--record-bright) 55%, transparent) 40%,
+    color-mix(in srgb, var(--rarity) 25%, transparent) 55%,
+    transparent 70%);
+  animation: turntable-glow 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes turntable-glow {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
+}
+
+.turntable__record .vinyl__disc {
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-black) 55%, transparent);
+}
+
+.turntable__glint {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.turntable__glint::after {
+  content: '';
+  position: absolute;
+  top: -10%;
+  bottom: -10%;
+  left: 0;
+  width: 55%;
+  background: linear-gradient(100deg,
+    transparent,
+    color-mix(in srgb, var(--record-shine) 80%, transparent) 50%,
+    transparent);
+  mix-blend-mode: screen;
+  translate: -120% 0;
+  animation: turntable-glint 2.4s ease-in-out infinite;
+}
+
+@keyframes turntable-glint {
+  0% { translate: -120% 0; }
+  55%, 100% { translate: 220% 0; }
+}
+
+/* No motion: a steady glow and no sweep. */
+@media (prefers-reduced-motion: reduce) {
+  .turntable__record::before {
+    animation: none;
+  }
+
+  .turntable__glint {
+    display: none;
+  }
+}
+
+.turntable__record .vinyl__sheen {
+  background:
+    radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--record-shine) 55%, transparent), transparent 45%),
+    conic-gradient(from 30deg,
+      transparent 0deg,
+      color-mix(in srgb, var(--record-shine) 40%, transparent) 16deg,
+      transparent 34deg 180deg,
+      color-mix(in srgb, var(--record-shine) 40%, transparent) 196deg,
+      transparent 214deg);
+}
+
+/* A round power button with the power symbol: dim while off, pressed in and
+   lit - symbol and ring glowing - as the platter starts. */
+.turntable__power {
+  position: absolute;
+  right: 3.5%;
+  bottom: 5%;
+  display: grid;
+  place-items: center;
+  width: 11%;
+  aspect-ratio: 1;
+  border: 1px solid var(--color-purple-700);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--color-purple-800), var(--color-purple-950));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-text) 12%, transparent),
+    0 2px 5px color-mix(in srgb, var(--color-black) 60%, transparent);
+}
+
+.turntable__power-icon {
+  grid-area: 1 / 1;
+  width: 55%;
+  height: 55%;
+  color: var(--color-purple-700);
+}
+
+.turntable__power-on {
+  position: absolute;
+  inset: -1px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  box-shadow:
+    0 0 8px var(--color-purple-300),
+    inset 0 0 6px var(--color-purple-300);
+  opacity: 0;
+}
+
+.turntable__power-icon--on {
+  color: var(--color-purple-50);
+  filter: drop-shadow(0 0 2px var(--color-purple-300)) drop-shadow(0 0 5px var(--color-purple-300));
+}
+
+/* Pivots at the top right: turned a few degrees it rests beside the
+   platter, ARM_PLAY_DEG (album-suggester.js) puts the needle on the record. */
+.turntable__arm {
+  position: absolute;
+  top: 8%;
+  right: 10%;
+  width: 8%;
+  height: 80%;
+  transform-origin: 50% 7%;
+  /* ARM_REST_DEG in album-suggester.js. */
+  rotate: 9deg;
+}
+
+.turntable__pivot {
+  position: absolute;
+  top: 7%;
+  left: 50%;
+  width: 150%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--vinyl-silver), var(--vinyl-grey) 70%);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--color-black) 60%, transparent);
+}
+
+.turntable__rod {
+  position: absolute;
+  top: 7%;
+  /* Ends just inside the headshell's top, so the two read as one piece. */
+  bottom: 18%;
+  left: 50%;
+  width: 3px;
+  translate: -50% 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--vinyl-grey), var(--vinyl-silver), var(--vinyl-grey));
+}
+
+/* The headshell, angled like a real one and lit in the reel frame's neon;
+   scaled up while the arm is raised. Hinged at its top centre, where the rod
+   ends, so the angle and the scaling never pull it off the rod. */
+.turntable__head {
+  position: absolute;
+  top: 81%;
+  left: 50%;
+  width: 50%;
+  height: 17%;
+  transform-origin: 50% 0;
+  translate: -50% 0;
+  rotate: 18deg;
+  border-radius: 3px;
+  background-color: var(--color-purple-100);
+  box-shadow:
+    0 0 6px var(--color-purple-300),
+    0 0 12px var(--color-purple-300);
+}
+
+/* The flourish when the reel stops: a screen-wide flash of light and a burst
+   of particles from the winning cover, both in its tier's colour
+   (album-suggester.js sets data-rarity on them). */
 .case-pulse {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--color-primary) 45%, transparent), transparent 70%);
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--rarity, var(--color-primary)) 50%, transparent), transparent 70%);
   opacity: 0;
   pointer-events: none;
 }
@@ -3806,38 +4267,154 @@ textarea.text-input {
   width: 10px;
   height: 10px;
   border-radius: 2px;
-  background-color: var(--color-primary);
+  background-color: var(--rarity, var(--color-primary));
 }
 
 .case-burst__particle--1 {
   border-radius: 50%;
-  background-color: var(--color-accent);
+  background-color: color-mix(in srgb, var(--rarity, var(--color-accent)) 60%, var(--color-text));
 }
 
 .case-burst__particle--2 {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--color-purple-300);
+  background-color: color-mix(in srgb, var(--rarity, var(--color-purple-300)) 30%, var(--color-text));
+}
+
+/* A gold win's flash and burst, in gold rather than the app's purple. */
+.case-pulse--gold {
+  background: radial-gradient(circle at 50% 40%,
+    color-mix(in srgb, var(--rarity-gold-shine) 70%, transparent),
+    color-mix(in srgb, var(--rarity-gold) 40%, transparent) 35%,
+    transparent 75%);
+}
+
+.case-burst--gold .case-burst__particle {
+  background-color: var(--rarity-gold);
+}
+
+.case-burst--gold .case-burst__particle--1 {
+  background-color: var(--rarity-gold-bright);
+}
+
+.case-burst--gold .case-burst__particle--2 {
+  background-color: var(--rarity-gold-shine);
+}
+
+/* Gold confetti: flat strips and flakes that tumble as they fall. */
+.confetti {
+  position: absolute;
+  /* Roughly centred on the burst point; the flight is plain pixels. */
+  top: -6px;
+  left: -5px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  background-color: var(--rarity-gold);
+}
+
+.confetti--1 {
+  background-color: var(--rarity-gold-bright);
+}
+
+.confetti--2 {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--rarity-gold-shine);
+}
+
+.confetti--3 {
+  width: 12px;
+  height: 6px;
+  background-color: var(--rarity-gold-deep);
 }
 
 /* The big reveal. */
+/* Framed in the album's rarity colour (data-rarity on the card). */
 .reveal {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1.25rem;
   padding: 2rem 1.25rem;
-  border: 1px solid var(--color-border);
+  border: 2px solid var(--rarity, var(--color-border));
   border-radius: var(--radius-card);
   background-color: var(--color-surface);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--rarity, transparent) 30%, transparent);
   text-align: center;
   animation: reveal-in 0.35s ease-out;
+}
+
+/* Round re-roll (top left) and close (top right) buttons in the corners,
+   like the concert gallery's heart and the setlist page's close button. */
+.reveal__corner {
+  position: absolute;
+  top: 0.75rem;
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+}
+
+.reveal__corner[hidden] {
+  display: none;
+}
+
+.reveal__corner svg {
+  width: 18px;
+  height: 18px;
+}
+
+.reveal__reroll {
+  left: 0.75rem;
+}
+
+/* Under re-roll - or in its place, when there's nothing left to re-roll to. */
+.reveal__discogs {
+  top: calc(0.75rem + 44px + 0.5rem);
+  left: 0.75rem;
+}
+
+.reveal__reroll[hidden] + .reveal__discogs {
+  top: 0.75rem;
+}
+
+.reveal__close {
+  right: 0.75rem;
 }
 
 @keyframes reveal-in {
   from { opacity: 0; transform: scale(0.97); }
   to { opacity: 1; transform: none; }
+}
+
+/* A gold reveal keeps its rays inside the card. */
+.reveal--gold {
+  overflow: hidden;
+}
+
+/* Cover, title and artist as one link into Spotify. Its own stacking
+   context, so a gold reveal's rays sit behind the cover and text. */
+.reveal__album {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  border-radius: var(--radius-card);
+  color: inherit;
+  text-decoration: none;
+}
+
+.reveal__album:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 6px;
 }
 
 .reveal__cover {
@@ -3846,7 +4423,51 @@ textarea.text-input {
   overflow: hidden;
   border-radius: var(--radius-card);
   background-color: var(--color-surface-raised);
-  box-shadow: 0 0 40px color-mix(in srgb, var(--color-primary) 55%, transparent);
+  /* The same ring and bright glow as the reel's winner, so every rarity
+     colour reads clearly against the dark card. */
+  box-shadow:
+    0 0 0 3px var(--rarity, var(--color-primary)),
+    0 0 24px 6px color-mix(in srgb, var(--rarity, var(--color-primary)) 70%, var(--color-text)),
+    0 0 64px 16px color-mix(in srgb, var(--rarity, var(--color-primary)) 60%, transparent);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.reveal__album:hover .reveal__cover {
+  transform: scale(1.02);
+  box-shadow:
+    0 0 0 3px var(--rarity, var(--color-primary)),
+    0 0 30px 8px color-mix(in srgb, var(--rarity, var(--color-primary)) 65%, var(--color-text)),
+    0 0 80px 20px color-mix(in srgb, var(--rarity, var(--color-primary)) 70%, transparent);
+}
+
+/* The gold cover keeps the reel's frame, shine-free, and a breathing glow. */
+.reveal__cover[data-rarity="gold"] {
+  position: relative;
+  padding: 5px;
+  background-color: var(--rarity-gold-deep);
+  animation: gold-glow-reveal 2.4s ease-in-out infinite;
+}
+
+.reveal__cover[data-rarity="gold"] .reveal__image {
+  position: relative;
+  z-index: 1;
+  border-radius: calc(var(--radius-card) - 4px);
+}
+
+@keyframes gold-glow-reveal {
+  0%, 100% { box-shadow: 0 0 40px 4px color-mix(in srgb, var(--rarity-gold) 60%, transparent); }
+  50% { box-shadow: 0 0 72px 14px color-mix(in srgb, var(--rarity-gold-bright) 80%, transparent); }
+}
+
+/* Centred on the cover, which leads the link. */
+.gold-rays--reveal {
+  top: calc(min(320px, 72vw) / 2);
+  width: calc(min(320px, 72vw) * 2.4);
+  animation: gold-rays-in 0.8s ease-out both;
+}
+
+.gold-rays--reveal .gold-rays__spin {
+  animation: gold-spin 30s linear infinite;
 }
 
 .reveal__image {
@@ -3863,18 +4484,12 @@ textarea.text-input {
   overflow-wrap: anywhere;
 }
 
-/* Focused only so screen readers announce the result - not a control. */
-.reveal__title:focus {
-  outline: none;
-}
-
 .reveal__artist {
   margin: 0.25rem 0 0;
   color: var(--color-text-soft);
   font-size: 1.0625rem;
 }
 
-.reveal__links,
 .reveal__actions {
   display: flex;
   flex-wrap: wrap;
@@ -3882,10 +4497,6 @@ textarea.text-input {
   gap: 0.5rem;
 }
 
-.reveal__actions {
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--color-border);
-}
 
 /* The optional rating in the "Mark as listened" dialog. */
 .rating-field {
@@ -3916,14 +4527,79 @@ textarea.text-input {
   list-style: none;
 }
 
+.history-header {
+  align-items: center;
+}
+
+/* With albums in it, the whole row opens and closes the history. */
+.history-header--toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+@media (hover: hover) {
+  .history-header--toggle:hover .history-toggle {
+    background-color: var(--color-surface-raised);
+    border-color: var(--color-purple-800);
+  }
+}
+
+/* The count and the open / close toggle, together on the right. */
+.history-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.history-toggle {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* A chevron pointing down while closed, up while open. */
+.history-toggle svg {
+  transition: rotate 0.2s ease;
+}
+
+.history-toggle[aria-expanded="true"] svg {
+  rotate: 180deg;
+}
+
+.history-search {
+  width: 260px;
+  max-width: 100%;
+}
+
+/* An entry opens the album in Spotify (an overlay link covers it); on hover
+   it lifts like a concert card, lit in the rarity it was picked with. */
 .history-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.875rem;
-  padding: 0.625rem 0.875rem 0.625rem 0.625rem;
+  overflow: hidden;
+  padding: 0.625rem 0.625rem 0.625rem 0.625rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background-color: var(--color-surface);
+  transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.history-item__link {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.history-item__link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
 }
 
 .history-item__cover {
@@ -3962,33 +4638,192 @@ textarea.text-input {
   font-size: 0.8125rem;
 }
 
+/* In the buttons' purple. Unrated albums have no pill at all. */
 .history-item__rating {
   flex: none;
   min-width: 3rem;
   padding: 0.25rem 0.625rem;
   border-radius: var(--radius-pill);
-  background-color: var(--color-purple-800);
+  background-color: var(--color-primary);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
-.history-item__rating--none {
-  border: 1px solid var(--color-border);
-  background-color: transparent;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
+/* The foil sheen's colour wash in the entry's rarity, rather than the
+   concert cards' purple and green, which would drown out the rarity tint.
+   Entries without one keep the concert cards' foil. */
+.history-item[data-rarity]::after {
+  background:
+    radial-gradient(
+      circle at var(--foil-x, 50%) var(--foil-y, 50%),
+      color-mix(in srgb, var(--color-text) 30%, transparent),
+      transparent 42%
+    ),
+    linear-gradient(
+      115deg,
+      transparent 18%,
+      color-mix(in srgb, var(--rarity) 45%, transparent) 38%,
+      color-mix(in srgb, color-mix(in srgb, var(--rarity) 55%, var(--color-text)) 30%, transparent) 52%,
+      color-mix(in srgb, var(--rarity) 40%, transparent) 66%,
+      transparent 84%
+    );
+  background-size: 100% 100%, 260% 260%;
+  background-position: 0 0, var(--foil-x, 50%) var(--foil-y, 50%);
+}
+
+/* Above the overlay link and the sheen. */
+.history-item__remove {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+}
+
+.history-item__remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Gold always stands out: a warm gold tint, a thicker gold frame with light
+   circling it and a gold glow - hover only adds a shine sweeping across.
+   The frame is two backgrounds - the fill inside the padding box, a conic
+   gradient under the transparent border - so turning the gradient
+   (--gold-angle) moves the light around the edge. */
+@property --gold-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.history-item[data-rarity="gold"] {
+  padding: calc(0.625rem - 1px);
+  border: 2px solid transparent;
+  /* Gold mixed with black, not the purple surface - that turns it brown -
+     in a soft gradient, like a dark polished-gold plate. */
+  background:
+    linear-gradient(110deg,
+      color-mix(in srgb, var(--rarity-gold) 32%, var(--color-black)),
+      color-mix(in srgb, var(--rarity-gold-deep) 30%, var(--color-black)) 45%,
+      color-mix(in srgb, var(--rarity-gold) 36%, var(--color-black))) padding-box,
+    conic-gradient(from var(--gold-angle),
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 18%,
+      var(--rarity-gold-shine) 25%,
+      var(--rarity-gold) 32%,
+      var(--rarity-gold-deep) 50%,
+      var(--rarity-gold) 68%,
+      var(--rarity-gold-shine) 75%,
+      var(--rarity-gold) 82%,
+      var(--rarity-gold-deep)) border-box;
+  box-shadow: 0 0 26px color-mix(in srgb, var(--rarity-gold-bright) 45%, transparent);
+  animation: history-gold-turn 2.4s linear infinite;
+}
+
+/* The shine band that sweeps across a hovered gold entry. */
+.history-item[data-rarity="gold"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  background: linear-gradient(115deg,
+      transparent 35%,
+      color-mix(in srgb, var(--rarity-gold-shine) 45%, transparent) 50%,
+      transparent 65%)
+    no-repeat;
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+@keyframes history-gold-turn {
+  to { --gold-angle: 360deg; }
+}
+
+@media (hover: hover) {
+  .history-item:hover {
+    transform: translateY(-3px) scale(1.01);
+    border-color: var(--rarity, var(--color-purple-300));
+    background-color: color-mix(in srgb, var(--rarity, var(--color-accent)) 18%, var(--color-surface));
+    box-shadow:
+      0 10px 28px color-mix(in srgb, var(--color-black) 50%, transparent),
+      0 0 26px color-mix(in srgb, var(--rarity, var(--color-accent)) 45%, transparent);
+  }
+
+  .history-item:hover::after {
+    opacity: 0.55;
+  }
+
+  /* Gold keeps its own frame, tint and glow - the shared hover would paint
+     over the turning border - and lifts like the rest; its only new effect
+     is the shine sweeping across, in place of the foil sheen. */
+  .history-item[data-rarity="gold"]:hover {
+    border-color: transparent;
+    box-shadow:
+      0 10px 28px color-mix(in srgb, var(--color-black) 50%, transparent),
+      0 0 26px color-mix(in srgb, var(--rarity-gold-bright) 45%, transparent);
+  }
+
+  .history-item[data-rarity="gold"]:hover::after {
+    opacity: 0;
+  }
+
+  .history-item[data-rarity="gold"]:hover::before {
+    opacity: 1;
+    animation: gold-shine 1.8s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-item,
+  .history-item::after {
+    transition: none;
+  }
+
+  .history-item[data-rarity="gold"],
+  .history-item[data-rarity="gold"]:hover::before {
+    animation: none;
+  }
 }
 
 @media (max-width: 600px) {
-  .reel {
-    --reel-cover: 88px;
-    --reel-gap: 6px;
+  .case {
+    --reel-cover: 112px;
+    --reel-gap: 8px;
   }
 
+  /* Search on its own full-width row under the sort buttons. */
+  .history-controls {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .history-search {
+    order: 1;
+    width: 100%;
+  }
+
+  /* Extra room on top, so the corner buttons never sit over the cover. */
   .reveal {
-    padding: 1.5rem 1rem;
+    padding: 4rem 1rem 1.5rem;
+  }
+
+  /* Beside re-roll rather than under it, where it would meet the cover. */
+  .reveal__discogs {
+    top: 0.75rem;
+    left: calc(0.75rem + 44px + 0.5rem);
+  }
+
+  .reveal__reroll[hidden] + .reveal__discogs {
+    left: 0.75rem;
   }
 
   .reveal__title {
@@ -3996,14 +4831,18 @@ textarea.text-input {
   }
 
   /* Full-width, thumb-sized buttons on a phone. */
-  .reveal__links .button,
   .reveal__actions .button {
     flex: 1 1 100%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .reveal {
+  .reveal,
+  .reveal__cover[data-rarity="gold"] {
     animation: none;
+  }
+
+  .reveal__cover[data-rarity="gold"] {
+    box-shadow: 0 0 56px 8px color-mix(in srgb, var(--rarity-gold) 70%, transparent);
   }
 }

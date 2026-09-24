@@ -88,6 +88,20 @@
   --vinyl-clear: #DCE7EC;
   --vinyl-glow: #C9FF9C;
 
+  /* The Album Suggester's rarity tiers, CS:GO's own colours from Mil-Spec
+     to rare special - borrowed from the game, like the reel itself. Gold
+     has a few more shades for its frame, glow and confetti: deep for the
+     frame's shadowed side, bright for the glow, shine for highlights. */
+  --rarity-blue: #4B69FF;
+  /* Nudged from CS:GO's #8847FF, which reads as blue next to the blue tier. */
+  --rarity-purple: #A63DFF;
+  --rarity-pink: #D32CE6;
+  --rarity-red: #EB4B4B;
+  --rarity-gold: #E4AE39;
+  --rarity-gold-deep: #9C6A12;
+  --rarity-gold-bright: #FFD75E;
+  --rarity-gold-shine: #FFF3C4;
+
   /* Google's own logo colours, for the "G" on the Settings page - a brand
      mark, so it keeps them rather than taking the palette's. */
   --color-google-blue: #4285F4;

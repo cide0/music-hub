@@ -27,7 +27,7 @@
 
           <div class="case__idle" id="case-idle" hidden>
             <p class="case__count" id="case-count"></p>
-            <button type="button" class="button button--primary case__open" id="case-open">Open case</button>
+            <button type="button" class="button button--primary case__open" id="case-open">Suggest an album</button>
           </div>
 
           <!-- The CS:GO-style reel. The window clips the strip; the marker
@@ -40,38 +40,96 @@
           </div>
 
           <div class="reveal" id="case-reveal" hidden>
-            <div class="reveal__cover" id="reveal-cover"></div>
-            <div class="reveal__text">
-              <h2 class="reveal__title" id="reveal-title"></h2>
-              <p class="reveal__artist" id="reveal-artist"></p>
-            </div>
-            <div class="reveal__links">
-              <a class="button button--primary" id="reveal-spotify" href="#">Listen on Spotify</a>
-              <a class="button button--ghost" id="reveal-discogs" href="#" target="_blank" rel="noopener noreferrer">
-                Find vinyl on Discogs
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="16" height="16">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
-              </a>
-            </div>
+            <!-- Corner controls. Re-roll keeps this album out of the next spin;
+                 closing just goes back, so it can come up again. Discogs sits
+                 under re-roll (beside it on a phone). -->
+            <button type="button" class="icon-button reveal__corner reveal__reroll" id="reveal-reroll" aria-label="Re-roll: suggest a different album" title="Re-roll">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+            </button>
+            <a class="icon-button reveal__corner reveal__discogs" id="reveal-discogs" href="#" target="_blank" rel="noopener noreferrer" aria-label="Find vinyl on Discogs (opens in a new tab)" title="Find vinyl on Discogs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </a>
+            <button type="button" class="icon-button reveal__corner reveal__close" id="reveal-close" aria-label="Close this suggestion" title="Close">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            <!-- Cover, title and artist are all one link into the Spotify app. -->
+            <a class="reveal__album" id="reveal-album" href="#">
+              <div class="reveal__cover" id="reveal-cover"></div>
+              <div class="reveal__text">
+                <h2 class="reveal__title" id="reveal-title"></h2>
+                <p class="reveal__artist" id="reveal-artist"></p>
+              </div>
+            </a>
             <div class="reveal__actions">
-              <button type="button" class="button button--ghost" id="reveal-reroll">Re-roll</button>
-              <button type="button" class="button button--ghost" id="reveal-not-listened">Mark as not listened</button>
-              <button type="button" class="button button--ghost" id="reveal-listened">Mark as listened</button>
+              <button type="button" class="button button--primary" id="reveal-listened">Mark as listened</button>
             </div>
           </div>
         </div>
 
-        <div class="section-header">
-          <h2 class="section-title">Listened history</h2>
-          <!-- Only one sort is active at a time; clicking the active one flips its direction. -->
-          <div class="filter-group" id="history-sort" role="group" aria-label="Sort listened history" hidden>
-            <button type="button" class="filter-button" data-sort="date">Date</button>
-            <button type="button" class="filter-button" data-sort="rating">Rating</button>
+        <!-- The title; on the right how many albums the history holds, and the
+             button opening and closing it (it starts closed on every visit). -->
+        <div class="section-header history-header">
+          <h2 class="section-title">Album history</h2>
+          <div class="history-summary">
+            <span class="toolbar__meta" id="history-count" hidden></span>
+            <button type="button" class="icon-button history-toggle" id="history-toggle" aria-expanded="false" aria-controls="history-body" aria-label="Show album history" title="Show album history" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
           </div>
         </div>
+
+        <!-- An album marked as listened that was already in the history; stays until dismissed. -->
+        <div class="notice" id="history-notice" role="status" hidden>
+          <span class="notice__text" id="history-notice-text"></span>
+          <button type="button" class="notice__dismiss" id="history-notice-dismiss" aria-label="Dismiss">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="history-body" hidden>
+          <!-- Clearing on the left; search and sort on the right, once there's more than one album. -->
+          <div class="toolbar" id="history-toolbar" hidden>
+            <button type="button" class="button button--ghost" id="history-clear" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18">
+                <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+              Clear saved data
+            </button>
+            <div class="toolbar__end history-controls" id="history-controls" hidden>
+              <div class="history-search">
+                <label class="visually-hidden" for="history-search">Search album history</label>
+                <div class="input-clear">
+                  <input type="text" id="history-search" class="text-input" placeholder="Search album or artist…"
+                    autocomplete="off" spellcheck="false" />
+                  <button type="button" class="input-clear__button" id="history-search-clear" aria-label="Clear search" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <!-- Only one sort is active at a time; clicking the active one flips its direction. -->
+              <div class="filter-group" id="history-sort" role="group" aria-label="Sort album history">
+                <button type="button" class="filter-button" data-sort="date">Date</button>
+                <button type="button" class="filter-button" data-sort="rating">Rating</button>
+              </div>
+            </div>
+          </div>
+          <p class="empty-state" id="history-no-match" hidden>No albums match your search.</p>
+          <ol class="history-list" id="history-list" hidden></ol>
+        </div>
         <p class="empty-state" id="history-empty">Nothing marked as listened yet.</p>
-        <ol class="history-list" id="history-list" hidden></ol>
       </section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->
@@ -91,7 +149,7 @@
         <p class="form-error" id="listened-error" role="alert" hidden></p>
         <div class="modal__actions">
           <button type="button" class="button button--ghost" id="listened-cancel">Cancel</button>
-          <button type="submit" class="button button--danger" id="listened-submit">Mark as listened</button>
+          <button type="submit" class="button button--primary" id="listened-submit">Mark as listened</button>
         </div>
       </form>
     </dialog>
@@ -106,6 +164,8 @@
     <script src="/js/storage.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
+    <script src="/js/confirm-dialog.js"></script>
+    <script src="/js/vinyl.js"></script>
     <script src="/js/album-suggester.js"></script>
   </body>
 </html>

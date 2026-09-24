@@ -775,8 +775,12 @@ window.MusicHub = window.MusicHub || {};
       els.mediaNote.hidden = true;
     }
 
-    els.mediaOrder.value = mediaOrder;
-    els.mediaOrderWrap.classList.toggle('select-wrap--asc', mediaOrder === 'oldest');
+    // Always the active sort; the arrow and labels say which way it runs,
+    // and the title what a click would switch to.
+    var newest = mediaOrder === 'newest';
+    els.mediaOrder.textContent = 'Date ' + (newest ? '↓' : '↑');
+    els.mediaOrder.title = 'Sort by date, ' + (newest ? 'oldest first' : 'newest first');
+    els.mediaOrder.setAttribute('aria-label', 'Sorted by date, ' + (newest ? 'newest first' : 'oldest first'));
     Array.prototype.forEach.call(els.mediaFilters.querySelectorAll('.filter-button'), function (btn) {
       var active = (btn.getAttribute('data-media-filter') === 'favorites') === mediaFavoritesOnly;
       btn.classList.toggle('filter-button--active', active);
@@ -1220,7 +1224,6 @@ window.MusicHub = window.MusicHub || {};
     els.videosSection = document.getElementById('videos-section');
     els.mediaNote = document.getElementById('media-note');
     els.mediaOrder = document.getElementById('media-order');
-    els.mediaOrderWrap = els.mediaOrder.parentNode;
     els.mediaFilters = document.getElementById('media-filters');
     els.artistPanel = document.getElementById('add-artist-panel');
     els.concertDialog = document.getElementById('concert-dialog');
@@ -1290,8 +1293,8 @@ window.MusicHub = window.MusicHub || {};
       openMediaDialog();
     });
 
-    els.mediaOrder.addEventListener('change', function () {
-      mediaOrder = els.mediaOrder.value;
+    els.mediaOrder.addEventListener('click', function () {
+      mediaOrder = mediaOrder === 'newest' ? 'oldest' : 'newest';
       applyMediaView();
     });
 

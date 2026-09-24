@@ -56,12 +56,10 @@
             <button type="button" class="button button--primary" id="add-media">+ Add media</button>
 
             <div class="toolbar__end">
-              <label class="visually-hidden" for="media-order">Sort order</label>
-              <div class="select-wrap">
-                <select id="media-order" class="select-input">
-                  <option value="newest">Newest first</option>
-                  <option value="oldest">Oldest first</option>
-                </select>
+              <!-- Sorted by the date an item was added; clicking flips the direction,
+                   like the Album Suggester's history sort. -->
+              <div class="filter-group" role="group" aria-label="Sort media">
+                <button type="button" class="filter-button filter-button--active" id="media-order" aria-pressed="true">Date ↓</button>
               </div>
 
               <div class="filter-group" id="media-filters" role="group" aria-label="Filter media">
