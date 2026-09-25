@@ -1208,8 +1208,8 @@ window.MusicHub = window.MusicHub || {};
   var TEAR_TUG_MS = [140, 360];
   var TEAR_RIP_MS = 530;
   var TEAR_FALL_MS = 1000;
-  var TEAR_MS = 3300;
-  var TEAR_FADE_MS = 700;
+  var TEAR_MS = 1600;
+  var TEAR_FADE_MS = 300;
   // Tear-line points, top to bottom; each strays this share of the width off centre.
   var TEAR_STEPS = 12;
   var TEAR_JITTER = 0.14;
