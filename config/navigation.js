@@ -7,7 +7,10 @@ export const tabs = [
   { label: 'Setlists', href: '/setlist-fetcher', external: false },
   { label: 'Gallery', href: '/concert-history', external: false },
   { label: 'Discogs', href: '/discogs', external: false },
-  { label: 'Suggestions', href: '/album-suggester', external: false },
+  { label: 'Albums', href: '/album-suggester', external: false },
+  // `coins`: the tab carries the coin balance next to its label.
+  { label: 'Store', href: '/store', external: false, coins: true },
+  { label: 'Collection', title: 'Vinyl collection', href: '/collection', external: false },
   { label: 'Video Matcher', href: 'https://spotify-video-matcher.onrender.com/', external: true },
   { label: 'Release List', href: 'https://spotifyreleaselist.netlify.app/', external: true },
   { label: 'Listening Stats', href: 'https://stats.fm/user/cide?range=lifetime', external: true },

@@ -32,6 +32,12 @@ database**, and the service sleeps/restarts, so no server-side state survives).
   hamburger menu, comfortable touch targets).
 - Use the Makefile targets (`make install`, `make up`, `make down`, `make list`, …)
   for Docker/dependency workflows rather than raw `docker`/`npm` commands.
+- Every vinyl pattern or finish `public/js/vinyl.js` can draw also gets a family
+  in `public/js/vinyl-catalog.js` (name, weight, format texts), so the Store's
+  Mystery Vinyl can unbox it too. Check the new formats with
+  `MusicHub.vinyl.describe()` to confirm they parse to the new pattern. One
+  drawn from the cover art (like picture discs) gets `needsCover: true`, so
+  it's only picked for an album that has a cover.
 
 ## Layout
 
@@ -48,10 +54,13 @@ routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
 views/               EJS pages + partials/ (head, navbar)
 public/css/          variables.css (palette) + style.css
-public/js/           storage.js, navbar.js, auth.js (every page),
+public/js/           storage.js, navbar.js, auth.js, wallet.js (every page;
+                     wallet.js = coins, Store items, coin animation),
                      spotify.js + google.js (shared API helpers),
                      playlist-picker.js (shared playlist dropdown),
                      vinyl.js (Discogs format -> CSS-drawn record),
+                     vinyl-catalog.js (the Store's mystery vinyls),
+                     turntable.js (the record player: Suggester + Collection),
                      <page-name>.js per page
 ```
 

@@ -102,6 +102,23 @@
   --rarity-gold-bright: #FFD75E;
   --rarity-gold-shine: #FFF3C4;
 
+  /* The Store's coins and name styles. Coins are the gold tier's gold;
+     the rainbow name runs through the record spectrum above. */
+  --coin-rim: var(--rarity-gold-deep);
+  --coin-face: var(--rarity-gold);
+  --coin-bright: var(--rarity-gold-bright);
+  --coin-shine: var(--rarity-gold-shine);
+  --rainbow-1: var(--vinyl-red);
+  --rainbow-2: var(--vinyl-orange);
+  --rainbow-3: var(--vinyl-yellow);
+  --rainbow-4: var(--vinyl-green);
+  --rainbow-5: var(--vinyl-blue);
+  --rainbow-6: var(--vinyl-purple);
+  /* Cardboard for the Store's vinyl mailer box. */
+  --cardboard: color-mix(in srgb, var(--vinyl-bronze) 70%, var(--vinyl-cream));
+  --cardboard-dark: color-mix(in srgb, var(--vinyl-brown) 80%, var(--vinyl-bronze));
+  --cardboard-tape: color-mix(in srgb, var(--vinyl-cream) 85%, var(--vinyl-gold));
+
   /* Google's own logo colours, for the "G" on the Settings page - a brand
      mark, so it keeps them rather than taking the palette's. */
   --color-google-blue: #4285F4;

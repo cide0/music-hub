@@ -54,6 +54,12 @@ window.MusicHub = window.MusicHub || {};
     { name: 'purple', share: 0.25, odds: 0.27 },
     { name: 'blue', share: 0.62, odds: 0.54 },
   ];
+  // Coins each tier earns when it's revealed - and again when that album
+  // is marked listened and joins the history.
+  var TIER_COINS = { blue: 50, purple: 100, pink: 250, red: 500, gold: 1000 };
+  // Coins fly once the reveal has settled in, not while it's still popping up.
+  var COINS_DELAY_MS = 450;
+
   // From this many albums on, the newest three are at least gold, red and
   // pink, so a small library still has one of each rarest tier.
   var FULL_TIERS_FROM = 10;
@@ -924,35 +930,20 @@ window.MusicHub = window.MusicHub || {};
   /* ---------------------------------------------------------------- setup */
 
   /*
-   * Before every spin a record drops onto a turntable laid over the reel,
-   * inside its neon frame: it lands, spins up, the tonearm swings in and
-   * drops the needle, then the turntable fades out over the reel already
-   * rolling. Only transform and opacity animate - the browser runs those
-   * off the main thread, so the first spin's one-off audio stall can land
-   * in here without a stutter. Times in ms from the click.
+   * Before every spin a record drops onto a turntable laid over the reel
+   * (turntable.js), inside its neon frame: it lands, spins up, the tonearm
+   * swings in and drops the needle, then the turntable fades out over the
+   * reel already rolling. Times in ms from the click: the turntable's own,
+   * plus when the reel takes over.
    */
-  var SETUP = {
-    drop: 850,
-    spinFrom: 700,
-    armFrom: 1400,
-    armSwing: 550,
-    lower: 200,
-    needleAt: 2150,
+  var SETUP = Object.assign({}, MusicHub.turntable.TIMING, {
     // The record playing, needle down, before the hand-off.
     handoff: 3400,
     fade: 450,
-  };
+  });
   var REDUCED_SETUP_MS = 500;
-  // The tonearm's angle resting beside the platter, and on the record.
-  var ARM_REST_DEG = 9;
-  var ARM_PLAY_DEG = 38;
   // Crackles per second of play, from the needle drop to the fade's end.
   var CRACKLES_PER_S = 30;
-  var POWER_PRESS_MS = 240;
-  // A record at 33 1/3 rpm turns once every 1.8s; the platter reaches that
-  // over SPIN_UP_MS.
-  var RECORD_DEG_PER_MS = 360 / 1800;
-  var SPIN_UP_MS = 500;
 
   /** The rarest tier the library has - gold, when there is one. */
   function rarestTier() {
@@ -986,66 +977,6 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
-   * The turntable, its record in `tier`'s colour with `labelUrl` as the
-   * centre label.
-   */
-  function buildTurntable(tier, labelUrl) {
-    var root = el('div', 'turntable');
-    root.setAttribute('aria-hidden', 'true');
-    var plinth = el('div', 'turntable__plinth');
-
-    plinth.appendChild(el('div', 'turntable__platter'));
-
-    // A round power button: the symbol dim while off, lit and glowing on.
-    var power = el('span', 'turntable__power');
-    var powerOn = el('span', 'turntable__power-on');
-    [['turntable__power-icon', ''], ['turntable__power-icon turntable__power-icon--on', powerOn]].forEach(function (icon) {
-      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('fill', 'none');
-      svg.setAttribute('stroke', 'currentColor');
-      svg.setAttribute('stroke-width', '2.5');
-      svg.setAttribute('stroke-linecap', 'round');
-      svg.setAttribute('class', icon[0]);
-      var arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      arc.setAttribute('d', 'M18.36 6.64a9 9 0 1 1-12.73 0');
-      var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', '12');
-      line.setAttribute('y1', '2');
-      line.setAttribute('x2', '12');
-      line.setAttribute('y2', '12');
-      svg.appendChild(arc);
-      svg.appendChild(line);
-      (icon[1] || power).appendChild(svg);
-    });
-    power.appendChild(powerOn);
-    plinth.appendChild(power);
-
-    var record = el('div', 'turntable__record');
-    // A polished metal record: vinyl.js draws it (grooves, label, the still
-    // reflection); style.css recolours it in the tier's colour.
-    record.dataset.rarity = tier;
-    var vinyl = MusicHub.vinyl.render(MusicHub.vinyl.describe('Vinyl, LP, Gold'), { imageUrl: labelUrl });
-    // A band of light sweeping across it, over the spinning disc.
-    vinyl.appendChild(el('span', 'turntable__glint'));
-    record.appendChild(vinyl);
-    plinth.appendChild(record);
-
-    var arm = el('div', 'turntable__arm');
-    arm.appendChild(el('span', 'turntable__pivot'));
-    arm.appendChild(el('span', 'turntable__rod'));
-    var head = el('span', 'turntable__head');
-    arm.appendChild(head);
-    plinth.appendChild(arm);
-
-    root.appendChild(plinth);
-    return {
-      root: root, record: record, disc: record.querySelector('.vinyl__disc'),
-      arm: arm, head: head, power: power, powerOn: powerOn,
-    };
-  }
-
-  /**
    * The record landing, the needle's click and a little crackle - all
    * timed on the audio clock from the click, so the first spin's stall
    * can't knock them out of step with the picture.
@@ -1061,7 +992,7 @@ window.MusicHub = window.MusicHub || {};
     metalNoise(ctx, landAt, 'lowpass', 900, 0.7, 0.25, 0.001, 0.05);
 
     // The power button's click.
-    var powerAt = now + (SETUP.spinFrom - POWER_PRESS_MS / 2) / 1000;
+    var powerAt = now + (SETUP.spinFrom - MusicHub.turntable.POWER_PRESS_MS / 2) / 1000;
     metalNoise(ctx, powerAt, 'bandpass', 1800, 2, 0.25, 0.0005, 0.006);
 
     var needleAt = now + SETUP.needleAt / 1000;
@@ -1074,14 +1005,18 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
-  /** Plays the set-up; resolves when the reel should start rolling. */
+  /**
+   * Plays the set-up - a polished metal record in the rarest tier's colour,
+   * one of that tier's covers as its label - and resolves when the reel
+   * should start rolling.
+   */
   function playSetup() {
-    var parts = buildTurntable(rarestTier(), labelCover());
+    var vinyl = MusicHub.vinyl.render(MusicHub.vinyl.describe('Vinyl, LP, Gold'), { imageUrl: labelCover() });
+    var parts = MusicHub.turntable.build(vinyl, { rarity: rarestTier() });
     els.views.reel.appendChild(parts.root);
 
     if (reducedMotion()) {
-      parts.arm.style.rotate = ARM_PLAY_DEG + 'deg';
-      parts.powerOn.style.opacity = '1';
+      MusicHub.turntable.showPlaying(parts);
       return new Promise(function (resolve) {
         window.setTimeout(function () {
           parts.root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, fill: 'forwards' }).onfinish = function () {
@@ -1093,39 +1028,7 @@ window.MusicHub = window.MusicHub || {};
     }
 
     playSetupSounds();
-    var total = SETUP.handoff + SETUP.fade;
-
-    // Dropped in from above, with a small bounce as it lands.
-    parts.record.animate([
-      { transform: 'translateY(-75%) scale(1.12)', opacity: 0, easing: 'cubic-bezier(0.55, 0, 1, 0.45)' },
-      { offset: 0.6, transform: 'translateY(0) scale(0.98)', opacity: 1, easing: 'ease-out' },
-      { offset: 0.8, transform: 'translateY(-2%) scale(1.01)', easing: 'ease-in' },
-      { transform: 'none', opacity: 1 },
-    ], { duration: SETUP.drop, fill: 'backwards' });
-
-    // A short start-up to 33 1/3 rpm, then a steady speed to the end. The
-    // start-up's easing ends at twice its average speed, so it covers half
-    // the ground a full-speed start would and meets the steady turn exactly.
-    var spinMs = total - SETUP.spinFrom;
-    var startUpDeg = (RECORD_DEG_PER_MS * SPIN_UP_MS) / 2;
-    parts.disc.animate([
-      { rotate: '0deg', easing: 'cubic-bezier(0.5, 0, 1, 1)' },
-      { offset: SPIN_UP_MS / spinMs, rotate: startUpDeg + 'deg', easing: 'linear' },
-      { rotate: (startUpDeg + RECORD_DEG_PER_MS * (spinMs - SPIN_UP_MS)) + 'deg' },
-    ], { delay: SETUP.spinFrom, duration: spinMs, fill: 'forwards' });
-    // The power button pressed in just as the platter starts, and lit.
-    parts.power.animate([{ scale: '1' }, { scale: '0.86' }, { scale: '1' }], {
-      delay: SETUP.spinFrom - POWER_PRESS_MS / 2, duration: POWER_PRESS_MS, easing: 'ease-out',
-    });
-    parts.powerOn.animate([{ opacity: 0 }, { opacity: 1 }], { delay: SETUP.spinFrom, duration: 150, fill: 'forwards' });
-
-    // The tonearm swings over raised, then lowers onto the record.
-    parts.arm.animate([{ rotate: ARM_REST_DEG + 'deg' }, { rotate: ARM_PLAY_DEG + 'deg' }], {
-      delay: SETUP.armFrom, duration: SETUP.armSwing, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'forwards',
-    });
-    parts.head.animate([{ scale: '1.25' }, { scale: '1' }], {
-      delay: SETUP.needleAt - SETUP.lower, duration: SETUP.lower, easing: 'ease-in', fill: 'both',
-    });
+    MusicHub.turntable.play(parts, { spinUntil: SETUP.handoff + SETUP.fade });
 
     parts.root.animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(1.04)' }], {
       delay: SETUP.handoff, duration: SETUP.fade, easing: 'ease-in', fill: 'forwards',
@@ -1169,9 +1072,19 @@ window.MusicHub = window.MusicHub || {};
         flourish(items[WIN_INDEX], winner.tier, function () {
           spinning = false;
           showReveal(winner);
+          window.setTimeout(function () {
+            earnCoins(winner.tier, els.revealCover);
+          }, COINS_DELAY_MS);
         });
       });
     });
+  }
+
+  /** The tier's coins, flying up to the navbar from `from`. */
+  function earnCoins(tier, from) {
+    if (MusicHub.wallet) {
+      MusicHub.wallet.earn(TIER_COINS[tier] || TIER_COINS.blue, { from: from });
+    }
   }
 
   function showReveal(album) {
@@ -1505,6 +1418,11 @@ window.MusicHub = window.MusicHub || {};
         current = null;
         els.dialog.close();
         showRestingState(true);
+        // The listening bonus: the tier's coins once more - only for an
+        // album that actually joined the history.
+        if (!already) {
+          earnCoins(album.tier, els.openButton);
+        }
       })
       .catch(function (err) {
         // The album stays saved and in the pool; the rating stays typed in.

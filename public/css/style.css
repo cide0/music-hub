@@ -334,7 +334,10 @@ button[aria-disabled='true'] {
   gap: 0.5rem;
   color: var(--color-text);
   text-decoration: none;
-  padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+  /* A transparent border (padding 2px short to make up for it), so a name
+     style from the Store can colour it without the pill changing size. */
+  padding: calc(0.25rem - 2px) calc(0.75rem - 2px) calc(0.25rem - 2px) calc(0.25rem - 2px);
+  border: 2px solid transparent;
   border-radius: var(--radius-pill);
   background-color: var(--color-surface-raised);
   font-weight: 600;
@@ -963,7 +966,7 @@ button[aria-disabled='true'] {
   }
 
   .navbar__user {
-    padding: 0.25rem;
+    padding: calc(0.25rem - 2px);
   }
 }
 
@@ -1470,7 +1473,8 @@ button[aria-disabled='true'] {
 /* Marks a followed artist who isn't the headliner of that show. */
 /* "New" flag in the card's top-left corner, over the artist image: the same
    pill as the Support role, in the accent that borders a newly-found card. */
-.concert-card__tag {
+.concert-card__tag,
+.vinyl-card__style {
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
@@ -3509,10 +3513,13 @@ textarea.text-input {
 }
 
 /* A zoetrope turns in steps of exactly one frame slot, like under a strobe
-   light, so its figures animate in place. The step count must match
-   ZOETROPE_FRAMES in public/js/vinyl.js. */
+   light, so its figures animate in place - quicker than its rpm, for a
+   smoother picture (the turn itself doesn't show). The step count and the
+   duration must match ZOETROPE_FRAMES and ZOETROPE_TURN_MS in
+   public/js/vinyl.js. */
 .vinyl--zoetrope .vinyl__disc {
-  animation-timing-function: steps(12, end);
+  animation-duration: 0.9s;
+  animation-timing-function: steps(16, end);
 }
 
 /* Bigger than the disc, so a blurred pattern's soft edge is cut off by the
@@ -4085,10 +4092,11 @@ textarea.text-input {
   border-bottom-color: var(--color-purple-100);
 }
 
-/* ---- The turntable that sets up each spin (album-suggester.js): laid over
-   the reel inside its neon frame, then faded out over the rolling covers.
-   Sized off the plinth's height; everything inside is in % of the plinth,
-   so it scales with the reel on phones. */
+/* ---- The turntable (turntable.js): on the Album Suggester it sets up
+   each spin, laid over the reel inside its neon frame, then faded out over
+   the rolling covers; on the Collection it plays a vinyl, big. Sized off
+   the plinth's height (--reel-cover); everything inside is in % of the
+   plinth, so it scales with it. */
 
 .turntable {
   position: absolute;
@@ -4140,11 +4148,13 @@ textarea.text-input {
   inset: 5%;
 }
 
-/* Polished metal in the colour of the rarest tier the library has (its
-   data-rarity): its grooves, but no brushed-metal bands - a pulsing glow
-   behind it, its still reflection tinted to match, and a band of light
-   sweeping across (.turntable__glint). --record-bright is the glow,
-   --record-shine the highlights; gold has its own shades for both. */
+/* A pulsing glow behind the record in --rarity, its still reflection
+   tinted to match, and a band of light sweeping across (.turntable__glint).
+   --record-bright is the glow, --record-shine the highlights. On the Album
+   Suggester (data-rarity) the record itself is recoloured too, as polished
+   metal in the rarest tier's colour: its grooves, but no brushed-metal
+   bands; gold has its own shades. The Collection sets --rarity to its
+   vinyl's colour and keeps the vinyl's own look. */
 .turntable__record {
   --record-bright: color-mix(in srgb, var(--rarity) 75%, var(--color-text));
   --record-shine: color-mix(in srgb, var(--rarity) 25%, var(--color-text));
@@ -4155,12 +4165,12 @@ textarea.text-input {
   --record-shine: var(--rarity-gold-shine);
 }
 
-.turntable__record .vinyl__finish {
+.turntable__record[data-rarity] .vinyl__finish {
   display: none;
 }
 
 /* Over vinyl.js's own inline colour for the record. */
-.turntable__record .vinyl__surface {
+.turntable__record[data-rarity] .vinyl__surface {
   background: radial-gradient(circle at 50% 50%,
     color-mix(in srgb, var(--rarity) 88%, var(--color-text)),
     var(--rarity) 55%,
@@ -4257,6 +4267,26 @@ textarea.text-input {
     0 2px 5px color-mix(in srgb, var(--color-black) 60%, transparent);
 }
 
+/* On the Collection's player it's a real button (turntable.js setPower):
+   it takes the pointer, which the rest of the turntable doesn't. */
+button.turntable__power {
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: filter 0.15s ease;
+}
+
+button.turntable__power:hover {
+  filter: brightness(1.25);
+}
+
+button.turntable__power:focus-visible {
+  outline-offset: 3px;
+  border-radius: 50%;
+}
+
 .turntable__power-icon {
   grid-area: 1 / 1;
   width: 55%;
@@ -4283,7 +4313,7 @@ textarea.text-input {
 }
 
 /* Pivots at the top right: turned a few degrees it rests beside the
-   platter, ARM_PLAY_DEG (album-suggester.js) puts the needle on the record. */
+   platter, ARM_PLAY_DEG (turntable.js) puts the needle on the record. */
 .turntable__arm {
   position: absolute;
   top: 8%;
@@ -4291,7 +4321,7 @@ textarea.text-input {
   width: 8%;
   height: 80%;
   transform-origin: 50% 7%;
-  /* ARM_REST_DEG in album-suggester.js. */
+  /* ARM_REST_DEG in turntable.js. */
   rotate: 9deg;
 }
 
@@ -4962,4 +4992,1138 @@ textarea.text-input {
   .reveal__cover[data-rarity="gold"] {
     box-shadow: 0 0 56px 8px color-mix(in srgb, var(--rarity-gold) 70%, transparent);
   }
+}
+
+/* ------------------------------------------------------------------ coins */
+
+/* The coin symbol's sheet (navbar.ejs). Out of sight but not display:none,
+   which would drop its gradients. */
+.svg-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.coin-stop--shine { stop-color: var(--coin-shine); }
+.coin-stop--bright { stop-color: var(--coin-bright); }
+.coin-stop--face { stop-color: var(--coin-face); }
+.coin-stop--rim { stop-color: var(--coin-rim); }
+
+/* The quaver and the ring round the face take `color`. */
+.coin {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--coin-rim);
+}
+
+/* The balance: next to the Store tab's label, and on its own in the navbar
+   on phones. */
+.coin-balance {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.25rem;
+  padding: 0.125rem 0.5rem 0.125rem 0.1875rem;
+  border-radius: var(--radius-pill);
+  background-color: color-mix(in srgb, var(--coin-face) 30%, transparent);
+  color: var(--coin-shine);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.navbar__tab .coin {
+  width: 18px;
+  height: 18px;
+}
+
+.navbar__coins {
+  display: none;
+  min-height: 40px;
+  margin: 0;
+  padding: 0.25rem 0.75rem 0.25rem 0.375rem;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.navbar__coins .coin {
+  width: 22px;
+  height: 22px;
+}
+
+@media (max-width: 900px) {
+  .navbar__coins {
+    display: inline-flex;
+  }
+}
+
+/* A coin on its way up to the balance (wallet.js moves it), flipping as
+   it goes. */
+.flying-coin {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  width: 26px;
+  height: 26px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.flying-coin__face {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--coin-rim);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--coin-bright) 70%, transparent));
+  animation: coin-flip var(--flip-ms, 400ms) linear infinite;
+}
+
+@keyframes coin-flip {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(0.12); }
+}
+
+/* "+50" where the coins came from. */
+.coin-float {
+  position: fixed;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--coin-bright);
+  font-size: 1.375rem;
+  font-weight: 800;
+  text-shadow: 0 2px 10px var(--color-black);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.coin-float .coin {
+  width: 24px;
+  height: 24px;
+}
+
+/* ------------------------------------------------------------ name styles */
+
+/* Name styles from the Store, worn by the navbar's profile pill (via
+   data-name-style on <html>, set before the first paint by head.ejs) and
+   by the Store's previews. Both take a turning border - a conic gradient
+   under the transparent border, the fill on top of it in the padding box -
+   and a coloured name. */
+@property --name-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.name-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: calc(0.25rem - 2px) calc(0.875rem - 2px) calc(0.25rem - 2px) calc(0.25rem - 2px);
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.name-pill__avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: var(--color-primary);
+}
+
+:root[data-name-style] .navbar__user,
+.name-pill[data-name-style] {
+  --name-fill: var(--color-surface-raised);
+  position: relative;
+  animation: name-border-turn 3s linear infinite;
+}
+
+:root[data-name-style] .navbar__user:hover {
+  --name-fill: var(--color-purple-800);
+}
+
+@keyframes name-border-turn {
+  to { --name-angle: 360deg; }
+}
+
+/* Rainbow: the spectrum sliding sideways through the border and the name
+   alike - the same gradient, the same slide, in step. Each holds the
+   spectrum twice at double width, so sliding by one copy loops without a
+   seam. */
+:root[data-name-style="rainbow"] .navbar__user,
+.name-pill[data-name-style="rainbow"] {
+  background:
+    linear-gradient(var(--name-fill), var(--name-fill)) padding-box,
+    linear-gradient(90deg,
+      var(--rainbow-1), var(--rainbow-2), var(--rainbow-3), var(--rainbow-4), var(--rainbow-5), var(--rainbow-6),
+      var(--rainbow-1), var(--rainbow-2), var(--rainbow-3), var(--rainbow-4), var(--rainbow-5), var(--rainbow-6),
+      var(--rainbow-1)) border-box;
+  background-size: 100% 100%, 200% 100%;
+  animation: name-rainbow-slide 3s linear infinite;
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--rainbow-6) 40%, transparent),
+    0 0 20px color-mix(in srgb, var(--rainbow-5) 22%, transparent);
+}
+
+:root[data-name-style="rainbow"] .navbar__user > span,
+.name-pill[data-name-style="rainbow"] .name-pill__name {
+  background: linear-gradient(90deg,
+    var(--rainbow-1), var(--rainbow-2), var(--rainbow-3), var(--rainbow-4), var(--rainbow-5), var(--rainbow-6),
+    var(--rainbow-1), var(--rainbow-2), var(--rainbow-3), var(--rainbow-4), var(--rainbow-5), var(--rainbow-6),
+    var(--rainbow-1));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: name-rainbow-slide 3s linear infinite;
+}
+
+@keyframes name-rainbow-slide {
+  from { background-position: 0% 0; }
+  to { background-position: 100% 0; }
+}
+
+/* Gold Shine: the Album Suggester's gold - a turning gold frame, a dark
+   gold plate, polished-gold lettering with a band of light sweeping across
+   and a sparkle twinkling at the corner. */
+:root[data-name-style="gold"] .navbar__user,
+.name-pill[data-name-style="gold"] {
+  --name-fill: color-mix(in srgb, var(--rarity-gold) 22%, var(--color-black));
+  background:
+    linear-gradient(var(--name-fill), var(--name-fill)) padding-box,
+    conic-gradient(from var(--name-angle),
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 18%,
+      var(--rarity-gold-shine) 25%,
+      var(--rarity-gold) 32%,
+      var(--rarity-gold-deep) 50%,
+      var(--rarity-gold) 68%,
+      var(--rarity-gold-shine) 75%,
+      var(--rarity-gold) 82%,
+      var(--rarity-gold-deep)) border-box;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--rarity-gold-bright) 45%, transparent);
+  animation-duration: 2.4s;
+}
+
+:root[data-name-style="gold"] .navbar__user:hover {
+  --name-fill: color-mix(in srgb, var(--rarity-gold) 32%, var(--color-black));
+}
+
+:root[data-name-style="gold"] .navbar__user > span,
+.name-pill[data-name-style="gold"] .name-pill__name {
+  background: linear-gradient(110deg,
+    var(--rarity-gold-deep) 0%,
+    var(--rarity-gold) 25%,
+    var(--rarity-gold-bright) 40%,
+    var(--rarity-gold-shine) 48%,
+    var(--rarity-gold-bright) 56%,
+    var(--rarity-gold) 72%,
+    var(--rarity-gold-deep) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: name-gold-shine 2.6s ease-in-out infinite;
+}
+
+@keyframes name-gold-shine {
+  0% { background-position: 150% 0; }
+  70%, 100% { background-position: -50% 0; }
+}
+
+:root[data-name-style="gold"] .navbar__user::after,
+.name-pill[data-name-style="gold"]::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: 6px;
+  width: 10px;
+  aspect-ratio: 1;
+  background-color: var(--rarity-gold-shine);
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  opacity: 0;
+  pointer-events: none;
+  animation: gold-twinkle 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-name-style] .navbar__user,
+  .name-pill[data-name-style],
+  :root[data-name-style] .navbar__user > span,
+  .name-pill[data-name-style] .name-pill__name {
+    animation: none;
+  }
+
+  :root[data-name-style="gold"] .navbar__user::after,
+  .name-pill[data-name-style="gold"]::after {
+    animation: none;
+    opacity: 1;
+  }
+
+  .flying-coin__face {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ store */
+
+.store-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.store-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, filter 0.3s ease, opacity 0.3s ease;
+}
+
+/* Where the item is shown off: a dim stage with a pool of light. */
+.store-item__preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  padding: 1.5rem 1rem;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 45%,
+      color-mix(in srgb, var(--color-primary) 28%, var(--color-surface)),
+      var(--color-bg) 78%);
+}
+
+/* The name pill shown off a size up. */
+.store-item__preview > .name-pill {
+  scale: 1.35;
+}
+
+/* Not bought yet: dimmed, with its lock over the pill's corner. */
+.store-item--locked .store-item__preview > .name-pill {
+  filter: brightness(0.5) saturate(0.45);
+}
+
+.store-item__preview > .name-pill ~ .store-lock {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  translate: 36px -78%;
+}
+
+.store-item__preview > .name-pill ~ .store-lock svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Not enough coins: the whole card greys out. */
+.store-item--short {
+  filter: grayscale(1);
+  opacity: 0.62;
+}
+
+.store-item--equipped {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+.store-item__badge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  padding: 0.125rem 0.625rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-accent);
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.store-lock {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  margin: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  color: var(--color-text-soft);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--color-black) 60%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.store-lock svg {
+  width: 28px;
+  height: 28px;
+  overflow: visible;
+}
+
+/* The shackle swings open about its right leg. */
+.store-lock__shackle {
+  transform-box: fill-box;
+  transform-origin: 100% 100%;
+}
+
+.store-lock--open {
+  border-color: var(--coin-face);
+  color: var(--coin-bright);
+  box-shadow:
+    0 8px 22px color-mix(in srgb, var(--color-black) 60%, transparent),
+    0 0 26px color-mix(in srgb, var(--coin-bright) 60%, transparent);
+}
+
+/* Unlocked: a band of light sweeps across the item once, and the card
+   glows up. */
+.store-item--revealed {
+  animation: store-unlocked 1.2s ease-out;
+}
+
+.store-item--revealed .store-item__preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg,
+      transparent 35%,
+      color-mix(in srgb, var(--color-text) 50%, transparent) 50%,
+      transparent 65%)
+    no-repeat;
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: store-shine 0.7s ease-out forwards;
+}
+
+@keyframes store-shine {
+  to { background-position: -50% 0; }
+}
+
+@keyframes store-unlocked {
+  0% { box-shadow: 0 0 0 color-mix(in srgb, var(--coin-bright) 0%, transparent); }
+  35% {
+    border-color: var(--coin-bright);
+    box-shadow: 0 0 36px 4px color-mix(in srgb, var(--coin-bright) 55%, transparent);
+  }
+  100% { box-shadow: 0 0 0 color-mix(in srgb, var(--coin-bright) 0%, transparent); }
+}
+
+.store-item__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 1rem 1rem 1.125rem;
+}
+
+.store-item__title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.store-item__text {
+  margin: 0;
+  color: var(--color-text-soft);
+  font-size: 0.9375rem;
+}
+
+.store-item__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: auto;
+  padding-top: 0.75rem;
+}
+
+.store-item__action {
+  margin-left: auto;
+}
+
+.price {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--coin-bright);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.price .coin {
+  width: 22px;
+  height: 22px;
+}
+
+/* The vinyl offer: the box beside its text on wide screens. */
+.store-offer {
+  flex-direction: row;
+}
+
+.store-offer__preview {
+  flex: 0 0 280px;
+}
+
+/* A flex box, not a line of text, so the price centres on the Unbox button
+   exactly, with no room left below it for letters' descenders. */
+.store-offer__price {
+  display: flex;
+}
+
+.store-offer .mailer {
+  animation: mailer-bob 3.2s ease-in-out infinite;
+}
+
+@keyframes mailer-bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-6px) rotate(2deg); }
+}
+
+/* Hovering (or tabbing to) Unbox, when it can be bought: the box jiggles
+   as if something inside wants out - a quick shake, then a short rest. */
+@keyframes mailer-jiggle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  10% { transform: translateY(-4px) rotate(-7deg); }
+  22% { transform: translateY(-5px) rotate(6deg); }
+  34% { transform: translateY(-3px) rotate(-5deg); }
+  46% { transform: translateY(-2px) rotate(3deg); }
+  58% { transform: translateY(0) rotate(-1deg); }
+  66% { transform: translateY(0) rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .store-offer:has(.store-item__action:focus-visible:not(:disabled)) .mailer {
+    animation: mailer-jiggle 0.8s ease-in-out infinite;
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .store-offer:has(.store-item__action:hover:not(:disabled)) .mailer {
+    animation: mailer-jiggle 0.8s ease-in-out infinite;
+  }
+}
+
+/* The Gallery's lift and glow on hover - only for an item that can be
+   bought or is already owned, not one greyed out for want of coins.
+   Hover only, so a tap on a touch screen doesn't leave it latched. */
+@media (hover: hover) {
+  .store-item:not(.store-item--short):hover {
+    transform: translateY(-3px) scale(1.01);
+    border-color: var(--color-purple-300);
+    box-shadow:
+      0 10px 28px color-mix(in srgb, var(--color-black) 50%, transparent),
+      0 0 26px color-mix(in srgb, var(--color-accent) 40%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-item:not(.store-item--short):hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .store-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .store-offer {
+    flex-direction: column;
+  }
+
+  .store-offer__preview {
+    flex-basis: auto;
+  }
+
+  /* Full-width, thumb-sized buttons on a phone. */
+  .store-item__action {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+}
+
+/* A record mailer box, drawn in CSS: the front with its tape and a big
+   question mark, and the lid on top. */
+.mailer {
+  position: relative;
+  width: 150px;
+  aspect-ratio: 1;
+}
+
+.mailer--small {
+  width: 108px;
+}
+
+.mailer__front {
+  position: absolute;
+  inset: 16% 0 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: 6px;
+  background: linear-gradient(160deg,
+    var(--cardboard),
+    color-mix(in srgb, var(--cardboard) 80%, var(--cardboard-dark)));
+  box-shadow:
+    inset 0 -10px 0 color-mix(in srgb, var(--cardboard-dark) 40%, transparent),
+    0 12px 26px color-mix(in srgb, var(--color-black) 60%, transparent);
+}
+
+.mailer__tape {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 20%;
+  translate: -50% 0;
+  background-color: color-mix(in srgb, var(--cardboard-tape) 75%, transparent);
+}
+
+/* A big purple question mark printed on the box. */
+.mailer__mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--color-primary);
+  font-size: 4.75rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.mailer--small .mailer__mark {
+  font-size: 3.25rem;
+}
+
+.mailer__lid {
+  position: absolute;
+  top: 6%;
+  right: -5%;
+  left: -5%;
+  z-index: 3;
+  height: 15%;
+  border-radius: 5px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--cardboard) 85%, var(--color-text)),
+    var(--cardboard));
+  box-shadow: 0 3px 0 var(--cardboard-dark);
+}
+
+/* ---- The unboxing dialog. */
+.unbox {
+  --record-glow: var(--color-accent);
+  --record-accent: var(--color-accent);
+  width: min(460px, calc(100vw - 2rem));
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 38%,
+      color-mix(in srgb, var(--record-glow) 22%, var(--color-surface)),
+      var(--color-surface) 70%);
+}
+
+.unbox__stage {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+}
+
+.unbox__box {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  width: 170px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  translate: -50% 0;
+  transform-origin: 50% 100%;
+  /* In front of the record, so the record rises out from inside it -
+     and so it's the box that takes the click. */
+  z-index: 2;
+  cursor: pointer;
+}
+
+/* Still dropping in, or already opening: not clickable, but no "not
+   allowed" cursor either - it's a moment, not a refusal. */
+.unbox__box:disabled {
+  cursor: default;
+}
+
+.unbox__box:not(:disabled):hover .mailer__front,
+.unbox__box:not(:disabled):hover .mailer__lid {
+  filter: brightness(1.12);
+}
+
+.unbox__box:focus-visible {
+  outline-offset: 6px;
+}
+
+.unbox__hint {
+  align-self: start;
+  margin: -0.5rem 0 1.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+  text-align: center;
+}
+
+/* The hint and the result in one cell, the slot as tall as the taller -
+   the result - whichever is showing. Hidden here means invisible but
+   still holding its space (and, being invisible, out of reach of clicks,
+   focus and screen readers), so the dialog never changes size. */
+.unbox__footer {
+  position: relative;
+  display: grid;
+}
+
+.unbox__footer > * {
+  grid-area: 1 / 1;
+}
+
+.unbox__footer > [hidden] {
+  display: block !important;
+  visibility: hidden;
+}
+
+/* Waits inside the box until the lid comes off (store.js lifts it out).
+   Never takes a click, even while invisible over the box. */
+.unbox__record {
+  position: absolute;
+  top: 34px;
+  left: 50%;
+  z-index: 1;
+  pointer-events: none;
+  width: 210px;
+  aspect-ratio: 1;
+  translate: -50% 0;
+  opacity: 0;
+}
+
+.unbox__stage--open .unbox__record,
+.unbox__stage--revealed .unbox__record {
+  opacity: 1;
+}
+
+/* Back in the box and waiting to be dragged out (store.js dragOut): it
+   takes the pointer now. */
+.unbox__stage--grab .unbox__record {
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Opened, the box takes no more clicks: they reach the record behind it,
+   including across the empty space where the lid was. */
+.unbox__stage--open .unbox__box {
+  pointer-events: none;
+}
+
+.unbox__stage--dragging .unbox__record {
+  cursor: grabbing;
+}
+
+.unbox__stage--grab .unbox__record:focus-visible {
+  outline-offset: 4px;
+  border-radius: 50%;
+}
+
+.unbox__stage--revealed .unbox__box {
+  opacity: 0;
+}
+
+.unbox__stage--spinning .vinyl__disc,
+.unbox__stage--revealed .vinyl__disc {
+  animation-play-state: running;
+}
+
+.unbox__stage--revealed .vinyl__disc {
+  box-shadow:
+    0 6px 18px color-mix(in srgb, var(--color-black) 55%, transparent),
+    0 0 36px color-mix(in srgb, var(--record-glow) 55%, transparent),
+    0 0 70px color-mix(in srgb, var(--record-accent) 30%, transparent);
+}
+
+/* Light bursting out of the opened box, in the record's colour - centred
+   on the record, over the whole dialog rather than just the stage, so it
+   shines on behind the name and buttons as well. */
+.unbox__rays {
+  position: absolute;
+  top: 140px;
+  left: 50%;
+  width: 560px;
+  aspect-ratio: 1;
+  margin: -280px 0 0 -280px;
+  opacity: 0;
+  background: repeating-conic-gradient(from 0deg,
+    color-mix(in srgb, var(--record-glow) 45%, transparent) 0deg 7deg,
+    transparent 7deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, var(--color-black) 12%, transparent 62%);
+  mask-image: radial-gradient(circle, var(--color-black) 12%, transparent 62%);
+  pointer-events: none;
+  animation: gold-spin 14s linear infinite;
+}
+
+.unbox:has(.unbox__stage--revealed) .unbox__rays {
+  opacity: 1;
+}
+
+.unbox__result {
+  /* Above the rays. */
+  position: relative;
+  padding: 0 1.25rem 1.25rem;
+  text-align: center;
+}
+
+/* Fades in each time it's shown. */
+.unbox__result:not([hidden]) {
+  animation: reveal-in 0.4s ease-out;
+}
+
+.unbox__eyebrow,
+.unbox__name {
+  /* Readable over the rays, however bright the record's colour. */
+  text-shadow: 0 1px 8px var(--color-black);
+}
+
+.unbox__eyebrow {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.unbox__name {
+  /* Room for two lines whatever the name - empty while the box is shut,
+     or long enough to wrap - centred in it, so the dialog's size never
+     depends on it. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5em;
+  margin: 0.25rem 0 0;
+  font-size: 1.375rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.unbox__family {
+  display: inline-block;
+  margin: 0.5rem 0 0;
+  padding: 0.125rem 0.625rem;
+  border-radius: var(--radius-pill);
+  background-color: color-mix(in srgb, var(--record-glow) 25%, var(--color-surface-raised));
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* The album it was pressed for: one line, however long the name. */
+.unbox__album {
+  margin: 0.125rem 0 0;
+  overflow: hidden;
+  color: var(--color-text-soft);
+  font-size: 0.9375rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 8px var(--color-black);
+}
+
+/* Empty until the box is opened: a line's height all the same. */
+.unbox__family:empty::before,
+.unbox__album:empty::before {
+  content: '\00a0';
+}
+
+.unbox__actions {
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+@media (max-width: 480px) {
+  .unbox__stage {
+    height: 280px;
+  }
+
+  .unbox__record {
+    width: 180px;
+  }
+
+  .unbox__rays {
+    top: 124px;
+  }
+
+  .unbox__actions .button {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-item,
+  .store-item--revealed,
+  .store-item--revealed .store-item__preview::after,
+  .store-offer .mailer,
+  .unbox__rays,
+  .unbox__result:not([hidden]) {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------- collection */
+
+/* A record on its own little stage (the Store's unboxing and the
+   Collection's cards): no sliding out of a sleeve, unlike the Discogs
+   cards - it stays put and just spins. */
+.vinyl-stage .vinyl {
+  transform: none;
+  transition: none;
+}
+
+/* The house label: the app's own logo in the middle of the record. */
+.vinyl--house .vinyl__label {
+  background: var(--color-surface-raised) url('/favicon.png') center / cover no-repeat;
+}
+
+/* A glow-in-the-dark record glows once it's out of the box. */
+.unbox__stage--revealed .vinyl--glow .vinyl__disc {
+  box-shadow:
+    0 6px 18px color-mix(in srgb, var(--color-black) 55%, transparent),
+    0 0 28px color-mix(in srgb, var(--vinyl-glow) 70%, transparent);
+}
+
+/* The Collection's cards are the Discogs page's release cards (the record
+   sliding out of its sleeve); these are the parts only they have. A vinyl
+   unboxed before albums were picked has the app's logo for a sleeve. */
+.release-card__sleeve--house {
+  background: var(--color-surface-raised) url('/favicon.png') center / 55% no-repeat;
+}
+
+/* The record's style: the Concert cards' tag in the cover's top-left
+   corner, over the sleeve and the record sliding out. One line; the rare
+   style too long for the cover is cut short, in full in its tooltip. */
+.vinyl-card__style {
+  max-width: calc(100% - 1rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Filters the collection as you type. Sized like .release-search. */
+.collection-search {
+  width: 280px;
+  max-width: 100%;
+}
+
+@media (max-width: 600px) {
+  /* Its own full-width row on a phone, the sort switch on the right below. */
+  .collection-search {
+    width: 100%;
+  }
+}
+
+.vinyl-card__foot {
+  /* At the card's foot, on the right, and clear of the text above however
+     short it is. */
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+@media (max-width: 600px) {
+  .vinyl-card__play {
+    width: 100%;
+  }
+}
+
+/* ---- Play: the turntable in place of the collection, as big as the page
+   allows - the plinth is --reel-cover + 1.5rem tall and 1.45 times as
+   wide - its album below. */
+.player {
+  --reel-cover: min(52vh, 440px, calc((100vw - 2rem) / 1.45 - 3rem));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.player__back {
+  align-self: flex-start;
+}
+
+.player__deck {
+  /* Room at the top for what's playing, where there's none beside the
+     turntable (below). */
+  --deck-top: 0px;
+  position: relative;
+  width: 100%;
+  height: calc(var(--reel-cover) + 1.5rem + 3rem + var(--deck-top));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  overflow: hidden;
+}
+
+.player__deck .turntable {
+  top: var(--deck-top);
+}
+
+/* What's playing: the album and artist in the deck's top-left corner, over
+   the turntable's layer, as wide as the space left of the turntable - the
+   plinth is 1.45 times its height wide, centred. */
+.player__now {
+  position: absolute;
+  top: 1.25rem;
+  left: 1.5rem;
+  z-index: 4;
+  max-width: calc((100% - 1.45 * (var(--reel-cover) + 1.5rem)) / 2 - 2.5rem);
+}
+
+.player__info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+.player__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.player__artist {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-soft);
+  font-size: 1.0625rem;
+}
+
+/* No room beside the turntable: a row of its own at the top of the deck,
+   the turntable below it. */
+@media (max-width: 1000px) {
+  .player__deck {
+    --deck-top: 5.5rem;
+  }
+
+  .player__now {
+    right: 1.5rem;
+    max-width: none;
+  }
+
+  .player__title {
+    overflow: hidden;
+    font-size: 1.25rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.player__status {
+  margin: 0.75rem 0 0;
+  color: var(--color-text-soft);
+  font-size: 0.9375rem;
+}
+
+.player__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* ---- The Store's album picker: the album history as a list to choose
+   the new vinyl's album from. */
+.album-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: min(50vh, 420px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.album-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 56px;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.album-picker__item:hover,
+.album-picker__item:focus-visible {
+  border-color: var(--color-purple-800);
+  background-color: var(--color-surface-raised);
+}
+
+.album-picker__cover {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 6px;
+  object-fit: cover;
+  background-color: var(--color-surface-raised);
+}
+
+.album-picker__text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.album-picker__name,
+.album-picker__artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-picker__name {
+  font-weight: 600;
+}
+
+.album-picker__artist {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.album-picker__empty {
+  margin: 0;
+  color: var(--color-text-soft);
 }

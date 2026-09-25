@@ -27,6 +27,9 @@ const SCOPES = [
   // Album Suggester: read the Saved Albums, unsave one once it's listened to.
   'user-library-read',
   'user-library-modify',
+  // Collection: play a vinyl's album - find a device to play on, start it.
+  'user-read-playback-state',
+  'user-modify-playback-state',
 ].join(' ');
 
 function basicAuthHeader() {

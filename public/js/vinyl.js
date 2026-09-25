@@ -230,10 +230,14 @@ window.MusicHub = window.MusicHub || {};
   }
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
-  // Frames around a zoetrope's rings. Must match the steps() count on
+  // Frames around a zoetrope's rings, and how long it takes to turn once
+  // through them all. Both must match the steps() count and the duration on
   // .vinyl--zoetrope .vinyl__disc in style.css: the disc turns one frame
-  // slot per step.
-  var ZOETROPE_FRAMES = 12;
+  // slot per step. 16 is as many as fit without the cover zoetrope's
+  // windows overlapping; one every 56ms is about 18 frames a second - the
+  // turn itself doesn't show, so it doesn't have to keep to the rpm.
+  var ZOETROPE_FRAMES = 16;
+  var ZOETROPE_TURN_MS = 900;
   // Filter ids have to be unique on the page.
   var filterCount = 0;
 
@@ -978,5 +982,7 @@ window.MusicHub = window.MusicHub || {};
     setPlaying: setPlaying,
     glowColors: glowColors,
     findColors: findColors,
+    ZOETROPE_FRAMES: ZOETROPE_FRAMES,
+    ZOETROPE_TURN_MS: ZOETROPE_TURN_MS,
   };
 })(window.MusicHub);

@@ -23,7 +23,11 @@
           class="navbar__tab<%= tab.href === activePath ? ' navbar__tab--active' : '' %>"
           href="<%= tab.href %>"
           <%- tab.href === activePath ? 'aria-current="page"' : '' %>
-        ><%= tab.label %></a>
+        ><%= tab.label %><% if (tab.coins) { %>
+          <span class="coin-balance" title="Your coins">
+            <svg class="coin" data-coin-target aria-hidden="true"><use href="#coin-icon" /></svg>
+            <span class="coin-balance__value" data-coin-balance>0</span><span class="visually-hidden"> coins</span>
+          </span><% } %></a>
       <% }); %>
 
       <% var externalTabs = tabs.filter(function (tab) { return tab.external; }); %>
@@ -58,6 +62,13 @@
     </nav>
 
     <div class="navbar__actions">
+      <!-- The coin balance for phones, where the Store tab is folded away in
+           the hamburger menu. Hidden on wider screens. -->
+      <a class="coin-balance navbar__coins" href="/store" title="Your coins - open the Store">
+        <svg class="coin" data-coin-target aria-hidden="true"><use href="#coin-icon" /></svg>
+        <span class="coin-balance__value" data-coin-balance>0</span><span class="visually-hidden"> coins</span>
+      </a>
+
       <a class="button button--primary navbar__login" id="spotify-login" data-auth-missing href="/login" title="Login with Spotify">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="20" height="20">
           <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" />
@@ -84,3 +95,47 @@
     </div>
   </div>
 </header>
+
+<!-- The coin: gold, with a quaver pressed into its face. Drawn once and used
+     everywhere (<use href="#coin-icon">) - the navbar, the Store, the coins
+     flying up to the balance. Not display:none, which would drop the
+     gradients. -->
+<svg class="svg-sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="coin-rim-gradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" class="coin-stop--bright" />
+      <stop offset="0.5" class="coin-stop--face" />
+      <stop offset="1" class="coin-stop--rim" />
+    </linearGradient>
+    <linearGradient id="coin-face-gradient" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" class="coin-stop--shine" />
+      <stop offset="0.45" class="coin-stop--bright" />
+      <stop offset="1" class="coin-stop--face" />
+    </linearGradient>
+    <symbol id="coin-icon" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="11.2" fill="url(#coin-rim-gradient)" />
+      <circle cx="12" cy="12" r="8.7" fill="url(#coin-face-gradient)" stroke="currentColor" stroke-width="0.9" />
+      <g fill="currentColor">
+        <ellipse cx="10.1" cy="15.7" rx="2.55" ry="1.95" transform="rotate(-22 10.1 15.7)" />
+        <rect x="11.95" y="6.3" width="1.35" height="9.6" rx="0.5" />
+        <path d="M12.6 6.3c.25 1.7 1.45 2.5 2.5 3.4 1.05.95 1.6 2.1 1.1 3.8-.15-1.35-.8-2.1-1.6-2.7-.65-.5-1.4-.8-2-1.1z" />
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<script>
+  /* The balance straight away, rather than a 0 until wallet.js runs. */
+  (function () {
+    var coins = 0;
+    try {
+      var store = JSON.parse(localStorage.getItem('store') || 'null');
+      coins = Math.max(0, Math.floor(Number(store && store.credits) || 0));
+    } catch (err) {
+      coins = 0;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('[data-coin-balance]'), function (node) {
+      node.textContent = coins.toLocaleString('en-US');
+    });
+  })();
+</script>
