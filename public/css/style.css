@@ -139,6 +139,43 @@ button[aria-disabled='true'] {
   flex: none;
 }
 
+/* The round "fetch again" button on every page (Albums, Concerts, Artist
+   Graph, Discogs): just the circular-arrows icon, its name in the tooltip
+   and aria-label, the icon turning while aria-busy. */
+.refresh-button {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+}
+
+.refresh-button[hidden] {
+  display: none;
+}
+
+.refresh-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.refresh-button[aria-busy='true'] svg {
+  animation: refresh-button-spin 0.9s linear infinite;
+}
+
+@keyframes refresh-button-spin {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh-button[aria-busy='true'] svg {
+    animation: none;
+  }
+}
+
 /* ---------------------------------------------------------------- navbar */
 
 .navbar {
@@ -369,6 +406,45 @@ button[aria-disabled='true'] {
 .navbar__actions .navbar__settings svg {
   width: 20px;
   height: 20px;
+}
+
+/* The followed-artists refresh (a .refresh-button), sized like the
+   settings circle beside it. Ringed until the list is first fetched, as
+   pages that need it point here. */
+.navbar__actions .navbar__refresh {
+  width: 40px;
+  height: 40px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  color: var(--color-text-soft);
+}
+
+.navbar__actions .navbar__refresh svg {
+  width: 18px;
+  height: 18px;
+}
+
+.navbar__refresh--empty {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+/* How that refresh went, just under the navbar's right end. */
+.navbar__toast {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 1rem;
+  z-index: 11;
+  max-width: min(360px, calc(100vw - 2rem));
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface-raised);
+  color: var(--color-text-soft);
+  font-size: 0.875rem;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--color-black) 50%, transparent);
 }
 
 .navbar__settings--active {
@@ -967,6 +1043,25 @@ button[aria-disabled='true'] {
 
   .navbar__user {
     padding: calc(0.25rem - 2px);
+  }
+}
+
+/* The narrowest phones: a little tighter, so the bar stays one row with
+   the refresh button in it. */
+@media (max-width: 359px) {
+  .navbar__bar {
+    gap: 0.375rem;
+    padding-inline: 0.75rem;
+  }
+
+  .navbar__actions {
+    gap: 0.25rem;
+  }
+
+  .is-logged-in .navbar__actions .navbar__settings,
+  .navbar__actions .navbar__refresh {
+    width: 36px;
+    height: 36px;
   }
 }
 
@@ -3616,7 +3711,9 @@ textarea.text-input {
     box-shadow: 8px 0 16px color-mix(in srgb, var(--color-black) 55%, transparent);
   }
 
-  .vinyl {
+  /* Only a card's record - not the turntable's, which would land off
+     the platter. */
+  .release-card .vinyl {
     transform: translateX(22%);
   }
 }
@@ -3726,6 +3823,20 @@ textarea.text-input {
   --reel-gap: 10px;
 }
 
+/* "Update from Spotify" (a .refresh-button) in the case's top left
+   corner, like the reveal's re-roll button. The boxes under it keep their
+   text clear of it. */
+.case {
+  position: relative;
+}
+
+.case__refresh {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1;
+}
+
 /* Waiting for a spin: the library size and one big button. */
 .case__idle {
   display: flex;
@@ -3742,6 +3853,21 @@ textarea.text-input {
 .case__count {
   margin: 0;
   color: var(--color-text-muted);
+}
+
+.case__fetched {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+/* On a phone the text could reach the refresh button's corner, so it
+   starts below it instead. */
+@media (max-width: 600px) {
+  .case > .empty-state,
+  .case__idle {
+    padding-top: calc(0.75rem + 44px + 0.5rem);
+  }
 }
 
 /* The CS:GO-style reel. Cover size scales down on phones, so the strip

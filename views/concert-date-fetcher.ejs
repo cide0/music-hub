@@ -20,7 +20,12 @@
       <!-- Shown once a valid Spotify login is present. -->
       <section class="page__content" data-auth-required>
         <div class="toolbar">
-          <button type="button" class="button button--primary" id="fetch-concerts">Fetch concert dates</button>
+          <button type="button" class="icon-button refresh-button" id="fetch-concerts" aria-label="Fetch concert dates" title="Fetch concert dates">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
           <button type="button" class="button button--ghost" id="clear-concerts" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18">
               <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
@@ -32,7 +37,7 @@
             <div class="concert-search">
               <label class="visually-hidden" for="concert-search">Search concerts</label>
               <div class="input-clear">
-                <input type="text" id="concert-search" class="text-input" placeholder="Search artist, venue, city…"
+                <input type="text" id="concert-search" class="text-input" placeholder="Search artist, venue, city"
                   autocomplete="off" spellcheck="false" />
                 <button type="button" class="input-clear__button" id="concert-search-clear" aria-label="Clear search" hidden>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -87,6 +92,7 @@
     <script src="/js/storage.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
+    <script src="/js/followed-artists.js"></script>
     <script src="/js/wallet.js"></script>
     <script src="/js/spotify.js"></script>
     <script src="/js/google.js"></script>

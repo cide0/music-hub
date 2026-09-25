@@ -850,8 +850,21 @@ window.MusicHub = window.MusicHub || {};
     return chain;
   }
 
+  /** The round refresh button: its icon turning while busy, its name saying so. */
+  function setRefreshBusy(button, isBusy, label) {
+    button.setAttribute('aria-busy', String(isBusy));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
+
   function runCheck() {
     if (activeRun) {
+      return Promise.resolve();
+    }
+    // Fetched by the navbar's refresh button only - never from here.
+    var followed = MusicHub.followedArtists.list();
+    if (!followed) {
+      setMessage(MusicHub.followedArtists.MISSING_MESSAGE);
       return Promise.resolve();
     }
 
@@ -867,14 +880,13 @@ window.MusicHub = window.MusicHub || {};
     var failed = [];
 
     els.checkButton.disabled = true;
-    els.checkButton.textContent = 'Checking…';
+    setRefreshBusy(els.checkButton, true, 'Checking for new releases…');
     updateClearButton();
     els.failedNotice.hidden = true;
     hideToast();
-    setStatus('Loading your followed artists…', 0);
     showRunningCount([], since);
 
-    return MusicHub.spotify.getFollowedArtists().then(function (artists) {
+    return Promise.resolve(followed).then(function (artists) {
       if (run.cancelled) {
         return;
       }
@@ -935,7 +947,7 @@ window.MusicHub = window.MusicHub || {};
       // Back from the running count to what the list on screen holds.
       renderSummary();
       els.checkButton.disabled = false;
-      els.checkButton.textContent = 'Check for new releases';
+      setRefreshBusy(els.checkButton, false, 'Check for new releases');
       activeRun = null;
       updateClearButton();
     });

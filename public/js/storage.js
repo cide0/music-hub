@@ -15,6 +15,10 @@ window.MusicHub = window.MusicHub || {};
     'concertHistory',
     'discogsVinylReleases',
     'albumSuggesterHistory',
+    // The Album Suggester's Saved Albums, as last fetched from Spotify.
+    'albumSuggesterLibrary',
+    // The followed Spotify artists, as the navbar's refresh button last fetched them.
+    'followedArtists',
     // Coins, bought Store items, the equipped name style and unboxed vinyls.
     'store',
     // The user's choices on the Settings page - see getSetting / setSetting.

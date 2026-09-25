@@ -9,8 +9,29 @@
     <main class="page">
       <!-- Shown once a valid Spotify login is present. -->
       <section class="page__content" data-auth-required>
+        <!-- An update that failed while albums were already on hand: they stay. -->
+        <div class="notice" id="library-error" role="alert" hidden>
+          <span class="notice__text" id="library-error-text"></span>
+          <a class="button button--ghost notice__action" id="library-relogin" href="/login?from=%2Falbum-suggester" hidden>Log in again</a>
+          <button type="button" class="notice__dismiss" id="library-error-dismiss" aria-label="Dismiss">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
         <!-- One of these panels shows at a time - see setView in album-suggester.js. -->
         <div class="case" id="case" aria-live="polite">
+          <!-- The saved albums are remembered from the last fetch; Spotify is
+               only asked again from this round button in the top left corner
+               (hidden on the reel and the reveal, which have their own). -->
+          <button type="button" class="icon-button refresh-button case__refresh" id="library-refresh" aria-label="Update from Spotify" title="Update from Spotify">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+
           <p class="empty-state" id="case-loading">Loading your Spotify library…</p>
 
           <div class="notice" id="case-error" hidden>
@@ -23,6 +44,7 @@
 
           <div class="case__idle" id="case-idle" hidden>
             <p class="case__count" id="case-count"></p>
+            <p class="case__fetched" id="library-fetched" hidden></p>
             <button type="button" class="button button--primary" id="case-open">Suggest an album</button>
           </div>
 
@@ -106,7 +128,7 @@
               <div class="history-search">
                 <label class="visually-hidden" for="history-search">Search album history</label>
                 <div class="input-clear">
-                  <input type="text" id="history-search" class="text-input" placeholder="Search album or artist…"
+                  <input type="text" id="history-search" class="text-input" placeholder="Search album or artist"
                     autocomplete="off" spellcheck="false" />
                   <button type="button" class="input-clear__button" id="history-search-clear" aria-label="Clear search" hidden>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -160,6 +182,7 @@
     <script src="/js/storage.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
+    <script src="/js/followed-artists.js"></script>
     <script src="/js/wallet.js"></script>
     <script src="/js/confirm-dialog.js"></script>
     <script src="/js/vinyl.js"></script>

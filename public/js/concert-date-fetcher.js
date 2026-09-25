@@ -862,7 +862,7 @@ window.MusicHub = window.MusicHub || {};
     if (!upcoming.length) {
       setMessage(state.lastFetchedAt
         ? 'No upcoming concerts found in the selected cities.'
-        : 'No concerts fetched yet — hit "Fetch concert dates" to start.');
+        : 'No concerts fetched yet — hit the refresh button to fetch them.');
       updateSummary([]);
       updateCountdown();
       renderLastFetched();
@@ -1061,7 +1061,7 @@ window.MusicHub = window.MusicHub || {};
     activeRun = { cancelled: false, controller: new AbortController() };
 
     els.fetchButton.disabled = true;
-    els.fetchButton.textContent = 'Fetching…';
+    setRefreshBusy(els.fetchButton, true, 'Fetching concert dates…');
     els.failedNotice.hidden = true;
     hideToast();
     updateClearButton();
@@ -1069,10 +1069,17 @@ window.MusicHub = window.MusicHub || {};
     return activeRun;
   }
 
+  /** The round refresh button: its icon turning while busy, its name saying so. */
+  function setRefreshBusy(button, isBusy, label) {
+    button.setAttribute('aria-busy', String(isBusy));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
+
   function endRun(run) {
     setStatus('');
     els.fetchButton.disabled = false;
-    els.fetchButton.textContent = 'Fetch concert dates';
+    setRefreshBusy(els.fetchButton, false, 'Fetch concert dates');
     if (activeRun === run) {
       activeRun = null;
     }
@@ -1080,14 +1087,19 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function runFetch() {
+    // Fetched by the navbar's refresh button only - never from here.
+    var followed = MusicHub.followedArtists.list();
+    if (!followed) {
+      setMessage(MusicHub.followedArtists.MISSING_MESSAGE);
+      return Promise.resolve();
+    }
+
     var run = startRun();
     var previous = state.concerts;
     var failed = [];
     var matches = [];
 
-    setStatus('Loading your followed artists…', 0);
-
-    return MusicHub.spotify.getFollowedArtists().then(function (artists) {
+    return Promise.resolve(followed).then(function (artists) {
       if (run.cancelled) {
         return null;
       }

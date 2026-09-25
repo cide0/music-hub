@@ -518,11 +518,21 @@ window.MusicHub = window.MusicHub || {};
     els.failedNotice.hidden = false;
   }
 
+  /** The round refresh button: its icon turning while busy, its name saying so. */
+  function setRefreshBusy(button, isBusy, label) {
+    button.setAttribute('aria-busy', String(isBusy));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
+
   function setBusy(state) {
     busy = state;
     updateOverlays();
     els.generate.disabled = state;
     els.update.disabled = state;
+    if (!state) {
+      setRefreshBusy(els.update, false, 'Update graph');
+    }
     els.clear.disabled = state;
     els.concertsToggle.disabled = state;
     updateModeToggles();
@@ -669,11 +679,18 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function runGeneration(mode) {
+    // Fetched by the navbar's refresh button only - never from here.
+    var followedArtists = MusicHub.followedArtists.list();
+    if (!followedArtists) {
+      setMessage(MusicHub.followedArtists.MISSING_MESSAGE);
+      return Promise.resolve();
+    }
+
     var run = startRun('graph');
     setBusy(true);
     setMessage('');
     els.failedNotice.hidden = true;
-    setStatus('Loading your followed artists…', 0);
+    setStatus('Checking your followed artists…', 0);
 
     // The recommendation set is built from the graph, so it goes stale here.
     if (showRecommended) {
@@ -682,7 +699,7 @@ window.MusicHub = window.MusicHub || {};
       recommended = { nodes: [], links: [] };
     }
 
-    return MusicHub.spotify.getFollowedArtists().then(function (followed) {
+    return Promise.resolve(followedArtists).then(function (followed) {
       if (run.cancelled) {
         return null;
       }
@@ -2427,6 +2444,7 @@ window.MusicHub = window.MusicHub || {};
 
     els.update.addEventListener('click', function () {
       runGeneration('update');
+      setRefreshBusy(els.update, busy, busy ? 'Updating graph…' : 'Update graph');
     });
 
     els.clear.addEventListener('click', clearStoredData);
@@ -2514,7 +2532,7 @@ window.MusicHub = window.MusicHub || {};
 
       if (!hasGenres) {
         els.genresToggle.checked = false;
-        setMessage('No genres stored yet — run "Update graph" to fetch them.');
+        setMessage('No genres stored yet — update the graph with the refresh button to fetch them.');
         return;
       }
 

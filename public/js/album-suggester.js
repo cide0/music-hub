@@ -8,9 +8,9 @@
  * and to its vinyl releases on Discogs; marking it listened unsaves it on
  * Spotify and adds it to a listened history kept here.
  *
- * The pool itself is never cached - it's whatever Spotify's Saved Albums
- * hold on page load. Only the history (Spotify has no "listened" concept)
- * is stored.
+ * The pool is the Saved Albums as last fetched, remembered between
+ * visits: Spotify is only asked again when the user presses "Update from
+ * Spotify". The history (Spotify has no "listened" concept) is stored too.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -18,6 +18,7 @@ window.MusicHub = window.MusicHub || {};
   'use strict';
 
   var HISTORY_KEY = 'albumSuggesterHistory';
+  var LIBRARY_KEY = 'albumSuggesterLibrary';
   var TIMEZONE = 'Europe/Berlin';
 
   // Covers on the reel, whatever the size of the library, and where on it
@@ -78,7 +79,10 @@ window.MusicHub = window.MusicHub || {};
   var spinning = false;
   // While a dismissed cover is tearing apart (see tearCover).
   var tearing = false;
-  var libraryRequested = false;
+  // While "Update from Spotify" is fetching, and when it last succeeded.
+  var refreshing = false;
+  var fetchedAt = null;
+  var currentView = null;
   var removing = false;
 
   function el(tag, className, text) {
@@ -105,6 +109,35 @@ window.MusicHub = window.MusicHub || {};
 
   function saveHistory() {
     MusicHub.storage.write(HISTORY_KEY, { listened: history });
+  }
+
+  /** The Saved Albums as last fetched, or null before the first fetch. */
+  function loadLibraryCache() {
+    var stored = MusicHub.storage.read(LIBRARY_KEY, null);
+    if (!stored || !Array.isArray(stored.albums)) {
+      return null;
+    }
+    return {
+      fetchedAt: stored.fetchedAt || null,
+      albums: stored.albums.filter(function (album) {
+        return album && album.id;
+      }).map(function (album) {
+        // JSON has no Infinity, so an unknown save date comes back as null.
+        return Object.assign({}, album, {
+          addedAt: typeof album.addedAt === 'number' ? album.addedAt : Infinity,
+        });
+      }),
+    };
+  }
+
+  /** Remembers the real albums in `albums` - never the placeholders. */
+  function saveLibraryCache(albums) {
+    MusicHub.storage.write(LIBRARY_KEY, {
+      fetchedAt: fetchedAt,
+      albums: albums.filter(function (album) {
+        return !isPlaceholder(album);
+      }),
+    });
   }
 
   /* ------------------------------------------------------------ spotify */
@@ -159,6 +192,9 @@ window.MusicHub = window.MusicHub || {};
 
   /** Unsaves the album. DELETE /me/albums is gone since Feb 2026; /me/library replaces it. */
   function unsaveAlbum(album) {
+    if (isPlaceholder(album)) {
+      return Promise.resolve();
+    }
     var uri = 'spotify:album:' + album.id;
     return MusicHub.auth.spotifyFetch('/me/library?uris=' + encodeURIComponent(uri), { method: 'DELETE' })
       .then(function (response) {
@@ -170,11 +206,73 @@ window.MusicHub = window.MusicHub || {};
       });
   }
 
+  /* -------------------------------------------------------- placeholders */
+
+  /*
+   * TEMPORARY, while Spotify rate-limits the app: this many stand-in albums
+   * join the pool as normal albums (tiers, reveal, listened history), with
+   * covers borrowed from the listened history and the saved Discogs
+   * releases. They never reach Spotify. Remove this block, and its uses
+   * (grep "placeholder"), once Spotify answers again.
+   */
+  var PLACEHOLDER_COUNT = 10;
+  var PLACEHOLDER_PREFIX = 'placeholder-';
+  var DAY_MS = 24 * 60 * 60 * 1000;
+
+  function isPlaceholder(album) {
+    return String(album.id).indexOf(PLACEHOLDER_PREFIX) === 0;
+  }
+
+  /** History and Discogs covers taken in turn, so both show up on the reel. */
+  function placeholderCovers() {
+    var fromHistory = loadHistory().map(function (entry) { return entry.imageUrl; });
+    var discogs = MusicHub.storage.read('discogsVinylReleases', null);
+    var fromDiscogs = (discogs && Array.isArray(discogs.releases) ? discogs.releases : [])
+      .map(function (release) { return release.imageUrl; });
+    var covers = [];
+    for (var i = 0; i < Math.max(fromHistory.length, fromDiscogs.length); i += 1) {
+      [fromHistory[i], fromDiscogs[i]].forEach(function (url) {
+        // Discogs hands out a blank spacer.gif for releases without art.
+        if (url && !/spacer\.gif/.test(url) && covers.indexOf(url) === -1) {
+          covers.push(url);
+        }
+      });
+    }
+    return covers;
+  }
+
+  function placeholderAlbums() {
+    var covers = placeholderCovers();
+    var albums = [];
+    for (var i = 0; i < PLACEHOLDER_COUNT; i += 1) {
+      var url = covers.length ? covers[i % covers.length] : null;
+      albums.push({
+        id: PLACEHOLDER_PREFIX + (i + 1),
+        // A day apart, so they spread over the tiers like real saves - but
+        // older than any real one, so they never take a real album's tier.
+        addedAt: (PLACEHOLDER_COUNT - i) * DAY_MS,
+        tier: 'blue',
+        name: 'Placeholder Album ' + (i + 1),
+        artistName: 'Placeholder Artist',
+        imageUrl: url,
+        largeImageUrl: url,
+        spotifyUrl: null,
+      });
+    }
+    return albums;
+  }
+
   // A login from before this page existed lacks the library scopes.
   function permissionHint(status) {
     return status === 401 || status === 403
       ? ' Log in again to give Music Hub access to your saved albums.'
       : '';
+  }
+
+  function fetchErrorMessage(err) {
+    return err.message
+      + (err.status === 429 ? ' Spotify is limiting requests right now - try again in a while.' : '')
+      + permissionHint(err.status);
   }
 
   /* ------------------------------------------------------------- rarity */
@@ -237,6 +335,9 @@ window.MusicHub = window.MusicHub || {};
   /* --------------------------------------------------------------- links */
 
   function spotifyAppUrl(album) {
+    if (isPlaceholder(album)) {
+      return '#';
+    }
     return 'spotify:album:' + album.id;
   }
 
@@ -251,9 +352,41 @@ window.MusicHub = window.MusicHub || {};
   var VIEWS = ['loading', 'error', 'empty', 'idle', 'reel', 'reveal'];
 
   function setView(name) {
+    currentView = name;
     VIEWS.forEach(function (view) {
       els.views[view].hidden = view !== name;
     });
+    renderLibraryBar();
+  }
+
+  function formatTimestamp(iso) {
+    var date = new Date(iso);
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    return new Intl.DateTimeFormat('de-DE', {
+      timeZone: TIMEZONE, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(date);
+  }
+
+  /**
+   * The corner refresh button - away on the reel and the reveal, which have
+   * corner buttons of their own, and on the error, which has Retry - and
+   * when the albums were last fetched.
+   */
+  function renderLibraryBar() {
+    var fetched = fetchedAt ? formatTimestamp(fetchedAt) : '';
+    els.libraryFetched.textContent = fetched ? 'Fetched from Spotify ' + fetched : '';
+    els.libraryFetched.hidden = !fetched;
+    var label = refreshing
+      ? 'Updating from Spotify\u2026'
+      : 'Update from Spotify' + (fetched ? ' (last fetched ' + fetched + ')' : '');
+    els.libraryRefresh.hidden = currentView === 'reel' || currentView === 'reveal' || currentView === 'error';
+    els.libraryRefresh.disabled = refreshing;
+    els.libraryRefresh.setAttribute('aria-busy', String(refreshing));
+    els.libraryRefresh.setAttribute('aria-label', label);
+    els.libraryRefresh.title = label;
+    els.openButton.disabled = refreshing || !pool.length;
   }
 
   /** A cover image, or a plain accent square when Spotify has none (or it fails to load). */
@@ -287,23 +420,52 @@ window.MusicHub = window.MusicHub || {};
     } else {
       els.empty.textContent = exhausted
         ? 'Your Spotify library has no saved albums left.'
-        : 'Your Spotify library has no saved albums yet.';
+        : fetchedAt
+          ? 'Your Spotify library has no saved albums yet.'
+          : 'Fetch your saved albums from Spotify with the refresh button to get started.';
       setView('empty');
     }
   }
 
-  function loadLibrary() {
-    libraryRequested = true;
-    setView('loading');
+  /** Puts `albums` - plus the placeholders - up as the pool to case. */
+  function usePool(albums) {
+    pool = assignTiers(albums.concat(placeholderAlbums()));
+    preloadLabelCovers();
+    showRestingState(false);
+  }
+
+  /** Asks Spotify for the Saved Albums again and remembers them. */
+  function refreshLibrary() {
+    if (refreshing) {
+      return;
+    }
+    refreshing = true;
+    els.libraryError.hidden = true;
+    // With albums on hand they stay up while Spotify answers.
+    var hadAlbums = pool.length > 0;
+    if (hadAlbums) {
+      renderLibraryBar();
+    } else {
+      setView('loading');
+    }
     fetchSavedAlbums()
       .then(function (albums) {
-        pool = assignTiers(albums);
-        preloadLabelCovers();
-        showRestingState(false);
+        refreshing = false;
+        fetchedAt = new Date().toISOString();
+        saveLibraryCache(albums);
+        usePool(albums);
       })
       .catch(function (err) {
+        refreshing = false;
         console.warn('Could not load the saved albums', err);
-        els.errorText.textContent = err.message + permissionHint(err.status);
+        if (hadAlbums) {
+          els.libraryErrorText.textContent = fetchErrorMessage(err);
+          els.libraryRelogin.hidden = !permissionHint(err.status);
+          els.libraryError.hidden = false;
+          renderLibraryBar();
+          return;
+        }
+        els.errorText.textContent = fetchErrorMessage(err);
         els.relogin.hidden = !permissionHint(err.status);
         setView('error');
       });
@@ -1052,7 +1214,7 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function openCase(excludeId) {
-    if (spinning || !pool.length) {
+    if (spinning || refreshing || !pool.length) {
       return;
     }
     spinning = true;
@@ -1393,6 +1555,7 @@ window.MusicHub = window.MusicHub || {};
         pool = assignTiers(pool.filter(function (entry) {
           return entry.id !== album.id;
         }));
+        saveLibraryCache(pool);
         preloadLabelCovers();
         // Off Spotify either way; the history just doesn't get it twice.
         var already = history.some(function (entry) {
@@ -1662,6 +1825,11 @@ window.MusicHub = window.MusicHub || {};
     els.empty = els.views.empty;
     els.count = document.getElementById('case-count');
     els.openButton = document.getElementById('case-open');
+    els.libraryFetched = document.getElementById('library-fetched');
+    els.libraryRefresh = document.getElementById('library-refresh');
+    els.libraryError = document.getElementById('library-error');
+    els.libraryErrorText = document.getElementById('library-error-text');
+    els.libraryRelogin = document.getElementById('library-relogin');
     els.window = document.getElementById('reel-window');
     els.strip = document.getElementById('reel-strip');
     els.blur = document.getElementById('reel-blur-amount');
@@ -1696,7 +1864,11 @@ window.MusicHub = window.MusicHub || {};
     els.historyNotice = document.getElementById('history-notice');
     els.historyNoticeText = document.getElementById('history-notice-text');
 
-    document.getElementById('case-retry').addEventListener('click', loadLibrary);
+    document.getElementById('case-retry').addEventListener('click', refreshLibrary);
+    els.libraryRefresh.addEventListener('click', refreshLibrary);
+    document.getElementById('library-error-dismiss').addEventListener('click', function () {
+      els.libraryError.hidden = true;
+    });
     els.openButton.addEventListener('click', function () {
       openCase(null);
     });
@@ -1754,15 +1926,10 @@ window.MusicHub = window.MusicHub || {};
     history = loadHistory();
     renderHistory();
 
-    if (MusicHub.auth.isLoggedIn()) {
-      loadLibrary();
-    }
-  });
-
-  document.addEventListener('musichub:authchange', function (event) {
-    if (event.detail && event.detail.loggedIn && els.views && !libraryRequested) {
-      loadLibrary();
-    }
+    // Never fetched on its own - the albums from last time, if any.
+    var cached = loadLibraryCache();
+    fetchedAt = cached ? cached.fetchedAt : null;
+    usePool(cached ? cached.albums : []);
   });
 
   // Exposed for tests.

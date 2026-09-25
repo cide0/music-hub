@@ -54,8 +54,12 @@ routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
 views/               EJS pages + partials/ (head, navbar)
 public/css/          variables.css (palette) + style.css
-public/js/           storage.js, navbar.js, auth.js, wallet.js (every page;
-                     wallet.js = coins, Store items, coin animation),
+public/js/           storage.js, navbar.js, auth.js, followed-artists.js,
+                     wallet.js (every page; followed-artists.js = the navbar
+                     refresh button, the only place the followed Spotify
+                     artists are fetched - pages read the stored list via
+                     MusicHub.followedArtists.list(); wallet.js = coins,
+                     Store items, coin animation),
                      spotify.js + google.js (shared API helpers),
                      playlist-picker.js (shared playlist dropdown),
                      vinyl.js (Discogs format -> CSS-drawn record),

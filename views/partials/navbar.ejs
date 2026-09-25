@@ -81,6 +81,16 @@
         <span id="spotify-user-name"></span>
       </a>
 
+      <!-- Fetches the followed Spotify artists that every page reads from
+           localStorage - see followed-artists.js. -->
+      <button type="button" class="icon-button refresh-button navbar__refresh" id="followed-refresh" data-auth-required
+        aria-label="Refresh followed artists" title="Refresh followed artists">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+        </svg>
+      </button>
+
       <a
         class="icon-button navbar__settings<%= activePath === '/settings' ? ' navbar__settings--active' : '' %>"
         href="/settings"
@@ -94,6 +104,8 @@
       </a>
     </div>
   </div>
+  <!-- How the navbar's followed-artists refresh went. -->
+  <p class="navbar__toast" id="followed-toast" role="status" hidden></p>
 </header>
 
 <!-- The coin: gold, with a quaver pressed into its face. Drawn once and used

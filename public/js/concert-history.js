@@ -998,7 +998,7 @@ window.MusicHub = window.MusicHub || {};
     els.artistList.textContent = '';
 
     if (!followedArtists) {
-      els.pickerMessage.textContent = 'Loading your followed artists…';
+      els.pickerMessage.textContent = MusicHub.followedArtists.MISSING_MESSAGE;
       els.pickerMessage.hidden = false;
       return;
     }
@@ -1058,19 +1058,9 @@ window.MusicHub = window.MusicHub || {};
     els.addArtistToggle.setAttribute('aria-expanded', 'true');
     els.artistSearch.value = '';
     els.artistSearch.focus();
+    // Fetched by the navbar's refresh button only - never from here.
+    followedArtists = MusicHub.followedArtists.list();
     renderArtistPicker();
-
-    if (followedArtists) {
-      return;
-    }
-
-    MusicHub.spotify.getFollowedArtists().then(function (artists) {
-      followedArtists = artists;
-      renderArtistPicker();
-    }).catch(function (err) {
-      els.pickerMessage.textContent = "Couldn't load your followed artists: " + err.message;
-      els.pickerMessage.hidden = false;
-    });
   }
 
   /**
@@ -1270,6 +1260,13 @@ window.MusicHub = window.MusicHub || {};
       }
     });
     els.artistSearch.addEventListener('input', renderArtistPicker);
+    // The navbar fetched a new list while the picker is open.
+    document.addEventListener(MusicHub.followedArtists.CHANGE_EVENT, function () {
+      if (!els.artistPanel.hidden) {
+        followedArtists = MusicHub.followedArtists.list();
+        renderArtistPicker();
+      }
+    });
 
     document.addEventListener('click', function (event) {
       var container = document.getElementById('add-artist');
