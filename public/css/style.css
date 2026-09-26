@@ -5423,15 +5423,23 @@ button.turntable__power:focus-visible {
 
 :root[data-name-style="gold"] .navbar__user > span,
 .name-pill[data-name-style="gold"] .name-pill__name {
-  background: linear-gradient(110deg,
-    var(--rarity-gold-deep) 0%,
-    var(--rarity-gold) 25%,
-    var(--rarity-gold-bright) 40%,
-    var(--rarity-gold-shine) 48%,
-    var(--rarity-gold-bright) 56%,
-    var(--rarity-gold) 72%,
-    var(--rarity-gold-deep) 100%);
-  background-size: 250% 100%;
+  /* Two layers: the band of light, sliding, over the polished gold, which
+     stays put. The band sits in the middle of its 2.5x-wide layer with
+     nothing either side, so it starts and ends fully off the name - every
+     loop begins on the same frame the last one ended on. */
+  background:
+    linear-gradient(110deg,
+      transparent 40%,
+      var(--rarity-gold-bright) 46%,
+      var(--rarity-gold-shine) 50%,
+      var(--rarity-gold-bright) 54%,
+      transparent 60%) 0 0 / 250% 100% no-repeat,
+    linear-gradient(110deg,
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 30%,
+      var(--rarity-gold-bright) 50%,
+      var(--rarity-gold) 70%,
+      var(--rarity-gold-deep));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -5439,8 +5447,8 @@ button.turntable__power:focus-visible {
 }
 
 @keyframes name-gold-shine {
-  0% { background-position: 150% 0; }
-  70%, 100% { background-position: -50% 0; }
+  0% { background-position: 100% 0, 0 0; }
+  70%, 100% { background-position: 0% 0, 0 0; }
 }
 
 :root[data-name-style="gold"] .navbar__user::after,
@@ -5473,6 +5481,304 @@ button.turntable__power:focus-visible {
   }
 
   .flying-coin__face {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------- navbar styles */
+
+/* Navbar styles from the Store, worn by the whole navbar (via
+   data-navbar-style on <html>, set before the first paint by head.ejs) and
+   by the Store's preview, a small copy of the navbar in its classes. The
+   profile pill keeps its own name style and the logo stays as it is.
+
+   Gold: the Gold Shine name spread over the bar - a dark gold plate with a
+   shimmering gold edge, the album history's gold shine sweeping across it,
+   and over whatever is hovered, polished-gold lettering (the current
+   page's and the hovered one with light running through it), turning gold
+   frames on the active tab and settings circle, and gold rings on the
+   buttons. */
+:root[data-navbar-style="gold"] .navbar,
+.navbar-preview[data-navbar-style="gold"] {
+  --navbar-gold-plate: color-mix(in srgb, var(--rarity-gold) 14%, var(--color-black));
+  /* The plate inside a turning frame; the active one's is a shade deeper. */
+  --navbar-gold-fill: color-mix(in srgb, var(--rarity-gold) 22%, var(--color-black));
+  background:
+    linear-gradient(110deg,
+      color-mix(in srgb, var(--rarity-gold) 20%, var(--color-black)),
+      color-mix(in srgb, var(--rarity-gold-deep) 18%, var(--color-black)) 45%,
+      color-mix(in srgb, var(--rarity-gold) 22%, var(--color-black)));
+  border-bottom-color: transparent;
+  box-shadow: 0 0 22px color-mix(in srgb, var(--rarity-gold-bright) 22%, transparent);
+}
+
+/* The shimmering gold edge along the bottom, in place of the border. */
+:root[data-navbar-style="gold"] .navbar::after,
+.navbar-preview[data-navbar-style="gold"]::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    var(--rarity-gold-deep),
+    var(--rarity-gold),
+    var(--rarity-gold-shine),
+    var(--rarity-gold),
+    var(--rarity-gold-deep));
+  background-size: 200% 100%;
+  pointer-events: none;
+  animation: gold-bar 2.4s linear infinite;
+}
+
+/* The album history's gold shine, sweeping over the whole bar from left to
+   right, then a rest before the next pass. Above the bar's contents, but
+   under the External Tools menu and the phone menu, which come later. */
+:root[data-navbar-style="gold"] .navbar::before,
+.navbar-preview[data-navbar-style="gold"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(115deg,
+      transparent 44%,
+      color-mix(in srgb, var(--rarity-gold-shine) 45%, transparent) 50%,
+      transparent 56%)
+    no-repeat;
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: navbar-gold-sweep 4.5s ease-in-out infinite;
+}
+
+.navbar-preview[data-navbar-style="gold"]::before {
+  animation-duration: 2.6s;
+}
+
+@keyframes navbar-gold-sweep {
+  0% { background-position: 150% 0; }
+  60%, 100% { background-position: -50% 0; }
+}
+
+/* Polished-gold lettering - the Gold Shine name's two layers. The band of
+   light only runs through the current page's label and a hovered one;
+   the rest keep it parked off to the side. */
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) .navbar__label {
+  background:
+    linear-gradient(110deg,
+      transparent 40%,
+      var(--rarity-gold-bright) 46%,
+      var(--rarity-gold-shine) 50%,
+      var(--rarity-gold-bright) 54%,
+      transparent 60%) 0 0 / 250% 100% no-repeat,
+    linear-gradient(110deg,
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 30%,
+      var(--rarity-gold-bright) 50%,
+      var(--rarity-gold) 70%,
+      var(--rarity-gold-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab--active, .navbar__tab:hover, .navbar__dropdown-toggle[aria-expanded='true'], .navbar__menu-item:is(:hover, :focus-visible), .navbar__brand:hover) .navbar__label {
+  animation: name-gold-shine 2.6s ease-in-out infinite;
+}
+
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab, .navbar__menu-item) > svg,
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) .icon-button {
+  color: var(--rarity-gold-bright);
+}
+
+/* Tabs: a transparent border (padding 2px short to make up for it), so the
+   hover and the active frame don't change their size. */
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) .navbar__tab {
+  padding: calc(0.375rem - 2px) calc(0.6875rem - 2px);
+  border: 2px solid transparent;
+}
+
+/* The buttons: gold rings on the plate. */
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) .icon-button {
+  border-color: color-mix(in srgb, var(--rarity-gold) 55%, transparent);
+  background-color: var(--navbar-gold-plate);
+}
+
+/* Still ringed until the followed artists are first fetched - in gold. */
+:root[data-navbar-style="gold"] .navbar .navbar__refresh--empty {
+  border-color: var(--rarity-gold-shine);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rarity-gold-bright) 45%, transparent);
+}
+
+/* Hovered, opened or where you are (the active tab, the settings circle on
+   /settings): the name's turning gold frame around a dark gold plate -
+   turning from the moment the pointer is on it. No glow behind it. */
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab:hover, .navbar__dropdown-toggle[aria-expanded='true'], .navbar__menu-item:is(:hover, :focus-visible), .icon-button:hover:not(:disabled):not([aria-disabled='true']), .navbar__tab--active, .navbar__settings--active, .navbar-preview__settings) {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--navbar-gold-fill), var(--navbar-gold-fill)) padding-box,
+    conic-gradient(from var(--name-angle),
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 18%,
+      var(--rarity-gold-shine) 25%,
+      var(--rarity-gold) 32%,
+      var(--rarity-gold-deep) 50%,
+      var(--rarity-gold) 68%,
+      var(--rarity-gold-shine) 75%,
+      var(--rarity-gold) 82%,
+      var(--rarity-gold-deep)) border-box;
+  box-shadow: none;
+  animation: name-border-turn 2.4s linear infinite;
+}
+
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab--active, .navbar__settings--active, .navbar-preview__settings) {
+  --navbar-gold-fill: color-mix(in srgb, var(--rarity-gold) 26%, var(--color-black));
+  border-width: 2px;
+}
+
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab--active, .navbar__settings--active, .navbar-preview__settings):hover {
+  --navbar-gold-fill: color-mix(in srgb, var(--rarity-gold) 36%, var(--color-black));
+}
+
+/* Login: a polished gold button with dark lettering. */
+:root[data-navbar-style="gold"] .navbar .navbar__login {
+  background: linear-gradient(160deg, var(--rarity-gold-bright), var(--rarity-gold) 55%, var(--rarity-gold-deep));
+  color: color-mix(in srgb, var(--rarity-gold-deep) 30%, var(--color-black));
+}
+
+:root[data-navbar-style="gold"] .navbar .navbar__login:hover {
+  filter: brightness(1.12);
+}
+
+/* The coin balance gets a gold ring. */
+:root[data-navbar-style="gold"] .navbar .coin-balance {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rarity-gold) 70%, transparent);
+}
+
+/* And over whatever is hovered, the same shine again and again while the
+   pointer stays. */
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab, .navbar__menu-item, .icon-button, .navbar__login, .navbar__coins, .navbar__brand) {
+  position: relative;
+  overflow: hidden;
+}
+
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab, .navbar__menu-item, .icon-button, .navbar__login, .navbar__coins, .navbar__brand)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  background: linear-gradient(115deg,
+      transparent 35%,
+      color-mix(in srgb, var(--rarity-gold-shine) 45%, transparent) 50%,
+      transparent 65%)
+    no-repeat;
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  :is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab, .navbar__menu-item, .icon-button, .navbar__login, .navbar__coins, .navbar__brand):hover:not(:disabled)::before {
+    opacity: 1;
+    animation: gold-shine 1.8s ease-in-out infinite;
+  }
+}
+
+/* The External Tools menu floating under its tab - on phones it sits in the
+   hamburger menu, which is gold as a whole. */
+@media (min-width: 901px) {
+  :root[data-navbar-style="gold"] .navbar .navbar__menu {
+    border-color: color-mix(in srgb, var(--rarity-gold) 55%, transparent);
+    background-color: var(--navbar-gold-plate);
+    box-shadow:
+      0 12px 24px color-mix(in srgb, var(--color-black) 55%, transparent),
+      0 0 18px color-mix(in srgb, var(--rarity-gold-bright) 20%, transparent);
+  }
+}
+
+:root[data-navbar-style="gold"] .navbar .navbar__menu-item {
+  border: 1px solid transparent;
+}
+
+@media (max-width: 900px) {
+  :root[data-navbar-style="gold"] .navbar .navbar__tabs {
+    border-bottom-color: color-mix(in srgb, var(--rarity-gold) 55%, transparent);
+    background-color: var(--navbar-gold-plate);
+  }
+}
+
+/* The Store's preview: the logo and name, the active tab and the settings
+   circle, on a compact strip of navbar that fits inside the card. */
+.navbar-preview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 100%;
+  padding: 0.375rem 0.5rem 0.375rem 0.625rem;
+  border-bottom: 1px solid var(--color-border);
+  overflow: hidden;
+  font-size: 0.8125rem;
+}
+
+.navbar-preview .navbar__brand {
+  gap: 0.375rem;
+  margin-right: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.navbar-preview .navbar__brand img {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.navbar-preview .navbar__tab {
+  min-height: 28px;
+  font-size: 0.75rem;
+  cursor: default;
+}
+
+:root .navbar-preview[data-navbar-style] .navbar__tab {
+  padding: calc(0.25rem - 2px) calc(0.5625rem - 2px);
+}
+
+.navbar-preview .icon-button {
+  width: 30px;
+  height: 30px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  cursor: default;
+}
+
+.navbar-preview .icon-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* On phones the navbar hides its name; the preview keeps it. */
+.navbar-preview .navbar__brand span {
+  display: inline;
+}
+
+.store-item--locked .store-item__preview > .navbar-preview {
+  filter: brightness(0.5) saturate(0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-navbar-style] .navbar::after,
+  .navbar-preview[data-navbar-style]::after,
+  :root[data-navbar-style] .navbar::before,
+  .navbar-preview[data-navbar-style]::before,
+  :is(:root[data-navbar-style] .navbar, .navbar-preview[data-navbar-style]) :is(.navbar__tab, .navbar__menu-item, .icon-button, .navbar__login, .navbar__coins, .navbar__brand):hover:not(:disabled)::before,
+  :is(:root[data-navbar-style] .navbar, .navbar-preview[data-navbar-style]) :is(.navbar__tab:hover, .navbar__dropdown-toggle[aria-expanded='true'], .navbar__menu-item:is(:hover, :focus-visible), .icon-button:hover:not(:disabled):not([aria-disabled='true']), .navbar__tab--active, .navbar__settings--active, .navbar-preview__settings),
+  :is(:root[data-navbar-style] .navbar, .navbar-preview[data-navbar-style]) :is(.navbar__tab--active, .navbar__tab:hover, .navbar__dropdown-toggle[aria-expanded='true'], .navbar__menu-item:is(:hover, :focus-visible), .navbar__brand:hover) .navbar__label {
     animation: none;
   }
 }
@@ -5515,23 +5821,10 @@ button.turntable__power:focus-visible {
   scale: 1.35;
 }
 
-/* Not bought yet: dimmed, with its lock over the pill's corner. */
+
+/* Not bought yet: dimmed, with its lock in the middle of the preview. */
 .store-item--locked .store-item__preview > .name-pill {
   filter: brightness(0.5) saturate(0.45);
-}
-
-.store-item__preview > .name-pill ~ .store-lock {
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  width: 48px;
-  height: 48px;
-  translate: 36px -78%;
-}
-
-.store-item__preview > .name-pill ~ .store-lock svg {
-  width: 22px;
-  height: 22px;
 }
 
 /* Not enough coins: the whole card greys out. */

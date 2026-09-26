@@ -13,7 +13,7 @@ window.MusicHub = window.MusicHub || {};
   'use strict';
 
   // Must stay in sync with the inline scripts in views/partials/head.ejs
-  // (the equipped name style) and navbar.ejs (the balance).
+  // (the equipped styles) and navbar.ejs (the balance).
   var STORE_KEY = 'store';
 
   var FLY_MS = 1050;
@@ -85,7 +85,7 @@ window.MusicHub = window.MusicHub || {};
     return id && owns(slot + ':' + id) ? id : null;
   }
 
-  /** Spends `price` coins on `id` ("username:rainbow"). False when short. */
+  /** Spends `price` coins on `id` ("username:rainbow", "navbar:gold"). False when short. */
   function buy(id, price) {
     var bought = update(function (state) {
       if (state.owned.indexOf(id) !== -1 || state.credits < price) {
@@ -114,7 +114,7 @@ window.MusicHub = window.MusicHub || {};
       }
       return true;
     });
-    applyNameStyle();
+    applyStyles();
   }
 
   function vinyls() {
@@ -155,14 +155,20 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  /** The equipped name style on <html>, where the navbar's CSS picks it up. */
-  function applyNameStyle() {
-    var style = equipped('username');
-    if (style) {
-      document.documentElement.setAttribute('data-name-style', style);
-    } else {
-      document.documentElement.removeAttribute('data-name-style');
-    }
+  // Each Store slot's equipped style goes on <html> as this attribute.
+  // Must stay in sync with the inline script in views/partials/head.ejs.
+  var STYLE_ATTRIBUTES = { username: 'data-name-style', navbar: 'data-navbar-style' };
+
+  /** The equipped styles on <html>, where the navbar's CSS picks them up. */
+  function applyStyles() {
+    Object.keys(STYLE_ATTRIBUTES).forEach(function (slot) {
+      var style = equipped(slot);
+      if (style) {
+        document.documentElement.setAttribute(STYLE_ATTRIBUTES[slot], style);
+      } else {
+        document.documentElement.removeAttribute(STYLE_ATTRIBUTES[slot]);
+      }
+    });
   }
 
   /* ----------------------------------------------------------- balance */
@@ -566,14 +572,14 @@ window.MusicHub = window.MusicHub || {};
 
   document.addEventListener('DOMContentLoaded', function () {
     setShown(balance());
-    applyNameStyle();
+    applyStyles();
   });
 
   // Another tab earned or spent something.
   window.addEventListener('storage', function (event) {
     if (event.key === STORE_KEY || event.key === null) {
       setShown(Math.max(0, balance() - inFlight));
-      applyNameStyle();
+      applyStyles();
       document.dispatchEvent(new CustomEvent('musichub:walletchange', { detail: { state: load() } }));
     }
   });

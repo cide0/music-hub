@@ -1,6 +1,6 @@
 /*
- * The Store: coins earned on the Album Suggester buy username styles
- * (bought once, then equipped or taken off) and mystery vinyls - a random
+ * The Store: coins earned on the Album Suggester buy username and navbar
+ * styles (bought once, then equipped or taken off) and mystery vinyls - a random
  * record, drawn by vinyl.js like the Discogs page's, unboxed with an
  * animation and never one the collection already holds.
  */
@@ -29,6 +29,15 @@ window.MusicHub = window.MusicHub || {};
     },
   ];
 
+  var NAVBAR_ITEMS = [
+    {
+      id: 'gold',
+      name: 'Gold Navbar',
+      price: 4000,
+      text: 'The whole navbar in polished gold.',
+    },
+  ];
+
   // The unlock, stage by stage (ms from the purchase).
   var UNLOCK_SHAKE_MS = 700;
   var UNLOCK_OPEN_MS = 600;
@@ -37,7 +46,7 @@ window.MusicHub = window.MusicHub || {};
 
   var wallet = MusicHub.wallet;
   var els = {};
-  // Item ids mid-unlock: left alone by re-renders until they're done.
+  // "slot:id"s mid-unlock: left alone by re-renders until they're done.
   var unlocking = {};
   var unboxing = false;
 
@@ -231,10 +240,47 @@ window.MusicHub = window.MusicHub || {};
     return pill;
   }
 
-  function usernameCard(item) {
-    var id = 'username:' + item.id;
+  /* -------------------------------------------------------------- navbar */
+
+  /**
+   * A small stand-in for the navbar, wearing `style`: the logo and name,
+   * the active tab and the settings circle. It uses the navbar's
+   * own classes, so it looks - and hovers - like the real one.
+   */
+  function navbarPreview(style) {
+    var bar = el('div', 'navbar-preview');
+    bar.dataset.navbarStyle = style;
+
+    var brand = el('span', 'navbar__brand');
+    var logo = el('img');
+    logo.src = '/favicon.png';
+    logo.alt = '';
+    brand.appendChild(logo);
+    brand.appendChild(el('span', 'navbar__label', 'Music Hub'));
+    bar.appendChild(brand);
+
+    var tab = el('span', 'navbar__tab navbar__tab--active');
+    tab.appendChild(el('span', 'navbar__label', 'Albums'));
+    bar.appendChild(tab);
+
+    var settings = el('span', 'icon-button navbar-preview__settings');
+    settings.appendChild(document.querySelector('.navbar__settings svg').cloneNode(true));
+    bar.appendChild(settings);
+    return bar;
+  }
+
+  /* ---------------------------------------------------------- style items */
+
+  // Each slot's items, the preview they're shown off in and their grid.
+  var SLOTS = {
+    username: { items: USERNAME_ITEMS, preview: namePill, grid: 'usernames' },
+    navbar: { items: NAVBAR_ITEMS, preview: navbarPreview, grid: 'navbars' },
+  };
+
+  function styleCard(slot, item) {
+    var id = slot + ':' + item.id;
     var owned = wallet.owns(id);
-    var worn = wallet.equipped('username') === item.id;
+    var worn = wallet.equipped(slot) === item.id;
     var affordable = wallet.balance() >= item.price;
 
     var card = el('article', 'store-item');
@@ -244,7 +290,7 @@ window.MusicHub = window.MusicHub || {};
     card.classList.toggle('store-item--equipped', worn);
 
     var preview = el('div', 'store-item__preview');
-    preview.appendChild(namePill(item.id));
+    preview.appendChild(SLOTS[slot].preview(item.id));
     if (!owned) {
       preview.appendChild(lock());
     }
@@ -264,13 +310,13 @@ window.MusicHub = window.MusicHub || {};
       button = el('button', 'button button--primary store-item__action', 'Buy');
       button.disabled = !affordable;
       button.addEventListener('click', function () {
-        buyUsername(item, card);
+        buyStyle(slot, item, card);
       });
     } else {
       button = el('button', 'button ' + (worn ? 'button--ghost' : 'button--primary') + ' store-item__action', worn ? 'Unequip' : 'Equip');
       button.addEventListener('click', function () {
-        wallet.equip('username', worn ? null : item.id);
-        renderUsernames(item.id);
+        wallet.equip(slot, worn ? null : item.id);
+        renderStyles(slot, item.id);
       });
     }
     button.type = 'button';
@@ -281,18 +327,19 @@ window.MusicHub = window.MusicHub || {};
     return card;
   }
 
-  /** Redraws the username cards; `focusId`'s button keeps the focus. */
-  function renderUsernames(focusId) {
-    USERNAME_ITEMS.forEach(function (item) {
-      if (unlocking[item.id]) {
+  /** Redraws `slot`'s cards; `focusId`'s button keeps the focus. */
+  function renderStyles(slot, focusId) {
+    var grid = els[SLOTS[slot].grid];
+    SLOTS[slot].items.forEach(function (item) {
+      if (unlocking[slot + ':' + item.id]) {
         return;
       }
-      var fresh = usernameCard(item);
-      var old = els.usernames.querySelector('[data-item="' + item.id + '"]');
+      var fresh = styleCard(slot, item);
+      var old = grid.querySelector('[data-item="' + item.id + '"]');
       if (old) {
-        els.usernames.replaceChild(fresh, old);
+        grid.replaceChild(fresh, old);
       } else {
-        els.usernames.appendChild(fresh);
+        grid.appendChild(fresh);
       }
       if (focusId === item.id) {
         fresh.querySelector('.store-item__action').focus();
@@ -300,22 +347,23 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  function buyUsername(item, card) {
-    if (unlocking[item.id]) {
+  function buyStyle(slot, item, card) {
+    var id = slot + ':' + item.id;
+    if (unlocking[id]) {
       return;
     }
     // Marked first: the purchase's walletchange would otherwise redraw this
     // card, and the unlock would play on one no longer on the page.
-    unlocking[item.id] = true;
-    if (!wallet.buy('username:' + item.id, item.price)) {
-      delete unlocking[item.id];
-      renderUsernames();
+    unlocking[id] = true;
+    if (!wallet.buy(id, item.price)) {
+      delete unlocking[id];
+      renderStyles(slot);
       return;
     }
     card.querySelector('.store-item__action').disabled = true;
     unlockAnimation(card).then(function () {
-      delete unlocking[item.id];
-      renderUsernames(item.id);
+      delete unlocking[id];
+      renderStyles(slot, item.id);
     });
   }
 
@@ -965,7 +1013,8 @@ window.MusicHub = window.MusicHub || {};
   /* ---------------------------------------------------------------- init */
 
   function render() {
-    renderUsernames();
+    renderStyles('username');
+    renderStyles('navbar');
     renderVinylOffer();
   }
 
@@ -976,6 +1025,7 @@ window.MusicHub = window.MusicHub || {};
    */
   (function init() {
     els.usernames = document.getElementById('username-items');
+    els.navbars = document.getElementById('navbar-items');
     els.vinylOffer = document.getElementById('vinyl-offer');
     els.vinylLock = document.getElementById('vinyl-lock');
     els.vinylPrice = document.getElementById('vinyl-price');
@@ -1046,7 +1096,7 @@ window.MusicHub = window.MusicHub || {};
   // The profile pill in the previews shows the Spotify name once it's in.
   document.addEventListener('musichub:authchange', function () {
     if (els.usernames) {
-      renderUsernames();
+      renderStyles('username');
     }
   });
 
