@@ -1,8 +1,8 @@
 /*
  * Discogs: a random "Pick of the Day" from the collection of the Discogs
  * username saved on the Settings page, on every load, and a check of every followed Spotify artist for vinyl releases on
- * Discogs that haven't been shown before. Each check's result replaces the
- * previous one.
+ * Discogs that haven't been shown before. Each check's finds are added to
+ * the releases already listed, the whole list sorted by release date.
  *
  * "New" means "not shown before", not "released since the last check":
  * Discogs often lists a record days or weeks after its release date, and a
@@ -60,8 +60,9 @@ window.MusicHub = window.MusicHub || {};
   /* ------------------------------------------------------------ storage */
 
   /**
-   * `releases` is what the last check found new, `checkedAt` when it ran and
-   * `since` the window start it used. `seen` maps every release id shown so
+   * `releases` is every new release the checks have found, most recent
+   * release date first, `checkedAt` when the last check ran and `since` the
+   * window start it used. `seen` maps every release id shown so
    * far to its release date, so it can be pruned once that date leaves the
    * window. `known` lists, per artist, every release already looked at in
    * detail - see recordLookup - so later checks don't pay for it again.
@@ -137,6 +138,14 @@ window.MusicHub = window.MusicHub || {};
     return unique.sort(function (a, b) {
       return a.releasedDate < b.releasedDate ? 1 : a.releasedDate > b.releasedDate ? -1 : 0;
     });
+  }
+
+  /**
+   * The list after a check: the releases already listed stay, and the new
+   * finds join them - the whole list most recent release date first.
+   */
+  function appendReleases(listed, fresh) {
+    return dedupeAndSort(listed.concat(fresh));
   }
 
   /** The first day of the look-back window, as 'YYYY-MM-DD'. */
@@ -923,16 +932,18 @@ window.MusicHub = window.MusicHub || {};
 
         state.seen = result.seen;
         state.known = known;
-        // Cancelled without finding anything new: nothing worth replacing
-        // the list on screen with - but what it learned is still kept.
-        var replaceList = !(run.cancelled && !result.fresh.length);
-        if (replaceList) {
+        // What it found new joins the releases already listed - a finished
+        // check and a cancelled one alike. Cancelled without finding
+        // anything new, it doesn't count as a check - but what it learned is
+        // still kept.
+        var counts = !(run.cancelled && !result.fresh.length);
+        if (counts) {
           state.checkedAt = checkStartedAt;
           state.since = since;
-          state.releases = result.fresh;
+          state.releases = appendReleases(state.releases, result.fresh);
         }
         saveState();
-        if (replaceList) {
+        if (counts) {
           render();
         }
         showFailedArtists(failed);
@@ -1025,6 +1036,7 @@ window.MusicHub = window.MusicHub || {};
     summaryText: summaryText,
     checkSummaryMessage: checkSummaryMessage,
     applySeen: applySeen,
+    appendReleases: appendReleases,
     clearStoredData: clearStoredData,
     pruneKnown: pruneKnown,
     recordLookup: recordLookup,
