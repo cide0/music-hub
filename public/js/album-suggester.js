@@ -130,14 +130,9 @@ window.MusicHub = window.MusicHub || {};
     };
   }
 
-  /** Remembers the real albums in `albums` - never the placeholders. */
+  /** Remembers `albums` as the Saved Albums. */
   function saveLibraryCache(albums) {
-    MusicHub.storage.write(LIBRARY_KEY, {
-      fetchedAt: fetchedAt,
-      albums: albums.filter(function (album) {
-        return !isPlaceholder(album);
-      }),
-    });
+    MusicHub.storage.write(LIBRARY_KEY, { fetchedAt: fetchedAt, albums: albums });
   }
 
   /* ------------------------------------------------------------ spotify */
@@ -192,9 +187,6 @@ window.MusicHub = window.MusicHub || {};
 
   /** Unsaves the album. DELETE /me/albums is gone since Feb 2026; /me/library replaces it. */
   function unsaveAlbum(album) {
-    if (isPlaceholder(album)) {
-      return Promise.resolve();
-    }
     var uri = 'spotify:album:' + album.id;
     return MusicHub.auth.spotifyFetch('/me/library?uris=' + encodeURIComponent(uri), { method: 'DELETE' })
       .then(function (response) {
@@ -204,62 +196,6 @@ window.MusicHub = window.MusicHub || {};
           throw err;
         }
       });
-  }
-
-  /* -------------------------------------------------------- placeholders */
-
-  /*
-   * TEMPORARY, while Spotify rate-limits the app: this many stand-in albums
-   * join the pool as normal albums (tiers, reveal, listened history), with
-   * covers borrowed from the listened history and the saved Discogs
-   * releases. They never reach Spotify. Remove this block, and its uses
-   * (grep "placeholder"), once Spotify answers again.
-   */
-  var PLACEHOLDER_COUNT = 10;
-  var PLACEHOLDER_PREFIX = 'placeholder-';
-  var DAY_MS = 24 * 60 * 60 * 1000;
-
-  function isPlaceholder(album) {
-    return String(album.id).indexOf(PLACEHOLDER_PREFIX) === 0;
-  }
-
-  /** History and Discogs covers taken in turn, so both show up on the reel. */
-  function placeholderCovers() {
-    var fromHistory = loadHistory().map(function (entry) { return entry.imageUrl; });
-    var discogs = MusicHub.storage.read('discogsVinylReleases', null);
-    var fromDiscogs = (discogs && Array.isArray(discogs.releases) ? discogs.releases : [])
-      .map(function (release) { return release.imageUrl; });
-    var covers = [];
-    for (var i = 0; i < Math.max(fromHistory.length, fromDiscogs.length); i += 1) {
-      [fromHistory[i], fromDiscogs[i]].forEach(function (url) {
-        // Discogs hands out a blank spacer.gif for releases without art.
-        if (url && !/spacer\.gif/.test(url) && covers.indexOf(url) === -1) {
-          covers.push(url);
-        }
-      });
-    }
-    return covers;
-  }
-
-  function placeholderAlbums() {
-    var covers = placeholderCovers();
-    var albums = [];
-    for (var i = 0; i < PLACEHOLDER_COUNT; i += 1) {
-      var url = covers.length ? covers[i % covers.length] : null;
-      albums.push({
-        id: PLACEHOLDER_PREFIX + (i + 1),
-        // A day apart, so they spread over the tiers like real saves - but
-        // older than any real one, so they never take a real album's tier.
-        addedAt: (PLACEHOLDER_COUNT - i) * DAY_MS,
-        tier: 'blue',
-        name: 'Placeholder Album ' + (i + 1),
-        artistName: 'Placeholder Artist',
-        imageUrl: url,
-        largeImageUrl: url,
-        spotifyUrl: null,
-      });
-    }
-    return albums;
   }
 
   // A login from before this page existed lacks the library scopes.
@@ -335,9 +271,6 @@ window.MusicHub = window.MusicHub || {};
   /* --------------------------------------------------------------- links */
 
   function spotifyAppUrl(album) {
-    if (isPlaceholder(album)) {
-      return '#';
-    }
     return 'spotify:album:' + album.id;
   }
 
@@ -427,9 +360,9 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
-  /** Puts `albums` - plus the placeholders - up as the pool to case. */
+  /** Puts `albums` up as the pool to case. */
   function usePool(albums) {
-    pool = assignTiers(albums.concat(placeholderAlbums()));
+    pool = assignTiers(albums);
     preloadLabelCovers();
     showRestingState(false);
   }
