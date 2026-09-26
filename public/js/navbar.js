@@ -1,5 +1,6 @@
 /*
- * Navbar behavior: the mobile hamburger menu and the External Tools dropdown.
+ * Navbar behavior: the mobile hamburger menu, the External Tools dropdown and
+ * the warning before leaving a page while an update is running.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -117,8 +118,70 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /*
+   * Every update in progress shows as a turning refresh button - the page's
+   * own or the navbar's - so that is what counts as "running" here.
+   */
+  function isUpdating() {
+    return !!document.querySelector('.refresh-button[aria-busy="true"]');
+  }
+
+  /*
+   * Leaving the page ends a running update and loses its progress, so a link
+   * that would do that asks first, in the app's own confirm modal. Anything
+   * that bypasses the links (reload, back, closing the tab) gets the
+   * browser's own prompt instead - the only one it allows there.
+   */
+  function initLeaveGuard() {
+    // Set once the user agreed, so the browser doesn't ask a second time.
+    var leaving = false;
+
+    // Bubble phase, so links that page scripts handle themselves are skipped.
+    document.addEventListener('click', function (event) {
+      if (event.defaultPrevented || event.button !== 0
+        || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      var link = event.target.closest && event.target.closest('a[href]');
+      if (!link || (link.target && link.target !== '_self') || link.hasAttribute('download')) {
+        return;
+      }
+      var url = new URL(link.href, window.location.href);
+      // A jump within this page doesn't leave it.
+      if (url.hash && url.origin + url.pathname + url.search
+        === window.location.origin + window.location.pathname + window.location.search) {
+        return;
+      }
+      if (!isUpdating() || !MusicHub.confirmDialog) {
+        return;
+      }
+
+      event.preventDefault();
+      MusicHub.confirmDialog.open({
+        title: 'Cancel the update?',
+        text: 'An update is still running. Leaving this page cancels it, '
+          + 'and the progress made so far will be lost.',
+        action: 'Leave page',
+        cancel: 'Stay'
+      }).then(function (confirmed) {
+        if (confirmed) {
+          leaving = true;
+          window.location.href = url.href;
+        }
+      });
+    });
+
+    window.addEventListener('beforeunload', function (event) {
+      if (!leaving && isUpdating()) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     initMenu();
     initDropdown();
+    initLeaveGuard();
   });
 })(window.MusicHub);

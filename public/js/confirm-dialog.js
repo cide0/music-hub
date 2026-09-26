@@ -90,8 +90,9 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * Opens the modal with `options.title`, `options.text` and the confirm
-   * button's label `options.action` (default "Delete"). Resolves to true only
-   * when the user confirms.
+   * button's label `options.action` (default "Delete") and the cancel
+   * button's `options.cancel` (default "Cancel"). Resolves to true only when
+   * the user confirms.
    */
   function open(options) {
     els = els || build();
@@ -101,6 +102,7 @@ window.MusicHub = window.MusicHub || {};
     els.title.textContent = options.title;
     els.text.textContent = options.text || '';
     els.submit.textContent = options.action || 'Delete';
+    els.cancel.textContent = options.cancel || 'Cancel';
 
     return new Promise(function (resolve) {
       settle = resolve;
