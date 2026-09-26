@@ -1,8 +1,9 @@
 /*
  * Every record the Store's Mystery Vinyl can hold, as Discogs-style format
  * text that vinyl.js draws ("Oxblood & Cream Marble"), and the random pick
- * of one the collection doesn't have yet. Used by the Store (to unbox) and
- * the Collection (for "12 of 2,813 collected").
+ * of one the collection doesn't have yet - plus the Daily Spin's ten wheel
+ * exclusives, which only the wheel ever hands out. Used by the Store (to
+ * unbox), the Daily Spin and the Collection (for "12 of 2,823 collected").
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -80,9 +81,42 @@ window.MusicHub = window.MusicHub || {};
     { name: 'Picture Disc', weight: 3, needsCover: true, formats: ['Picture Disc', 'Picture Disc With Glitter', 'Metallic Picture Disc', 'Clear Picture Disc', 'Glow In The Dark Picture Disc'] },
   ];
 
+  /*
+   * The wheel exclusives: won only on the Daily Spin, never in the Mystery
+   * Vinyl's box (see `wheelOnly` below). Each is its own pattern in
+   * vinyl.js, named by its format; `text` is what the wheel's showcase
+   * says about it.
+   */
+  var EXCLUSIVES = [
+    { format: 'Aurora Borealis', text: 'Curtains of green and violet light rippling across a starry polar sky.' },
+    { format: 'Supernova', text: 'A star blowing itself apart: a white-hot core, turning rays and shockwaves racing out to the rim.' },
+    { format: 'Holographic', text: 'Rainbow foil that never sits still - every colour shifting through every other as it turns.' },
+    { format: 'Black Hole', text: 'A blazing accretion disc whirling into the dark, ringed by white-hot light.' },
+    { format: 'Liquid Gold', text: 'Molten gold, bright and dark streams of it folding into each other and flowing on.' },
+    { format: 'Bioluminescent', text: 'The deep sea at night: rippling light, glowing trails and plankton pulsing in the dark.' },
+    { format: 'Thunderstorm', text: 'Churning storm clouds, slanting rain and lightning forking out to the rim.' },
+    { format: 'Synthwave Sunset', text: 'A striped neon sun sinking behind the mountains, a glowing grid racing towards you.' },
+    { format: 'Stained Glass', text: 'A cathedral rose window of jewel-coloured glass, sunlight wandering across it.' },
+    { format: 'Inferno', text: 'A ring of fire roaring out from the label, embers flying off the rim.' },
+  ];
+
+  FAMILIES.push({
+    name: 'Wheel Exclusive',
+    weight: 0,
+    // Never picked for the Mystery Vinyl - see pickExclusive.
+    wheelOnly: true,
+    formats: EXCLUSIVES.map(function (exclusive) {
+      return exclusive.format;
+    }),
+  });
+
   var CATALOG_SIZE = FAMILIES.reduce(function (sum, family) {
     return sum + family.formats.length;
   }, 0);
+
+  function seed() {
+    return Math.random().toString(36).slice(2, 10);
+  }
 
   /**
    * A random record not among `vinyls` (the collection so far), or null
@@ -96,7 +130,7 @@ window.MusicHub = window.MusicHub || {};
       owned[vinyl.format] = true;
     });
     var open = FAMILIES.filter(function (family) {
-      return cover || !family.needsCover;
+      return !family.wheelOnly && (cover || !family.needsCover);
     }).map(function (family) {
       return {
         family: family,
@@ -126,14 +160,38 @@ window.MusicHub = window.MusicHub || {};
       format: chosen.formats[Math.floor(Math.random() * chosen.formats.length)],
       family: chosen.family.name,
       // Its own marbling or splatter, the same on every visit.
-      seed: Math.random().toString(36).slice(2, 10),
+      seed: seed(),
       unboxedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * A random wheel exclusive not among `vinyls` (the collection, plus any
+   * won but not pressed yet), or null when they're all there.
+   */
+  function pickExclusive(vinyls) {
+    var owned = {};
+    vinyls.forEach(function (vinyl) {
+      owned[vinyl.format] = true;
+    });
+    var open = EXCLUSIVES.filter(function (exclusive) {
+      return !owned[exclusive.format];
+    });
+    if (!open.length) {
+      return null;
+    }
+    return {
+      format: open[Math.floor(Math.random() * open.length)].format,
+      family: 'Wheel Exclusive',
+      seed: seed(),
     };
   }
 
   MusicHub.vinylCatalog = {
     families: FAMILIES,
     size: CATALOG_SIZE,
+    exclusives: EXCLUSIVES,
     pick: pick,
+    pickExclusive: pickExclusive,
   };
 })(window.MusicHub);

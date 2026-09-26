@@ -88,6 +88,32 @@
   --vinyl-clear: #DCE7EC;
   --vinyl-glow: #C9FF9C;
 
+  /* The Daily Spin's wheel exclusives (vinyl.js draws them): lights and
+     skies no pressing plant has - aurora, starlight, plasma, neon, fire. */
+  --exclusive-night: #050818;
+  --exclusive-star: #FFF8E1;
+  --exclusive-aurora-green: #3DFFA2;
+  --exclusive-aurora-teal: #22D3EE;
+  --exclusive-aurora-violet: #B26BFF;
+  --exclusive-hot-white: #FFF4D6;
+  --exclusive-nova-flare: #FF4FD8;
+  --exclusive-plasma: #FF7A1A;
+  --exclusive-abyss: #021620;
+  --exclusive-biolume: #3BF5FF;
+  --exclusive-biolume-soft: #7CFFCB;
+  --exclusive-storm: #1A2133;
+  --exclusive-lightning: #E6ECFF;
+  --exclusive-neon-pink: #FF2BD6;
+  --exclusive-neon-cyan: #19F0FF;
+  --exclusive-sunset: #FF8A3D;
+  --exclusive-sun: #FFE45C;
+  --exclusive-synth-night: #1E0838;
+  --exclusive-lead: #0E0B10;
+  --exclusive-fire-deep: #6E0A00;
+  --exclusive-fire: #FF4D00;
+  --exclusive-flame: #FFB21A;
+  --exclusive-flame-tip: #FFF1A8;
+
   /* The Album Suggester's rarity tiers, CS:GO's own colours from Mil-Spec
      to rare special - borrowed from the game, like the reel itself. Gold
      has a few more shades for its frame, glow and confetti: deep for the

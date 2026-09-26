@@ -42,19 +42,22 @@
         <script>
           /*
            * Greyed out and locked from the first paint when the coins don't
-           * reach, rather than fading out once store.js runs. The price must
-           * stay in sync with VINYL_PRICE in public/js/store.js.
+           * reach (and no mystery vinyl from the Daily Spin is waiting),
+           * rather than fading out once store.js runs. The price must stay
+           * in sync with VINYL_PRICE in public/js/unbox.js.
            */
           (function () {
             var price = 1000;
             var coins = 0;
+            var free = 0;
             try {
               var store = JSON.parse(localStorage.getItem('store') || 'null');
               coins = Math.max(0, Math.floor(Number(store && store.credits) || 0));
+              free = Math.floor(Number(store && store.wheel && store.wheel.freeVinyls) || 0);
             } catch (err) {
               coins = 0;
             }
-            if (coins >= price) {
+            if (coins >= price || free > 0) {
               return;
             }
             document.getElementById('vinyl-offer').classList.add('store-item--short');
@@ -80,67 +83,17 @@
       </section>
     </main>
 
-    <!-- Before the unboxing: which album from the album history the new vinyl
-         is for. Its cover becomes the vinyl's sleeve and label. -->
-    <dialog class="modal album-picker" id="album-picker" aria-labelledby="album-picker-title">
-      <div class="modal__form">
-        <h2 class="modal__title" id="album-picker-title">Choose an album</h2>
-        <p class="modal__hint">Your new vinyl is pressed for one of the albums in your album history - its cover goes on the sleeve and the record's label.</p>
-        <div class="input-clear" id="album-picker-search-wrap">
-          <label class="visually-hidden" for="album-picker-search">Search your album history</label>
-          <input type="text" id="album-picker-search" class="text-input" placeholder="Search album or artist"
-            autocomplete="off" spellcheck="false" />
-          <button type="button" class="input-clear__button" id="album-picker-search-clear" aria-label="Clear search" hidden>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-        <ul class="album-picker__list" id="album-picker-list"></ul>
-        <p class="album-picker__empty" id="album-picker-empty" hidden></p>
-        <div class="modal__actions">
-          <button type="button" class="button button--ghost" id="album-picker-cancel">Cancel</button>
-        </div>
-      </div>
-    </dialog>
-
-    <!-- The unboxing: a mailer box shaken open, and the record rising out of it. -->
-    <dialog class="modal unbox" id="unbox-dialog" aria-labelledby="unbox-name">
-      <!-- Across the whole dialog, so the light reaches behind the text too. -->
-      <span class="unbox__rays" id="unbox-rays" aria-hidden="true"></span>
-      <div class="unbox__stage" id="unbox-stage">
-        <div class="unbox__record vinyl-stage" id="unbox-record"></div>
-        <!-- Hops until it's clicked; only then does it open (store.js). -->
-        <button type="button" class="mailer unbox__box" id="unbox-box" aria-label="Open the box" disabled>
-          <span class="mailer__lid" id="unbox-lid"></span>
-          <span class="mailer__front"><span class="mailer__tape"></span><span class="mailer__mark" aria-hidden="true">?</span></span>
-        </button>
-      </div>
-      <!-- The hint and the result share one slot, sized for the result, so
-           the dialog keeps its size from the first moment to the last. -->
-      <div class="unbox__footer">
-        <p class="unbox__hint" id="unbox-hint" hidden>Click to open</p>
-        <div class="unbox__result" id="unbox-result" hidden>
-          <p class="unbox__eyebrow">Added to collection</p>
-          <h2 class="unbox__name" id="unbox-name"></h2>
-          <p class="unbox__album" id="unbox-album"></p>
-          <p class="unbox__family" id="unbox-family"></p>
-          <div class="modal__actions unbox__actions">
-            <a class="button button--primary" href="/collection">View collection</a>
-            <button type="button" class="button button--primary" id="unbox-close">Close</button>
-          </div>
-        </div>
-      </div>
-    </dialog>
-
     <script src="/js/storage.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/followed-artists.js"></script>
     <script src="/js/wallet.js"></script>
-    <script src="/js/confirm-dialog.js"></script>
     <script src="/js/vinyl.js"></script>
     <script src="/js/vinyl-catalog.js"></script>
+    <script src="/js/sfx.js"></script>
+    <script src="/js/unbox.js"></script>
+    <script src="/js/daily-wheel.js"></script>
+    <script src="/js/confirm-dialog.js"></script>
     <script src="/js/store.js"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 /*
  * The coin wallet, on every page: the balance in the navbar, the Store's
- * bought items and the unboxed vinyls, all under one `store` key in
- * localStorage (see public/js/storage.js).
+ * bought items, the unboxed vinyls and the Daily Spin's winnings, all under
+ * one `store` key in localStorage (see public/js/storage.js).
  *
  * Coins earned anywhere go through earn(): they burst out of where they
  * were won, fly up to the navbar's balance and count it up as each one
@@ -46,6 +46,26 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------------- state */
 
+  /*
+   * The Daily Spin (daily-wheel.js): the local day of the last free spin,
+   * respins kept for later, mystery vinyls won but not unboxed yet, wheel
+   * exclusives won but not pressed onto an album yet, and the prize of a
+   * spin still turning - stored the moment it's spun, so a reload mid-spin
+   * loses nothing.
+   */
+  function loadWheel(stored) {
+    var wheel = stored && typeof stored === 'object' ? stored : {};
+    return {
+      lastSpin: typeof wheel.lastSpin === 'string' ? wheel.lastSpin : null,
+      respins: Math.max(0, Math.floor(Number(wheel.respins) || 0)),
+      freeVinyls: Math.max(0, Math.floor(Number(wheel.freeVinyls) || 0)),
+      exclusives: Array.isArray(wheel.exclusives) ? wheel.exclusives.filter(function (vinyl) {
+        return vinyl && typeof vinyl.format === 'string';
+      }) : [],
+      unclaimed: wheel.unclaimed && typeof wheel.unclaimed.id === 'string' ? wheel.unclaimed : null,
+    };
+  }
+
   function load() {
     var stored = storage.read(STORE_KEY, null) || {};
     return {
@@ -57,6 +77,7 @@ window.MusicHub = window.MusicHub || {};
       vinyls: Array.isArray(stored.vinyls) ? stored.vinyls.filter(function (vinyl) {
         return vinyl && typeof vinyl.format === 'string';
       }) : [],
+      wheel: loadWheel(stored.wheel),
     };
   }
 
@@ -121,20 +142,45 @@ window.MusicHub = window.MusicHub || {};
     return load().vinyls;
   }
 
-  /** Pays `price` for `vinyl` and puts it in the collection. False when short. */
-  function unboxVinyl(vinyl, price) {
+  /**
+   * Pays `price` for `vinyl` and puts it in the collection - or, with
+   * `options.free`, one of the mystery vinyls won on the Daily Spin
+   * instead. False when short.
+   */
+  function unboxVinyl(vinyl, price, options) {
+    var free = !!(options && options.free);
     var paid = update(function (state) {
-      if (state.credits < price) {
+      if (free ? state.wheel.freeVinyls < 1 : state.credits < price) {
         return false;
       }
-      state.credits -= price;
+      if (free) {
+        state.wheel.freeVinyls -= 1;
+      } else {
+        state.credits -= price;
+      }
       state.vinyls.push(vinyl);
       return true;
     });
-    if (paid) {
+    if (paid && !free) {
       animateCountDown();
     }
     return paid;
+  }
+
+  /** The Daily Spin's state (see loadWheel). */
+  function wheel() {
+    return load().wheel;
+  }
+
+  /**
+   * Changes the Daily Spin's state: `change(wheel, state)` edits it (and the
+   * rest of the wallet, e.g. its vinyls) in place; returning false leaves
+   * everything as it was. True when it was saved.
+   */
+  function updateWheel(change) {
+    return update(function (state) {
+      return change(state.wheel, state);
+    });
   }
 
   /**
@@ -594,6 +640,8 @@ window.MusicHub = window.MusicHub || {};
     vinyls: vinyls,
     unboxVinyl: unboxVinyl,
     removeVinyl: removeVinyl,
+    wheel: wheel,
+    updateWheel: updateWheel,
     format: format,
     coinSvg: coinSvg,
     // The Store's own sounds share this context and limiter.

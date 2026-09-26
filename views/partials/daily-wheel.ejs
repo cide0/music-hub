@@ -1,0 +1,102 @@
+<!-- The Daily Spin (public/js/daily-wheel.js): a wheel of fortune, free once
+     a day, opened from the navbar on every page. -->
+<dialog class="modal wheel" id="wheel-dialog" aria-labelledby="wheel-title">
+  <div class="wheel__view" id="wheel-view">
+    <div class="wheel__header">
+      <h2 class="modal__title wheel__title" id="wheel-title">Daily Spin</h2>
+      <!-- Until the free spin comes back: how long. -->
+      <p class="wheel__status" id="wheel-status" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
+        </svg>
+        <span class="visually-hidden">Next free spin in </span><span id="wheel-timer"></span>
+      </p>
+      <div class="wheel__header-buttons">
+        <!-- The Wheel Exclusives showcase. -->
+        <button type="button" class="icon-button wheel__close" id="wheel-showcase-open"
+          aria-haspopup="dialog" aria-label="Wheel Exclusives" title="Wheel Exclusives">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7.5 8.5a4.6 4.6 0 0 1 8.9 1.4c0 3-4.4 3.6-4.4 6" /><line x1="12" y1="20" x2="12.01" y2="20" />
+          </svg>
+        </button>
+        <button type="button" class="icon-button wheel__close" id="wheel-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- The wheel is the spin button (daily-wheel.js). -->
+    <div class="wheel__machine" id="wheel-machine" role="button" tabindex="0" aria-disabled="true" aria-label="Spin the wheel">
+      <!-- Light behind the wheel for the bigger wins. -->
+      <span class="wheel__rays" aria-hidden="true"></span>
+      <!-- The turning part: the prizes and the pegs between them (built by daily-wheel.js). -->
+      <svg class="wheel__disc" id="wheel-disc" viewBox="-100 -100 200 200" aria-hidden="true"></svg>
+      <!-- The still frame around it: a dark purple rim. -->
+      <svg class="wheel__frame" id="wheel-frame" viewBox="-100 -100 200 200" aria-hidden="true"></svg>
+      <!-- The spins left. -->
+      <span class="wheel__hub" aria-hidden="true">
+        <span class="wheel__hub-count" id="wheel-count">0</span>
+        <span class="wheel__hub-label" id="wheel-count-label">spins</span>
+      </span>
+      <!-- The flapper the slices' edges knock aside as they pass. -->
+      <svg class="wheel__pointer" id="wheel-pointer" viewBox="0 -4 34 50" aria-hidden="true">
+        <path class="wheel__pointer-body" d="M17 45 L4.5 13.5 A13 13 0 1 1 29.5 13.5 Z" />
+        <circle class="wheel__pointer-pin" cx="17" cy="12" r="4.2" />
+      </svg>
+      <!-- "Big win!", "Jackpot!" over the wheel. -->
+      <p class="wheel__banner" id="wheel-banner" aria-hidden="true"></p>
+    </div>
+
+    <div class="wheel__result" id="wheel-result" role="status" aria-live="polite"></div>
+    <ul class="wheel__claims" id="wheel-claims"></ul>
+  </div>
+
+  <!-- Winning a wheel exclusive: the record rises out of a burst of light. -->
+  <div class="wheel-reveal" id="wheel-reveal" hidden>
+    <span class="wheel-reveal__rays" aria-hidden="true"></span>
+    <span class="wheel-reveal__halo" aria-hidden="true"></span>
+    <div class="wheel-reveal__record vinyl-stage" id="wheel-reveal-record"></div>
+    <div class="wheel-reveal__text">
+      <p class="wheel-reveal__eyebrow" id="wheel-reveal-eyebrow">Wheel Exclusive</p>
+      <h2 class="wheel-reveal__name" id="wheel-reveal-name"></h2>
+      <p class="wheel-reveal__note" id="wheel-reveal-note"></p>
+      <div class="modal__actions wheel-reveal__actions" id="wheel-reveal-actions">
+        <button type="button" class="button button--ghost" id="wheel-reveal-later">Later</button>
+        <button type="button" class="button button--primary" id="wheel-reveal-press">Press it on an album</button>
+      </div>
+      <div class="modal__actions wheel-reveal__actions" id="wheel-reveal-done" hidden>
+        <a class="button button--ghost" href="/collection">View collection</a>
+        <button type="button" class="button button--primary" id="wheel-reveal-close">Done</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- The ten records only the wheel hands out. -->
+<dialog class="modal wheel-showcase" id="wheel-showcase" aria-labelledby="wheel-showcase-title">
+  <div class="wheel-showcase__header">
+    <div>
+      <h2 class="modal__title" id="wheel-showcase-title">Wheel Exclusives</h2>
+      <p class="modal__hint" id="wheel-showcase-count"></p>
+    </div>
+    <button type="button" class="icon-button wheel__close" id="wheel-showcase-close" aria-label="Back to the wheel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </button>
+  </div>
+  <div class="wheel-showcase__feature" id="wheel-showcase-feature">
+    <div class="wheel-showcase__stage">
+      <span class="wheel-showcase__glow" aria-hidden="true"></span>
+      <div class="wheel-showcase__record vinyl-stage" id="wheel-showcase-record"></div>
+    </div>
+    <div class="wheel-showcase__about">
+      <p class="wheel-showcase__state" id="wheel-showcase-state"></p>
+      <h3 class="wheel-showcase__name" id="wheel-showcase-name"></h3>
+      <p class="wheel-showcase__text" id="wheel-showcase-text"></p>
+    </div>
+  </div>
+  <ul class="wheel-showcase__list" id="wheel-showcase-list" aria-label="All wheel exclusives"></ul>
+</dialog>

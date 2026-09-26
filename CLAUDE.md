@@ -37,7 +37,9 @@ database**, and the service sleeps/restarts, so no server-side state survives).
   Mystery Vinyl can unbox it too. Check the new formats with
   `MusicHub.vinyl.describe()` to confirm they parse to the new pattern. One
   drawn from the cover art (like picture discs) gets `needsCover: true`, so
-  it's only picked for an album that has a cover.
+  it's only picked for an album that has a cover. The exception: the ten
+  Daily Spin exclusives live in the `wheelOnly` family, which the Mystery
+  Vinyl never picks - only `pickExclusive()` (the wheel) hands them out.
 
 ## Layout
 
@@ -52,7 +54,7 @@ routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
                      GET /api/similar-artists (Last.fm),
                      GET /api/discogs/releases + /random-collection-item
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
-views/               EJS pages + partials/ (head, navbar)
+views/               EJS pages + partials/ (head, navbar, daily-wheel, unbox)
 public/css/          variables.css (palette) + style.css
 public/js/           storage.js, navbar.js, auth.js, followed-artists.js,
                      wallet.js (every page; followed-artists.js = the navbar
@@ -63,7 +65,11 @@ public/js/           storage.js, navbar.js, auth.js, followed-artists.js,
                      spotify.js + google.js (shared API helpers),
                      playlist-picker.js (shared playlist dropdown),
                      vinyl.js (Discogs format -> CSS-drawn record),
-                     vinyl-catalog.js (the Store's mystery vinyls),
+                     vinyl-catalog.js (the Store's mystery vinyls + the
+                     wheel exclusives), sfx.js (synthesised sounds),
+                     unbox.js (album picker + Mystery Vinyl unboxing, every
+                     page), daily-wheel.js (the navbar's Daily Spin, every
+                     page; its state lives in the `store` key's `wheel`),
                      turntable.js (the record player: Suggester + Collection),
                      <page-name>.js per page
 ```

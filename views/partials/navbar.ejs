@@ -69,6 +69,20 @@
         <span class="coin-balance__value" data-coin-balance>0</span><span class="visually-hidden"> coins</span>
       </a>
 
+      <!-- The Daily Spin: opens the wheel of fortune (daily-wheel.js) on any
+           page. Gold and nudging round while there's a spin or a prize
+           waiting. -->
+      <button type="button" class="icon-button navbar__wheel" id="wheel-open" data-auth-required
+        aria-haspopup="dialog" aria-label="Daily Spin" title="Daily Spin">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <g class="navbar__wheel-face">
+            <circle cx="12" cy="13" r="8.5" /><circle cx="12" cy="13" r="1.6" />
+            <path d="M12 4.5v6.9M12 14.6v6.9M3.5 13h6.9M13.6 13h6.9M6 7l4.9 4.9M13.1 14.1 18 19M18 7l-4.9 4.9M10.9 14.1 6 19" />
+          </g>
+          <path d="M9.6 1.4h4.8L12 5z" fill="currentColor" />
+        </svg>
+      </button>
+
       <a class="button button--primary navbar__login" id="spotify-login" data-auth-missing href="/login" title="Login with Spotify">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="20" height="20">
           <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" />
@@ -136,18 +150,32 @@
   </defs>
 </svg>
 
+<%- include('daily-wheel') %>
+<%- include('unbox') %>
+
 <script>
-  /* The balance straight away, rather than a 0 until wallet.js runs. */
+  /*
+   * The balance straight away, rather than a 0 until wallet.js runs - and
+   * the Daily Spin's dot, when a spin or a prize is waiting. The day must
+   * be worked out like localDay() in public/js/daily-wheel.js.
+   */
   (function () {
     var coins = 0;
+    var ready = false;
     try {
       var store = JSON.parse(localStorage.getItem('store') || 'null');
       coins = Math.max(0, Math.floor(Number(store && store.credits) || 0));
+      var wheel = (store && store.wheel) || {};
+      var now = new Date();
+      var today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      ready = wheel.lastSpin !== today || wheel.respins > 0 || wheel.freeVinyls > 0
+        || (Array.isArray(wheel.exclusives) && wheel.exclusives.length > 0) || !!wheel.unclaimed;
     } catch (err) {
       coins = 0;
     }
     Array.prototype.forEach.call(document.querySelectorAll('[data-coin-balance]'), function (node) {
       node.textContent = coins.toLocaleString('en-US');
     });
+    document.getElementById('wheel-open').classList.toggle('navbar__wheel--ready', ready);
   })();
 </script>
