@@ -22,7 +22,15 @@ window.MusicHub = window.MusicHub || {};
   // The tonearm's angle resting beside the platter, and on the record.
   // ARM_REST_DEG is also the arm's resting rotate in style.css.
   var ARM_REST_DEG = 9;
-  var ARM_PLAY_DEG = 38;
+  var ARM_PLAY_DEG = 35;
+  // As the album plays, the needle works its way in from the record's
+  // edge (ARM_PLAY_DEG) to ARM_END_DEG, just short of the label.
+  var ARM_END_DEG = 50;
+  // Following the album there, a small correction still slides over
+  // rather than jumping; a skip with the track buttons lifts the needle
+  // and carries it over at least this slowly.
+  var ARM_GLIDE_MS = 250;
+  var ARM_SKIP_MS = 450;
   var POWER_PRESS_MS = 240;
   // A record at 33 1/3 rpm turns once every 1.8s; the platter reaches that
   // over SPIN_UP_MS.
@@ -66,6 +74,36 @@ window.MusicHub = window.MusicHub || {};
     return svg;
   }
 
+  /** A track button's icon: a triangle to the bar at the end of the way it skips. */
+  function skipIcon(forward) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'turntable__skip-icon');
+    svg.setAttribute('aria-hidden', 'true');
+    var triangle = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    triangle.setAttribute('points', forward ? '5 4 16 12 5 20' : '19 4 8 12 19 20');
+    triangle.setAttribute('fill', 'currentColor');
+    var bar = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    bar.setAttribute('x1', forward ? '19' : '5');
+    bar.setAttribute('y1', '5');
+    bar.setAttribute('x2', forward ? '19' : '5');
+    bar.setAttribute('y2', '19');
+    bar.setAttribute('stroke', 'currentColor');
+    bar.setAttribute('stroke-width', '2.5');
+    bar.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(triangle);
+    svg.appendChild(bar);
+    return svg;
+  }
+
+  function skipButton(forward) {
+    var button = el('button', 'turntable__skip turntable__skip--' + (forward ? 'next' : 'prev'));
+    button.type = 'button';
+    button.setAttribute('aria-label', forward ? 'Next track' : 'Previous track');
+    button.appendChild(skipIcon(forward));
+    return button;
+  }
+
   /**
    * The turntable with `vinyl` (a record from vinyl.js render()) on it.
    * `options.rarity`: recolour it as polished metal in that Album
@@ -73,6 +111,8 @@ window.MusicHub = window.MusicHub || {};
    * own look and glows in `options.glow`. `options.powerButton`: the power
    * button is a real button the page can switch it on and off with
    * (setPower); otherwise the whole turntable is only a picture.
+   * `options.trackButtons`: previous and next track buttons too, lit
+   * while they can be used (the page disables them otherwise).
    */
   function build(vinyl, options) {
     var o = options || {};
@@ -97,6 +137,15 @@ window.MusicHub = window.MusicHub || {};
     power.appendChild(powerOn);
     plinth.appendChild(power);
 
+    var prev = null;
+    var next = null;
+    if (o.trackButtons) {
+      prev = skipButton(false);
+      next = skipButton(true);
+      plinth.appendChild(prev);
+      plinth.appendChild(next);
+    }
+
     var record = el('div', 'turntable__record');
     if (o.rarity) {
       record.dataset.rarity = o.rarity;
@@ -118,11 +167,16 @@ window.MusicHub = window.MusicHub || {};
     root.appendChild(plinth);
     return {
       root: root, record: record, disc: record.querySelector('.vinyl__disc'),
-      arm: arm, head: head, power: power, powerOn: powerOn,
+      arm: arm, head: head, power: power, powerOn: powerOn, prev: prev, next: next,
       // Whether it's switched on, and the animations running each part -
       // replaced, not piled up, each time it's switched.
       on: false,
       anims: {},
+      // How far through the album it is (setNeedle), and when the arm's
+      // current swing is over (performance.now() time).
+      needle: null,
+      armFreeAt: 0,
+      needleTimer: 0,
     };
   }
 
@@ -138,6 +192,98 @@ window.MusicHub = window.MusicHub || {};
   function current(node, property, fallback) {
     var value = parseFloat(window.getComputedStyle(node)[property]);
     return isNaN(value) ? fallback : value;
+  }
+
+  /** How long the arm takes to swing from `fromDeg` to `toDeg`: its share of a full swing. */
+  function swingMs(fromDeg, toDeg) {
+    return TIMING.armSwing * Math.abs(toDeg - fromDeg) / (ARM_PLAY_DEG - ARM_REST_DEG);
+  }
+
+  /**
+   * Where the arm puts the needle at `time` (a performance.now() time):
+   * as far in from the record's edge as the album is through - the edge
+   * itself until setNeedle says otherwise.
+   */
+  function needleDeg(parts, time) {
+    var needle = parts.needle;
+    if (!needle) {
+      return ARM_PLAY_DEG;
+    }
+    var fraction = needle.fraction + needle.perMs * (time - needle.at);
+    return ARM_PLAY_DEG + (ARM_END_DEG - ARM_PLAY_DEG) * Math.min(1, Math.max(0, fraction));
+  }
+
+  /**
+   * The arm swinging from `fromDeg` onto the record at `toDeg`, after
+   * `delay` ms and over `duration` ms - then, while the album plays,
+   * creeping on inwards with it until it reaches the label. Held where it
+   * is while it waits ('both'): the animation it replaces is already gone,
+   * and the arm would otherwise snap to its rest.
+   */
+  function armOnto(parts, fromDeg, toDeg, delay, duration) {
+    parts.armFreeAt = performance.now() + delay + duration;
+    var animations = [
+      parts.arm.animate([{ rotate: fromDeg + 'deg' }, { rotate: toDeg + 'deg' }], {
+        delay: delay, duration: duration, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'both',
+      }),
+    ];
+    var needle = parts.needle;
+    if (needle && needle.perMs > 0 && toDeg < ARM_END_DEG) {
+      // Composited over the swing once it starts, where the swing ends.
+      var degPerMs = (ARM_END_DEG - ARM_PLAY_DEG) * needle.perMs;
+      animations.push(parts.arm.animate([{ rotate: toDeg + 'deg' }, { rotate: ARM_END_DEG + 'deg' }], {
+        delay: delay + duration, duration: (ARM_END_DEG - toDeg) / degPerMs, easing: 'linear', fill: 'forwards',
+      }));
+    }
+    return animations;
+  }
+
+  /**
+   * The arm, switched on and over the record, moved on to where the album
+   * has got to - once any swing it's in the middle of is over.
+   */
+  function followNeedle(parts, still, lift) {
+    window.clearTimeout(parts.needleTimer);
+    if (!parts.on) {
+      return;
+    }
+    var now = performance.now();
+    if (parts.armFreeAt > now) {
+      parts.needleTimer = window.setTimeout(function () {
+        followNeedle(parts, still, lift);
+      }, parts.armFreeAt - now);
+      return;
+    }
+    lift = lift && !still;
+    var fromDeg = current(parts.arm, 'rotate', ARM_PLAY_DEG);
+    var duration = still ? 0 : Math.max(lift ? ARM_SKIP_MS : ARM_GLIDE_MS, swingMs(fromDeg, needleDeg(parts, now)));
+    // Lifted, it moves once the needle is up.
+    var delay = lift ? TIMING.lower : 0;
+    swap(parts, 'arm', armOnto(parts, fromDeg, needleDeg(parts, now + delay + duration), delay, duration));
+    if (lift) {
+      var headScale = current(parts.head, 'scale', 1);
+      swap(parts, 'head', [
+        parts.head.animate([{ scale: headScale }, { scale: 1.25 }], { duration: TIMING.lower, easing: 'ease-out', fill: 'forwards' }),
+        parts.head.animate([{ scale: 1.25 }, { scale: 1 }], {
+          delay: delay + duration, duration: TIMING.lower, easing: 'ease-in', fill: 'forwards',
+        }),
+      ]);
+      needleSound((delay + duration + TIMING.lower) / 1000);
+    }
+  }
+
+  /**
+   * How far through its album the record is - `fraction` of the way,
+   * moving on by `perMs` of it each ms (0 while paused) - for the arm to
+   * follow inwards. Switched off, it's kept for when the arm next swings
+   * over. `options.lift`: the needle is lifted, carried over and lowered
+   * again, as for a skip to another track. `options.still` (reduced
+   * motion): no glide or lift to get there.
+   */
+  function setNeedle(parts, fraction, perMs, options) {
+    var o = options || {};
+    parts.needle = { fraction: fraction, perMs: perMs, at: performance.now() };
+    followNeedle(parts, !!o.still, !!o.lift);
   }
 
   /**
@@ -166,7 +312,7 @@ window.MusicHub = window.MusicHub || {};
 
   /** Straight to playing - arm on the record, power lit - with no motion. */
   function showPlaying(parts) {
-    parts.arm.style.rotate = ARM_PLAY_DEG + 'deg';
+    parts.arm.style.rotate = needleDeg(parts, performance.now()) + 'deg';
     parts.powerOn.style.opacity = '1';
     parts.on = true;
   }
@@ -210,11 +356,8 @@ window.MusicHub = window.MusicHub || {};
     ]);
 
     // The tonearm swings over raised, then lowers onto the record.
-    swap(parts, 'arm', [
-      parts.arm.animate([{ rotate: ARM_REST_DEG + 'deg' }, { rotate: ARM_PLAY_DEG + 'deg' }], {
-        delay: TIMING.armFrom, duration: TIMING.armSwing, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'forwards',
-      }),
-    ]);
+    var armDeg = needleDeg(parts, performance.now() + TIMING.armFrom + TIMING.armSwing);
+    swap(parts, 'arm', armOnto(parts, ARM_REST_DEG, armDeg, TIMING.armFrom, TIMING.armSwing));
     swap(parts, 'head', [
       parts.head.animate([{ scale: '1.25' }, { scale: '1' }], {
         delay: TIMING.needleAt - TIMING.lower, duration: TIMING.lower, easing: 'ease-in', fill: 'both',
@@ -256,22 +399,28 @@ window.MusicHub = window.MusicHub || {};
       parts.powerOn.animate([{ opacity: light }, { opacity: on ? 1 : 0 }], { duration: 150 * time, fill: 'forwards' }),
     ]);
 
-    // The arm's swing takes as long as the share of the way it has to go.
-    var targetDeg = on ? ARM_PLAY_DEG : ARM_REST_DEG;
-    var swingMs = TIMING.armSwing * Math.abs(targetDeg - armDeg) / (ARM_PLAY_DEG - ARM_REST_DEG);
+    // The arm's swing takes as long as the share of the way it has to go:
+    // on, to where the album has got to on the record.
     var armDelay = on ? ARM_ON_DELAY_MS : TIMING.lower;
-    swap(parts, 'arm', [
-      // Held where it is while it waits ('both'): the animation it replaces
-      // is already gone, and the arm would otherwise snap to its rest.
-      parts.arm.animate([{ rotate: armDeg + 'deg' }, { rotate: targetDeg + 'deg' }], {
-        delay: armDelay * time, duration: swingMs * time, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'both',
-      }),
-    ]);
+    var now = performance.now();
+    var targetDeg = on ? needleDeg(parts, now + armDelay) : ARM_REST_DEG;
+    var armMs = swingMs(armDeg, targetDeg);
+    window.clearTimeout(parts.needleTimer);
+    if (on) {
+      targetDeg = needleDeg(parts, now + (armDelay + armMs) * time);
+      swap(parts, 'arm', armOnto(parts, armDeg, targetDeg, armDelay * time, armMs * time));
+    } else {
+      swap(parts, 'arm', [
+        parts.arm.animate([{ rotate: armDeg + 'deg' }, { rotate: targetDeg + 'deg' }], {
+          delay: armDelay * time, duration: armMs * time, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'both',
+        }),
+      ]);
+    }
     // Raised straight away; on, lowered again once the arm is over the record.
     var head = [parts.head.animate([{ scale: headScale }, { scale: 1.25 }], { duration: TIMING.lower * time, easing: 'ease-out', fill: 'forwards' })];
     if (on) {
       head.push(parts.head.animate([{ scale: 1.25 }, { scale: 1 }], {
-        delay: (armDelay + swingMs) * time, duration: TIMING.lower * time, easing: 'ease-in', fill: 'forwards',
+        delay: (armDelay + armMs) * time, duration: TIMING.lower * time, easing: 'ease-in', fill: 'forwards',
       }));
     }
     swap(parts, 'head', head);
@@ -282,7 +431,7 @@ window.MusicHub = window.MusicHub || {};
     }
     if (on) {
       swap(parts, 'spin', spinUp(parts, discDeg, 0));
-      needleSound((armDelay + swingMs + TIMING.lower) / 1000);
+      needleSound((armDelay + armMs + TIMING.lower) / 1000);
     } else {
       // Only a platter that has got going coasts; one still waiting to
       // start just stays where it is.
@@ -382,6 +531,7 @@ window.MusicHub = window.MusicHub || {};
     play: play,
     showPlaying: showPlaying,
     setPower: setPower,
+    setNeedle: setNeedle,
     playSounds: playSounds,
   };
 })(window.MusicHub);

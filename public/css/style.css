@@ -4438,6 +4438,81 @@ button.turntable__power:focus-visible {
   filter: drop-shadow(0 0 2px var(--color-purple-300)) drop-shadow(0 0 5px var(--color-purple-300));
 }
 
+/* The Collection's previous / next track buttons, on the strip of plinth
+   between the platter and the arm's pivot - clear of the arm wherever it
+   is. Round like the power button, lit the way it is when on: the icon
+   and ring glowing. Disabled (turntable.js leaves that to the page) they
+   go dark, like the power button switched off. */
+.turntable__skip {
+  position: absolute;
+  top: 7.5%;
+  display: grid;
+  place-items: center;
+  width: 6.5%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--color-purple-700);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--color-purple-800), var(--color-purple-950));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-text) 12%, transparent),
+    0 2px 5px color-mix(in srgb, var(--color-black) 60%, transparent),
+    0 0 8px var(--color-purple-300),
+    inset 0 0 6px var(--color-purple-300);
+  color: var(--color-purple-50);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: box-shadow 0.15s ease, color 0.15s ease, filter 0.15s ease, scale 0.1s ease;
+}
+
+/* A bigger target for a finger than the button's drawn size. */
+.turntable__skip::before {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+}
+
+.turntable__skip--prev {
+  left: 59.5%;
+}
+
+.turntable__skip--next {
+  left: 69%;
+}
+
+.turntable__skip:hover:not(:disabled) {
+  filter: brightness(1.25);
+}
+
+.turntable__skip:active:not(:disabled) {
+  scale: 0.86;
+}
+
+.turntable__skip:focus-visible {
+  outline-offset: 3px;
+  border-radius: 50%;
+}
+
+.turntable__skip:disabled {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-text) 12%, transparent),
+    0 2px 5px color-mix(in srgb, var(--color-black) 60%, transparent);
+  color: var(--color-black);
+  cursor: default;
+}
+
+.turntable__skip-icon {
+  width: 50%;
+  height: 50%;
+  filter: drop-shadow(0 0 2px var(--color-purple-300)) drop-shadow(0 0 5px var(--color-purple-300));
+  transition: filter 0.15s ease;
+}
+
+.turntable__skip:disabled .turntable__skip-icon {
+  filter: none;
+}
+
 /* Pivots at the top right: turned a few degrees it rests beside the
    platter, ARM_PLAY_DEG (turntable.js) puts the needle on the record. */
 .turntable__arm {
@@ -6070,18 +6145,49 @@ button.turntable__power:focus-visible {
 }
 
 .vinyl-card__foot {
-  /* At the card's foot, on the right, and clear of the text above however
-     short it is. */
+  /* At the card's foot - remove on the left, play on the right - and clear
+     of the text above however short it is. */
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   margin-top: auto;
   padding-top: 0.5rem;
 }
 
-@media (max-width: 600px) {
-  .vinyl-card__play {
-    width: 100%;
-  }
+/* Remove: a round icon button, like the Setlists page's. */
+.vinyl-card__action {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+}
+
+.vinyl-card__action svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Play: a round primary button with only its triangle - nudged a touch
+   right of centre, so it looks centred. */
+.vinyl-card__play {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.vinyl-card__play svg {
+  width: 16px;
+  height: 16px;
+  translate: 1px 0;
 }
 
 /* ---- Play: the turntable in place of the collection, as big as the page
@@ -6143,21 +6249,98 @@ button.turntable__power:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.player__title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.player__title-link:hover {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
 .player__artist {
   margin: 0.25rem 0 0;
   color: var(--color-text-soft);
   font-size: 1.0625rem;
 }
 
+/* The track Spotify is on, as big as the artist. While it plays a wave
+   runs through its letters, left to right: each one in turn lifts a
+   little and lights up in the power button's neon, like a level meter
+   catching the beat. Paused, the wave holds where it is. */
+.player__track {
+  margin: 0.75rem 0 0;
+  color: var(--color-purple-100);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.player__track-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.player__track-letter {
+  display: inline-block;
+  animation: player-track-wave 2.4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 70ms);
+}
+
+.player__track--paused .player__track-letter {
+  animation-play-state: paused;
+}
+
+@keyframes player-track-wave {
+  0%, 30%, 100% {
+    translate: 0 0;
+    color: var(--color-purple-100);
+    text-shadow: none;
+  }
+
+  12% {
+    translate: 0 -0.18em;
+    color: var(--color-purple-50);
+    text-shadow: 0 0 4px var(--color-purple-300), 0 0 10px var(--color-purple-300);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player__track-letter {
+    animation: none;
+  }
+}
+
+/* The track's place in the album, "5/20", in the deck's top-right corner. */
+.player__count {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.5rem;
+  z-index: 4;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--color-purple-700);
+  border-radius: 999px;
+  background-color: var(--color-purple-900);
+  color: var(--color-purple-50);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.player__count[hidden] {
+  display: none;
+}
+
 /* No room beside the turntable: a row of its own at the top of the deck,
    the turntable below it. */
 @media (max-width: 1000px) {
   .player__deck {
-    --deck-top: 5.5rem;
+    --deck-top: 7.5rem;
   }
 
+  /* Clear of the track count in the top-right corner. */
   .player__now {
-    right: 1.5rem;
+    right: 6rem;
     max-width: none;
   }
 
@@ -6166,6 +6349,18 @@ button.turntable__power:focus-visible {
     font-size: 1.25rem;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .player__track {
+    margin-top: 0.5rem;
+  }
+
+  /* One line; a name too long for it fades out at the edge - its letters
+     are boxes of their own, which an ellipsis can't cut off. */
+  .player__track {
+    overflow: hidden;
+    white-space: nowrap;
+    mask-image: linear-gradient(to right, var(--color-black) calc(100% - 2rem), transparent);
   }
 }
 

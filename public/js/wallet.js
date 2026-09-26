@@ -137,6 +137,24 @@ window.MusicHub = window.MusicHub || {};
     return paid;
   }
 
+  /**
+   * Takes `vinyl` out of the collection - the one unboxed with that format
+   * at that time - so the Store's Mystery Vinyl can unbox its style again.
+   * No coins come back. False when it wasn't in the collection.
+   */
+  function removeVinyl(vinyl) {
+    return update(function (state) {
+      var index = state.vinyls.findIndex(function (owned) {
+        return owned.format === vinyl.format && owned.unboxedAt === vinyl.unboxedAt;
+      });
+      if (index === -1) {
+        return false;
+      }
+      state.vinyls.splice(index, 1);
+      return true;
+    });
+  }
+
   /** The equipped name style on <html>, where the navbar's CSS picks it up. */
   function applyNameStyle() {
     var style = equipped('username');
@@ -493,7 +511,8 @@ window.MusicHub = window.MusicHub || {};
    * Adds `amount` coins to the balance - stored straight away, so leaving
    * the page mid-flight loses nothing - and shows them flying from
    * `options.from` (an element, or {x, y}; the middle of the screen when
-   * left out) up to the navbar.
+   * left out) up to the navbar - `options.coins` of them, or as many as
+   * flyingCount gives the amount.
    */
   function earn(amount, options) {
     amount = Math.floor(Number(amount) || 0);
@@ -519,7 +538,7 @@ window.MusicHub = window.MusicHub || {};
     inFlight += amount;
 
     floatLabel(amount, from);
-    var count = flyingCount(amount);
+    var count = Math.min(MAX_FLYING_COINS, Math.floor(options && options.coins) || flyingCount(amount));
     var landedCoins = 0;
     var stagger = Math.min(FLY_STAGGER_MS, MAX_LAUNCH_MS / count);
     var clinks = Math.min(count, MAX_CLINKS);
@@ -568,6 +587,7 @@ window.MusicHub = window.MusicHub || {};
     equip: equip,
     vinyls: vinyls,
     unboxVinyl: unboxVinyl,
+    removeVinyl: removeVinyl,
     format: format,
     coinSvg: coinSvg,
     // The Store's own sounds share this context and limiter.

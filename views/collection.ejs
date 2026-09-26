@@ -51,18 +51,38 @@
             </svg>
             Back to collection
           </button>
-          <!-- The turntable, with what's playing in its top-left corner. -->
+          <!-- The turntable, with what's playing in its top-left corner -
+               the album, its artist and the track Spotify is on - and the
+               track's place in the album ("5/20") in the top-right one. -->
           <div class="player__deck" id="player-deck">
             <div class="player__now">
               <h2 class="player__title" id="player-title"></h2>
               <p class="player__artist" id="player-artist"></p>
+              <p class="player__track" id="player-track" hidden>
+                <span class="visually-hidden" id="player-track-label"></span>
+                <span class="player__track-name" id="player-track-name" aria-hidden="true"></span>
+              </p>
             </div>
+            <span class="player__count" id="player-count" hidden></span>
           </div>
           <div class="player__info">
             <p class="player__status" id="player-status" role="status"></p>
             <div class="player__actions" id="player-actions" hidden></div>
           </div>
         </div>
+
+        <!-- Asks before a vinyl leaves the collection (see confirmRemove). -->
+        <dialog class="modal modal--confirm" id="remove-vinyl-dialog" aria-labelledby="remove-vinyl-dialog-title"
+          aria-describedby="remove-vinyl-dialog-text">
+          <form class="modal__form" id="remove-vinyl-form">
+            <h2 class="modal__title" id="remove-vinyl-dialog-title">Remove this vinyl?</h2>
+            <p class="modal__hint" id="remove-vinyl-dialog-text"></p>
+            <div class="modal__actions">
+              <button type="button" class="button button--ghost" id="remove-vinyl-cancel">Cancel</button>
+              <button type="submit" class="button button--danger">Remove</button>
+            </div>
+          </form>
+        </dialog>
       </section>
 
       <!-- Page-level gating: no Spotify login, no page content. -->
