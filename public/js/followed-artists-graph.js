@@ -1669,6 +1669,9 @@ window.MusicHub = window.MusicHub || {};
     els.stepper.hidden = !(showRecommended && nodes.length);
     // Only with a recommended artist picked in the stepper to say it of.
     els.followedButton.hidden = els.stepper.hidden || recommendIndex < 0 || !nodes[recommendIndex];
+    if (!els.followedButton.hidden) {
+      els.followedButton.textContent = 'Followed ' + nodes[recommendIndex].name;
+    }
     if (els.stepper.hidden) {
       return;
     }
@@ -1904,14 +1907,27 @@ window.MusicHub = window.MusicHub || {};
       .attr('class', 'graph-stash')
       .attr('transform', 'translate(' + node.x + ', ' + (node.y - nodeRadius(node) - 38) + ')');
     var inner = stash.append('g').attr('class', 'graph-stash__inner');
-    inner.append('rect').attr('x', -48).attr('y', -18).attr('width', 96).attr('height', 36).attr('rx', 18);
-    inner.append('use').attr('href', '#coin-icon').attr('x', -38).attr('y', -12).attr('width', 24).attr('height', 24)
+    var pill = inner.append('rect').attr('y', -18).attr('height', 36).attr('rx', 18);
+    var coin = inner.append('use').attr('href', '#coin-icon').attr('y', -12).attr('width', 24).attr('height', 24)
       .attr('class', 'graph-stash__coin');
-    var text = inner.append('text').attr('x', 8).attr('dy', '0.36em').attr('text-anchor', 'middle').text('0');
+    var text = inner.append('text').attr('dy', '0.36em');
+
+    // The coin, then the number, the pill wrapped round both - as wide as
+    // the number needs, centred over the artist.
+    function layout(label) {
+      text.text(label);
+      var width = 14 + 24 + 8 + text.node().getComputedTextLength() + 16;
+      var left = -width / 2;
+      pill.attr('x', left).attr('width', width);
+      coin.attr('x', left + 14);
+      text.attr('x', left + 14 + 24 + 8);
+    }
+    layout('0');
+
     return {
       node: stash.node(),
       set: function (coins) {
-        text.text(MusicHub.wallet.format(coins));
+        layout(MusicHub.wallet.format(coins));
         if (!reducedMotion()) {
           inner.node().animate([{ scale: '1' }, { scale: '1.3' }, { scale: '1' }], { duration: 320, easing: 'ease-out' });
         }
@@ -2050,6 +2066,7 @@ window.MusicHub = window.MusicHub || {};
 
     var sources = connectedFollowed(node);
     var stash = coinStash(node);
+    var unflash = null;
     var coins = 0;
     var chain = wait(still ? 0 : 500);
     sources.forEach(function (source, index) {
@@ -2069,13 +2086,16 @@ window.MusicHub = window.MusicHub || {};
       welcomeSound('bang');
       if (!still) {
         shockwave(node);
-        var flash = goldFlash(node);
-        window.setTimeout(flash, 1100);
+        // Gold from the bang until it turns purple - never back to green.
+        unflash = goldFlash(node);
       }
       var landed = coins ? MusicHub.wallet.earn(coins, { from: stash.node }) : Promise.resolve();
       stash.remove();
       return landed;
     }).then(function () {
+      if (unflash) {
+        unflash();
+      }
       becomeFollowed(node, sources);
       showToast('Now following ' + node.name + (coins
         ? ' — ' + sources.length + (sources.length === 1 ? ' connection' : ' connections')
