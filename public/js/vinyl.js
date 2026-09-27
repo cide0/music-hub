@@ -321,6 +321,17 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * Ends a filter that makes its own picture (turbulence, a flood) with it
+   * cut to the shape it's on - the whole canvas, as it's used, so nothing
+   * shows any different. Without it, the picture didn't depend on the shape
+   * at all, and Chrome still painted it when the shape was hidden: a
+   * removed vinyl's card, hidden while it tears apart, showed its smoke.
+   */
+  function insideSource(filter) {
+    filter.appendChild(svgNode('feComposite', { in2: 'SourceAlpha', operator: 'in' }));
+  }
+
+  /**
    * Turbulence that bends whatever is drawn through it - marbling, swirls,
    * smashes. `swell` ([from, to]) animates how strongly it bends, back and
    * forth over `seconds` (3.6 by default), so the shapes flow.
@@ -737,6 +748,7 @@ window.MusicHub = window.MusicHub || {};
       filter.appendChild(svgNode('feColorMatrix', {
         type: 'matrix', values: '0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  3.4 0 0 0 -1.3',
       }));
+      insideSource(filter);
     });
     svg.appendChild(svgNode('rect', { x: 0, y: 0, width: 200, height: 200, filter: wisps }, { opacity: '0.8' }));
     return svg;
@@ -830,6 +842,7 @@ window.MusicHub = window.MusicHub || {};
       // The colour through a style, where var(--exclusive-*) resolves.
       filter.appendChild(svgNode('feFlood', { result: 'color' }, { floodColor: options.color }));
       filter.appendChild(svgNode('feComposite', { in: 'color', in2: 'mask', operator: 'in' }));
+      insideSource(filter);
     });
   }
 
@@ -4156,14 +4169,18 @@ window.MusicHub = window.MusicHub || {};
     });
     raven.appendChild(wing);
 
-    // The head: cocked this way and that in sudden jerks, thrown back to
-    // caw, the beak gaping and the call ringing out.
+    // The head: cocked this way and that - each tilt eased in and out,
+    // then held a moment - thrown back to caw, the beak gaping and the
+    // call ringing out.
     var head = svgNode('g');
     var HEAD = { keyTimes: '0;0.14;0.3;0.44;0.5;0.56;0.64;1', dur: '6.2s' };
-    loop(head, animate, Object.assign({
-      attributeName: 'transform', type: 'rotate', calcMode: 'discrete',
-      values: '0 12 -28;-12 12 -28;8 12 -28;-18 12 -28;-18 12 -28;-18 12 -28;4 12 -28;0 12 -28',
-    }, HEAD), 'animateTransform');
+    var TILTS = [[0, 0], [0.07, 0], [0.14, -12], [0.22, -12], [0.3, 8], [0.36, 8], [0.44, -18], [0.56, -18], [0.64, 4], [0.84, 4], [1, 0]];
+    loop(head, animate, {
+      attributeName: 'transform', type: 'rotate', calcMode: 'spline', dur: HEAD.dur,
+      keyTimes: TILTS.map(function (tilt) { return tilt[0]; }).join(';'),
+      values: TILTS.map(function (tilt) { return tilt[1] + ' 12 -28'; }).join(';'),
+      keySplines: TILTS.slice(1).map(function () { return '0.45 0 0.55 1'; }).join(';'),
+    }, 'animateTransform');
     // Head and neck in one smooth sweep down into the body, the throat's
     // shaggy hackles soft scallops along its edge. No outline of its own -
     // that would draw a seam across the body - only moonlight along the
@@ -5082,6 +5099,52 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * Holds the CSS animations - the exclusives' halos, gold frames, foil and
+   * glitter - of whichever of `nodes` are scrolled out of view (of `root`,
+   * or the page): .vinyl-offscreen pauses them, so a long list of records
+   * only works on the ones on screen. Back in view, each picks up in step
+   * with the rest, as though it had never stopped. Returns the observer
+   * (disconnect it before the nodes go), or null.
+   */
+  function pauseOffscreen(nodes, root) {
+    if (!window.IntersectionObserver || !document.body.getAnimations) {
+      return null;
+    }
+    var starts = new WeakMap();
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        var node = entry.target;
+        var off = !entry.isIntersecting;
+        if (off === node.classList.contains('vinyl-offscreen')) {
+          return;
+        }
+        if (off) {
+          node.getAnimations({ subtree: true }).forEach(function (animation) {
+            if (animation.playState === 'running') {
+              starts.set(animation, animation.startTime);
+            }
+          });
+          node.classList.add('vinyl-offscreen');
+          return;
+        }
+        node.classList.remove('vinyl-offscreen');
+        // Running again from where they stopped: back to where they'd be.
+        // Not the spin, which hovering starts and stops.
+        node.getAnimations({ subtree: true }).forEach(function (animation) {
+          if (starts.has(animation) && animation.playState === 'running' && animation.animationName !== 'vinyl-spin') {
+            animation.startTime = starts.get(animation);
+          }
+          starts.delete(animation);
+        });
+      });
+    }, { root: root || null, rootMargin: '100px' });
+    Array.prototype.forEach.call(nodes, function (node) {
+      observer.observe(node);
+    });
+    return observer;
+  }
+
+  /**
    * The colours the card itself glows in: the record's first real colour,
    * and its second one for the outer halo. Plain black glows silver - a
    * black glow wouldn't show on the dark page.
@@ -5111,6 +5174,7 @@ window.MusicHub = window.MusicHub || {};
     render: render,
     backdrop: backdrop,
     setPlaying: setPlaying,
+    pauseOffscreen: pauseOffscreen,
     glowColors: glowColors,
     findColors: findColors,
     ZOETROPE_FRAMES: ZOETROPE_FRAMES,

@@ -310,11 +310,17 @@ window.MusicHub = window.MusicHub || {};
     ];
   }
 
+  /** Whether it's switched on - on the power button too (.turntable__power--on), for the styles. */
+  function markOn(parts, on) {
+    parts.on = on;
+    parts.power.classList.toggle('turntable__power--on', on);
+  }
+
   /** Straight to playing - arm on the record, power lit - with no motion. */
   function showPlaying(parts) {
     parts.arm.style.rotate = needleDeg(parts, performance.now()) + 'deg';
     parts.powerOn.style.opacity = '1';
-    parts.on = true;
+    markOn(parts, true);
   }
 
   /**
@@ -363,7 +369,7 @@ window.MusicHub = window.MusicHub || {};
         delay: TIMING.needleAt - TIMING.lower, duration: TIMING.lower, easing: 'ease-in', fill: 'both',
       }),
     ]);
-    parts.on = true;
+    markOn(parts, true);
   }
 
   /**
@@ -378,7 +384,7 @@ window.MusicHub = window.MusicHub || {};
     if (parts.on === on) {
       return;
     }
-    parts.on = on;
+    markOn(parts, on);
     var still = !!(options && options.still);
     var time = still ? 0 : 1;
     if (parts.power.tagName === 'BUTTON') {

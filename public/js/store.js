@@ -1,6 +1,7 @@
 /*
- * The Store: coins earned on the Album Suggester buy username and navbar
- * styles (bought once, then equipped or taken off) and mystery vinyls - a random
+ * The Store: coins earned on the Album Suggester buy username, navbar and
+ * vinyl player styles (bought once, then equipped or taken off) and
+ * mystery vinyls - a random
  * record, drawn by vinyl.js like the Discogs page's, unboxed with an
  * animation (unbox.js) and never one the collection already holds.
  */
@@ -32,6 +33,19 @@ window.MusicHub = window.MusicHub || {};
       text: 'The whole navbar in polished gold.',
     },
   ];
+
+  // The Collection's record player (turntable.js).
+  var PLAYER_ITEMS = [
+    {
+      id: 'gold',
+      name: 'Gold Player',
+      price: 4000,
+      text: 'The Collection\u2019s record player in polished gold: a gold plinth with a shine sweeping across, a gold headshell and gold-lit buttons.',
+    },
+  ];
+
+  // When the jiggling box settles: 58% of mailer-jiggle's 0.8s in style.css.
+  var JIGGLE_SETTLE_S = 0.46;
 
   // The unlock, stage by stage (ms from the purchase).
   var UNLOCK_SHAKE_MS = 700;
@@ -174,12 +188,36 @@ window.MusicHub = window.MusicHub || {};
     return bar;
   }
 
+  /* -------------------------------------------------------------- player */
+
+  /**
+   * A small stand-in for the Collection's record player, wearing `style`:
+   * turntable.js's own turntable, switched on, its needle on a record - so
+   * it looks just like the real one.
+   */
+  function playerPreview(style) {
+    var box = el('div', 'player-preview');
+    box.dataset.playerStyle = style;
+    var record = MusicHub.vinyl.render(MusicHub.vinyl.describe('Vinyl, LP, Black'), { seed: 'store-player' });
+    record.classList.add('vinyl--house');
+    MusicHub.vinyl.setPlaying(record, false);
+    var parts = MusicHub.turntable.build(record, { trackButtons: true, glow: 'var(--rarity-gold)' });
+    // Only a picture: its track buttons are no stops for the keyboard.
+    parts.prev.tabIndex = -1;
+    parts.next.tabIndex = -1;
+    // Switched on, as it's shown.
+    parts.power.classList.add('turntable__power--on');
+    box.appendChild(parts.root);
+    return box;
+  }
+
   /* ---------------------------------------------------------- style items */
 
   // Each slot's items, the preview they're shown off in and their grid.
   var SLOTS = {
     username: { items: USERNAME_ITEMS, preview: namePill, grid: 'usernames' },
     navbar: { items: NAVBAR_ITEMS, preview: navbarPreview, grid: 'navbars' },
+    player: { items: PLAYER_ITEMS, preview: playerPreview, grid: 'players' },
   };
 
   function styleCard(slot, item) {
@@ -360,6 +398,7 @@ window.MusicHub = window.MusicHub || {};
   function render() {
     renderStyles('username');
     renderStyles('navbar');
+    renderStyles('player');
     renderVinylOffer();
   }
 
@@ -371,6 +410,7 @@ window.MusicHub = window.MusicHub || {};
   (function init() {
     els.usernames = document.getElementById('username-items');
     els.navbars = document.getElementById('navbar-items');
+    els.players = document.getElementById('player-items');
     els.vinylOffer = document.getElementById('vinyl-offer');
     els.vinylLock = document.getElementById('vinyl-lock');
     els.vinylPrice = document.getElementById('vinyl-price');
@@ -380,6 +420,17 @@ window.MusicHub = window.MusicHub || {};
 
     els.unboxButton.addEventListener('click', function () {
       MusicHub.unbox.start().then(renderVinylOffer);
+    });
+    // Hovered or tabbed to, Unbox makes the box jiggle (style.css,
+    // mailer-jiggle): it rattles like the unboxing's hopping box, once a
+    // shake, settling where the jiggle does.
+    var mailer = els.vinylOffer.querySelector('.mailer');
+    ['animationstart', 'animationiteration'].forEach(function (type) {
+      mailer.addEventListener(type, function (event) {
+        if (event.animationName === 'mailer-jiggle') {
+          MusicHub.unbox.rattle(JIGGLE_SETTLE_S);
+        }
+      });
     });
 
     render();

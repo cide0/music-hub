@@ -184,9 +184,19 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /** heldExclusives()' formats, to look many up at once: each read of the wallet parses it all. */
+  function heldFormats() {
+    var formats = {};
+    heldExclusives().forEach(function (vinyl) {
+      formats[vinyl.format] = true;
+    });
+    return formats;
+  }
+
   function heldCount() {
+    var held = heldFormats();
     return MusicHub.vinylCatalog.exclusives.filter(function (exclusive) {
-      return isHeld(exclusive.format);
+      return held[exclusive.format];
     }).length;
   }
 
@@ -381,10 +391,6 @@ window.MusicHub = window.MusicHub || {};
     ctx.fillStyle = conic;
     ctx.fillRect(0, 0, size, size);
 
-    var clip = svg('clipPath', { id: 'wheel-gold-clip' });
-    clip.appendChild(svg('path', { d: slicePath(92, slice.start, slice.end) }));
-    defs.appendChild(clip);
-
     // Turning about the middle of the slice, big enough to cover all of it.
     var centre = polar(56, (slice.start + slice.end) / 2);
     var reach = 60;
@@ -394,14 +400,23 @@ window.MusicHub = window.MusicHub || {};
       x: (centre.x - reach).toFixed(2), y: (centre.y - reach).toFixed(2),
       width: reach * 2, height: reach * 2, preserveAspectRatio: 'none',
     });
-    picture.appendChild(svg('animateTransform', {
-      attributeName: 'transform', type: 'rotate',
-      from: '0 ' + centre.x.toFixed(2) + ' ' + centre.y.toFixed(2),
-      to: '360 ' + centre.x.toFixed(2) + ' ' + centre.y.toFixed(2),
-      dur: FRAME_TURN_S + 's', repeatCount: 'indefinite',
-    }));
+    picture.style.transformBox = 'fill-box';
+    picture.style.transformOrigin = '50% 50%';
+    forever(picture, [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }], FRAME_TURN_S * 1000);
     frame.appendChild(picture);
     group.appendChild(frame);
+  }
+
+  /*
+   * An endless animation of the wheel's own, on the page's clock (Web
+   * Animations) rather than as SMIL in the SVG: the wheel is drawn into
+   * the closed dialog, and Chrome left its SMIL animations standing still
+   * for a second or so after it was first opened.
+   */
+  function forever(node, keyframes, ms) {
+    if (typeof node.animate === 'function') {
+      node.animate(keyframes, { duration: ms, iterations: Infinity });
+    }
   }
 
   /** The prizes, and the light over them. */
@@ -423,20 +438,33 @@ window.MusicHub = window.MusicHub || {};
       [0.2, 'var(--rarity-gold-deep)'], [0.4, 'var(--rarity-gold)'], [0.6, 'var(--rarity-gold-bright)'],
       [0.8, 'var(--rarity-gold)'], [1, 'var(--rarity-gold-deep)'],
     ]);
-    function sweep(id, stops, seconds, pass, reach) {
-      var node = gradient(defs, id, 'linearGradient', alongSlice, stops);
-      var from = (-reach * rim.x).toFixed(2) + ' ' + (-reach * rim.y).toFixed(2);
-      var to = (reach * rim.x).toFixed(2) + ' ' + (reach * rim.y).toFixed(2);
-      node.appendChild(svg('animateTransform', {
-        attributeName: 'gradientTransform', type: 'translate',
-        values: from + ';' + to + ';' + to, keyTimes: '0;' + pass + ';1', calcMode: 'spline', keySplines: '0.45 0 0.55 1;0 0 1 1',
-        dur: seconds + 's', repeatCount: 'indefinite',
-      }));
-    }
-    sweep('wheel-gold-glare', [
+    // The frame and the glare stay inside the slice.
+    var clip = svg('clipPath', { id: 'wheel-gold-clip' });
+    clip.appendChild(svg('path', { d: slicePath(92, golden.start, golden.end) }));
+    defs.appendChild(clip);
+    gradient(defs, 'wheel-gold-glare', 'linearGradient', alongSlice, [
       [0.3, 'var(--rarity-gold-shine)', 0], [0.44, 'var(--rarity-gold-shine)', 0.85], [0.5, 'var(--rarity-gold-shine)', 1],
       [0.56, 'var(--rarity-gold-shine)', 0.85], [0.7, 'var(--rarity-gold-shine)', 0],
-    ], 1.5, 0.65, 0.7);
+    ]);
+    /*
+     * The glare, carried from the middle out past the rim in `pass` of
+     * every `seconds`, then off the slice for the rest: a sheet painted
+     * with it, far bigger than the slice, sliding under the slice's clip
+     * (the gradient moves with it).
+     */
+    function glare(seconds, pass, reach) {
+      var layer = svg('g', { 'clip-path': 'url(#wheel-gold-clip)' }, { mixBlendMode: 'screen' });
+      var sheet = svg('rect', { x: -170, y: -170, width: 340, height: 340, fill: 'url(#wheel-gold-glare)' }, { stroke: 'none' });
+      var from = 'translate(' + (-reach * rim.x).toFixed(2) + 'px, ' + (-reach * rim.y).toFixed(2) + 'px)';
+      var to = 'translate(' + (reach * rim.x).toFixed(2) + 'px, ' + (reach * rim.y).toFixed(2) + 'px)';
+      forever(sheet, [
+        { transform: from, easing: 'cubic-bezier(0.45, 0, 0.55, 1)' },
+        { offset: pass, transform: to },
+        { transform: to },
+      ], seconds * 1000);
+      layer.appendChild(sheet);
+      return layer;
+    }
     gradient(defs, 'wheel-shade', 'radialGradient', { cx: '0.5', cy: '0.5', r: '0.5' }, [
       [0, 'var(--color-text)', 0.16], [0.45, 'var(--color-text)', 0], [0.85, 'var(--color-black)', 0.12], [1, 'var(--color-black)', 0.4],
     ]);
@@ -449,7 +477,7 @@ window.MusicHub = window.MusicHub || {};
       group.appendChild(svg('path', { d: slicePath(92, slice.start, slice.end) }, { fill: gold ? 'url(#wheel-gold)' : prize.fill }));
       if (gold) {
         goldFrame(defs, group, slice);
-        group.appendChild(svg('path', { d: slicePath(92, slice.start, slice.end), fill: 'url(#wheel-gold-glare)' }, { mixBlendMode: 'screen', stroke: 'none' }));
+        group.appendChild(glare(1.5, 0.65, 0.7));
       }
 
       // The label runs along the slice's middle, reading outwards.
@@ -1514,7 +1542,7 @@ window.MusicHub = window.MusicHub || {};
       // No entrance delays any more: the buttons are wanted straight away.
       els.reveal.classList.remove('wheel-reveal--fresh');
       els.revealDone.hidden = false;
-      els.revealClose.focus();
+      els.revealCollection.focus();
     });
   }
 
@@ -1707,49 +1735,127 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------------ showcase */
 
-  var showcaseRecords = [];
+  // The list is built once and kept: forty records are a lot to draw. Its
+  // records are drawn while the wheel sits open, whenever the page is idle,
+  // so the showcase is usually ready before it's asked for. If not, the
+  // ones in view (about the first SHOWCASE_FIRST) are drawn on opening,
+  // and the rest carry on after.
+  var SHOWCASE_FIRST = 15;
+  var showcaseItems = [];
+  var showcaseFill = 0;
+  var showcasePressed = null;
 
-  function renderShowcase(selected) {
-    var exclusives = MusicHub.vinylCatalog.exclusives;
-    els.showcaseCount.textContent = heldCount() + ' of ' + exclusives.length + ' won · only ever on the Daily Spin';
-    els.showcaseList.textContent = '';
-    showcaseRecords = [];
-    exclusives.forEach(function (exclusive, index) {
-      var held = isHeld(exclusive.format);
+  function buildShowcase() {
+    MusicHub.vinylCatalog.exclusives.forEach(function (exclusive, index) {
       var item = el('li');
-      var button = el('button', 'wheel-showcase__item' + (held ? ' wheel-showcase__item--held' : ''));
+      var button = el('button', 'wheel-showcase__item');
       button.type = 'button';
-      button.setAttribute('aria-pressed', String(index === selected));
-      button.setAttribute('aria-label', exclusive.format + (held ? ' (won)' : ' (not won yet)'));
+      button.setAttribute('aria-pressed', 'false');
       var thumb = el('span', 'wheel-showcase__thumb vinyl-stage');
-      var record = MusicHub.vinyl.render(MusicHub.vinyl.describe(exclusive.format), { seed: exclusive.format });
-      record.classList.add('vinyl--house');
-      MusicHub.vinyl.setPlaying(record, false);
-      thumb.appendChild(record);
       button.appendChild(thumb);
       button.appendChild(el('span', 'wheel-showcase__item-name', exclusive.format));
-      if (held) {
-        var check = el('span', 'wheel-showcase__check', '✓');
-        check.setAttribute('aria-hidden', 'true');
-        button.appendChild(check);
-      }
+      var check = el('span', 'wheel-showcase__check');
+      check.setAttribute('aria-hidden', 'true');
+      check.appendChild(wallet.checkSvg());
+      button.appendChild(check);
       button.addEventListener('click', function () {
         selectShowcase(index);
       });
       item.appendChild(button);
       els.showcaseList.appendChild(item);
-      showcaseRecords.push(record);
+      showcaseItems.push({ exclusive: exclusive, button: button, thumb: thumb, check: check });
     });
-    selectShowcase(selected);
+    // The halos of the records scrolled out of the list's view wait.
+    MusicHub.vinyl.pauseOffscreen(els.showcaseList.children, els.showcaseList);
+  }
+
+  /** An item's record, the first time it's needed. */
+  function drawThumb(entry) {
+    if (entry.thumb.firstChild) {
+      return;
+    }
+    var record = MusicHub.vinyl.render(MusicHub.vinyl.describe(entry.exclusive.format), { seed: entry.exclusive.format });
+    record.classList.add('vinyl--house');
+    MusicHub.vinyl.setPlaying(record, false);
+    entry.thumb.appendChild(record);
+  }
+
+  /**
+   * The records not drawn yet, while the page has time between frames -
+   * `soon`: on the showcase, so at least one every 100ms, idle or not.
+   * Without idle callbacks, only then.
+   */
+  function fillShowcase(soon) {
+    if (!window.requestIdleCallback && !soon) {
+      return;
+    }
+    var idle = window.requestIdleCallback || function (callback) {
+      return window.setTimeout(function () {
+        callback({ timeRemaining: function () { return 0; } });
+      }, 16);
+    };
+    var options = soon ? { timeout: 100 } : undefined;
+    function next(deadline) {
+      var waiting = showcaseItems.filter(function (entry) {
+        return !entry.thumb.firstChild;
+      });
+      // At least one each time, even when the animations leave no idle time.
+      for (var i = 0; i < waiting.length && (i === 0 || deadline.timeRemaining() > 4); i += 1) {
+        drawThumb(waiting[i]);
+      }
+      showcaseFill = i < waiting.length ? idle(next, options) : 0;
+    }
+    stopFillingShowcase();
+    showcaseFill = idle(next, options);
+  }
+
+  /** The showcase built, and its records drawn in the wheel's idle moments. */
+  function prepareShowcase() {
+    if (!showcaseItems.length) {
+      buildShowcase();
+    }
+    fillShowcase(false);
+  }
+
+  function stopFillingShowcase() {
+    if (showcaseFill) {
+      (window.cancelIdleCallback || window.clearTimeout)(showcaseFill);
+      showcaseFill = 0;
+    }
+  }
+
+  /** Which ones are won, ticked - it may have changed since last time. */
+  function refreshShowcase() {
+    var formats = heldFormats();
+    var count = 0;
+    showcaseItems.forEach(function (entry) {
+      var held = !!formats[entry.exclusive.format];
+      count += held ? 1 : 0;
+      entry.button.classList.toggle('wheel-showcase__item--held', held);
+      entry.button.setAttribute('aria-label', entry.exclusive.format + (held ? ' (won)' : ' (not won yet)'));
+      entry.check.hidden = !held;
+    });
+    els.showcaseCount.textContent = count + ' of ' + showcaseItems.length + ' won';
   }
 
   /** The big record at the top: the chosen exclusive, spinning and moving. */
   function selectShowcase(index) {
-    var exclusive = MusicHub.vinylCatalog.exclusives[index];
+    var entry = showcaseItems[index];
+    var exclusive = entry.exclusive;
     var spec = MusicHub.vinyl.describe(exclusive.format);
     var glow = MusicHub.vinyl.glowColors(spec);
+    // Set on the dialog, the glow would restyle all forty records in the
+    // list below it: the list keeps its own (style.css), and only the
+    // chosen item there is given the record's.
     els.showcase.style.setProperty('--record-glow', glow.glow);
     els.showcase.style.setProperty('--record-accent', glow.accent);
+    if (showcasePressed) {
+      showcasePressed.setAttribute('aria-pressed', 'false');
+      showcasePressed.style.removeProperty('--record-glow');
+    }
+    showcasePressed = entry.button;
+    showcasePressed.setAttribute('aria-pressed', 'true');
+    showcasePressed.style.setProperty('--record-glow', glow.glow);
     MusicHub.vinyl.setPlaying(els.showcaseRecord, false);
     els.showcaseRecord.textContent = '';
     var record = MusicHub.vinyl.render(spec, { seed: exclusive.format });
@@ -1767,25 +1873,30 @@ window.MusicHub = window.MusicHub || {};
     els.showcaseState.classList.toggle('wheel-showcase__state--held', held);
     els.showcaseName.textContent = exclusive.format;
     els.showcaseText.textContent = exclusive.text;
-    Array.prototype.forEach.call(els.showcaseList.querySelectorAll('.wheel-showcase__item'), function (button, i) {
-      button.setAttribute('aria-pressed', String(i === index));
-    });
   }
 
   function openShowcase() {
-    renderShowcase(0);
-    els.showcase.showModal();
-    var first = els.showcaseList.querySelector('button');
-    if (first) {
-      first.focus();
+    if (!showcaseItems.length) {
+      buildShowcase();
     }
+    refreshShowcase();
+    showcaseItems.slice(0, SHOWCASE_FIRST).forEach(drawThumb);
+    selectShowcase(0);
+    els.showcase.showModal();
+    els.showcaseList.scrollTop = 0;
+    fillShowcase(true);
+    showcaseItems[0].button.focus();
   }
 
   function closeShowcase() {
+    // Back to the wheel: any records left carry on in its idle moments.
+    if (els.dialog.open) {
+      fillShowcase(false);
+    } else {
+      stopFillingShowcase();
+    }
     MusicHub.vinyl.setPlaying(els.showcaseRecord, false);
     els.showcaseRecord.textContent = '';
-    els.showcaseList.textContent = '';
-    showcaseRecords = [];
   }
 
   /* ------------------------------------------------------- open & close */
@@ -1806,6 +1917,7 @@ window.MusicHub = window.MusicHub || {};
       els.machine.focus();
     }
     statusTimer = window.setInterval(tick, 1000);
+    prepareShowcase();
   }
 
   function close() {
@@ -1820,6 +1932,7 @@ window.MusicHub = window.MusicHub || {};
   /** The wheel's gone: stop the moving parts, then whatever the win left to do. */
   function onClosed() {
     window.clearInterval(statusTimer);
+    stopFillingShowcase();
     // The celebration went with the wheel.
     celebration = null;
     // Whatever was won meanwhile, no pop for it when the wheel opens again.
@@ -1886,7 +1999,7 @@ window.MusicHub = window.MusicHub || {};
     els.revealNote = document.getElementById('wheel-reveal-note');
     els.revealDone = document.getElementById('wheel-reveal-done');
     els.revealBack = document.getElementById('wheel-reveal-back');
-    els.revealClose = document.getElementById('wheel-reveal-close');
+    els.revealCollection = document.getElementById('wheel-reveal-collection');
     els.showcase = document.getElementById('wheel-showcase');
     els.showcaseClose = document.getElementById('wheel-showcase-close');
     els.showcaseCount = document.getElementById('wheel-showcase-count');
@@ -1955,7 +2068,6 @@ window.MusicHub = window.MusicHub || {};
       }
     });
     els.revealBack.addEventListener('click', backToWheel);
-    els.revealClose.addEventListener('click', backToWheel);
 
     // No closing mid-spin; otherwise Escape closes like the X.
     els.dialog.addEventListener('cancel', function (event) {

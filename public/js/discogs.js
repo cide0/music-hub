@@ -37,6 +37,8 @@ window.MusicHub = window.MusicHub || {};
   var toastTimer = null;
   // What's typed into the release search - only for this visit, not stored.
   var query = '';
+  // 'all' | 'new': every release, or only what the last check found.
+  var activeFilter = 'all';
   // Every card built so far, by release id: { release, card, text }. Cards
   // are built once and kept, so searching only shows and hides them instead
   // of rebuilding the list - and redrawing every record - on each keystroke.
@@ -66,11 +68,13 @@ window.MusicHub = window.MusicHub || {};
    * far to its release date, so it can be pruned once that date leaves the
    * window. `known` lists, per artist, every release already looked at in
    * detail - see recordLookup - so later checks don't pay for it again.
+   * `lastFound` holds the ids the last check added, marked "New" until the
+   * next check.
    */
   function loadState() {
     var stored = MusicHub.storage.read(STORAGE_KEY, null);
     if (!stored || !Array.isArray(stored.releases)) {
-      return { checkedAt: null, since: null, releases: [], seen: {}, known: {} };
+      return { checkedAt: null, since: null, releases: [], seen: {}, known: {}, lastFound: [] };
     }
 
     var seen = stored.seen && typeof stored.seen === 'object' ? stored.seen : null;
@@ -88,6 +92,7 @@ window.MusicHub = window.MusicHub || {};
       releases: stored.releases,
       seen: seen,
       known: stored.known && typeof stored.known === 'object' ? stored.known : {},
+      lastFound: Array.isArray(stored.lastFound) ? stored.lastFound : [],
     };
   }
 
@@ -289,12 +294,16 @@ window.MusicHub = window.MusicHub || {};
     return count + ' ' + (count === 1 ? one : many);
   }
 
-  /** The header count for the list on screen, e.g. "12 new releases across 8 artists". */
-  function summaryText(releases, visibleCount, search) {
+  /**
+   * The header count for the list on screen, e.g. "12 new releases across 8
+   * artists" - or "3 of 12 new releases" while a search or the New filter
+   * (`newOnly`) narrows it down.
+   */
+  function summaryText(releases, visibleCount, search, newOnly) {
     if (!releases.length) {
       return '';
     }
-    if (search && search.trim()) {
+    if ((search && search.trim()) || newOnly) {
       return visibleCount + ' of ' + plural(releases.length, 'new release', 'new releases');
     }
     var artists = {};
@@ -502,6 +511,17 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /** The last check's finds: the concert page's accent border, tint and "New" tag. */
+  function setCardNew(card, isNew) {
+    card.classList.toggle('release-card--new', isNew);
+    var tag = card.querySelector('.concert-card__tag');
+    if (isNew && !tag) {
+      card.appendChild(el('span', 'concert-card__tag', 'New'));
+    } else if (!isNew && tag) {
+      tag.remove();
+    }
+  }
+
   function renderCard(release) {
     var card = el('a', 'release-card');
     card.href = release.releaseUrl;
@@ -546,7 +566,7 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function renderSummary() {
-    setSummary(summaryText(state.releases, visibleCount, query));
+    setSummary(summaryText(state.releases, visibleCount, query, activeFilter === 'new'));
   }
 
   function hasSavedData() {
@@ -591,10 +611,46 @@ window.MusicHub = window.MusicHub || {};
   function cardFor(release) {
     var entry = cards[release.id];
     if (!entry || entry.release !== release) {
-      entry = { release: release, card: renderCard(release), text: searchText(release) };
+      entry = { release: release, card: renderCard(release), text: searchText(release), isNew: false };
       cards[release.id] = entry;
     }
+    var isNew = state.lastFound.indexOf(release.id) !== -1;
+    if (entry.isNew !== isNew) {
+      setCardNew(entry.card, isNew);
+      entry.isNew = isNew;
+    }
     return entry;
+  }
+
+  /** How many of the listed releases the last check found. */
+  function newCount() {
+    return state.releases.filter(function (release) {
+      return state.lastFound.indexOf(release.id) !== -1;
+    }).length;
+  }
+
+  /** "New" only with something new to show - otherwise back to All. */
+  function updateFilterControls() {
+    var newButton = els.filters.querySelector('[data-filter="new"]');
+    newButton.disabled = !newCount();
+    if (newButton.disabled && activeFilter === 'new') {
+      activeFilter = 'all';
+    }
+    Array.prototype.forEach.call(els.filters.querySelectorAll('.filter-button'), function (button) {
+      var active = button.getAttribute('data-filter') === activeFilter;
+      button.classList.toggle('filter-button--active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  function emptyFilterMessage() {
+    var search = query.trim();
+    if (activeFilter === 'new') {
+      return search
+        ? 'None of the new releases match \u201c' + search + '\u201d.'
+        : 'The last check didn\u2019t turn up anything new.';
+    }
+    return 'No releases match \u201c' + search + '\u201d.';
   }
 
   /** Drops the cards of releases no longer in the list. */
@@ -614,8 +670,8 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
-   * Shows the cards matching the search and hides the rest - no cards are
-   * built or removed, so the records already drawn stay drawn.
+   * Shows the cards matching the search and the filter, and hides the rest
+   * - no cards are built or removed, so the records already drawn stay drawn.
    */
   function applySearch() {
     window.cancelAnimationFrame(searchFrame);
@@ -626,7 +682,7 @@ window.MusicHub = window.MusicHub || {};
       if (!entry) {
         return;
       }
-      var show = !words.length || matches(entry.text, words);
+      var show = (activeFilter !== 'new' || entry.isNew) && (!words.length || matches(entry.text, words));
       if (entry.card.hidden === show) {
         entry.card.hidden = !show;
       }
@@ -637,7 +693,7 @@ window.MusicHub = window.MusicHub || {};
     renderSummary();
 
     if (state.checkedAt && state.releases.length) {
-      setMessage(visibleCount ? '' : 'No releases match \u201c' + query.trim() + '\u201d.');
+      setMessage(visibleCount ? '' : emptyFilterMessage());
     }
   }
 
@@ -652,6 +708,7 @@ window.MusicHub = window.MusicHub || {};
     els.list.textContent = '';
     updateClearButton();
     els.searchWrap.hidden = !state.releases.length;
+    updateFilterControls();
     visibleCount = state.releases.length;
     renderSummary();
 
@@ -941,6 +998,9 @@ window.MusicHub = window.MusicHub || {};
           state.checkedAt = checkStartedAt;
           state.since = since;
           state.releases = appendReleases(state.releases, result.fresh);
+          state.lastFound = result.fresh.map(function (release) {
+            return release.id;
+          });
         }
         saveState();
         if (counts) {
@@ -987,6 +1047,7 @@ window.MusicHub = window.MusicHub || {};
     els.searchWrap = document.getElementById('releases-search-wrap');
     els.search = document.getElementById('releases-search');
     els.searchClear = document.getElementById('releases-search-clear');
+    els.filters = document.getElementById('releases-filters');
     eta = MusicHub.progressEta.create(document.getElementById('check-eta'));
 
     els.clearButton = document.getElementById('clear-releases');
@@ -997,6 +1058,15 @@ window.MusicHub = window.MusicHub || {};
       els.failedNotice.hidden = true;
     });
 
+    els.filters.addEventListener('click', function (event) {
+      var button = event.target.closest('.filter-button');
+      if (!button || button.disabled) {
+        return;
+      }
+      activeFilter = button.getAttribute('data-filter');
+      updateFilterControls();
+      applySearch();
+    });
     els.search.addEventListener('input', function () {
       query = els.search.value;
       els.searchClear.hidden = !query;

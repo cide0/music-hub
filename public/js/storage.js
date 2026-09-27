@@ -94,20 +94,12 @@ window.MusicHub = window.MusicHub || {};
     return data;
   }
 
-  // App data "Clear all data" never removes: the Store's - coins, bought
-  // and equipped items, the vinyl collection - all earned, not just saved.
-  var KEPT_ON_CLEAR = ['store'];
-
   /**
-   * Removes every app-data key but those in KEPT_ON_CLEAR. The Spotify /
-   * Google logins stay too.
+   * Removes every app-data key - coins, Store items and the vinyl
+   * collection included. Only the Spotify / Google logins stay.
    */
   function clearAppData() {
-    APP_DATA_KEYS.forEach(function (key) {
-      if (KEPT_ON_CLEAR.indexOf(key) === -1) {
-        remove(key);
-      }
-    });
+    APP_DATA_KEYS.forEach(remove);
   }
 
   function exportData() {

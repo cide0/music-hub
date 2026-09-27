@@ -897,7 +897,10 @@ window.MusicHub = window.MusicHub || {};
     item.appendChild(button);
 
     // "+": one more track for this entry (a medley), search stays open.
-    var extra = el('button', 'track-option__add', picked ? '✓' : '+');
+    var extra = el('button', 'track-option__add', picked ? null : '+');
+    if (picked) {
+      extra.appendChild(MusicHub.wallet.checkSvg());
+    }
     extra.type = 'button';
     extra.setAttribute('aria-pressed', picked ? 'true' : 'false');
     extra.setAttribute('aria-label', picked

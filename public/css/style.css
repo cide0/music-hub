@@ -1384,8 +1384,7 @@ button[aria-disabled='true'] {
    past concerts. */
 .concert-card::after,
 .history-item::after,
-.past-show::after,
-.vinyl-card--exclusive::after {
+.past-show::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1458,10 +1457,8 @@ button[aria-disabled='true'] {
 
 /* A concert the user is going to shimmers on its own: the same sheen at the
    same strength as on hover, with the highlight sweeping across as though a
-   cursor were moving over it. So does a wheel exclusive in the Collection,
-   until the record comes out (.release-card--playing). */
-.concert-card--attending::after,
-.vinyl-card--exclusive:not(.release-card--playing)::after {
+   cursor were moving over it. */
+.concert-card--attending::after {
   opacity: 0.55;
   animation: foil-drift 9s ease-in-out infinite;
 }
@@ -1528,18 +1525,15 @@ button[aria-disabled='true'] {
     84% 12%, 84% 12%, 26% 8%, 26% 8%;
 }
 
-.concert-card--attending .concert-card__glitter,
-.vinyl-card--exclusive:not(.release-card--playing) .concert-card__glitter {
+.concert-card--attending .concert-card__glitter {
   animation: glitter 2.9s ease-in-out infinite;
 }
 
-.concert-card--attending .concert-card__glitter::before,
-.vinyl-card--exclusive:not(.release-card--playing) .concert-card__glitter::before {
+.concert-card--attending .concert-card__glitter::before {
   animation: glitter 3.7s ease-in-out 0.8s infinite;
 }
 
-.concert-card--attending .concert-card__glitter::after,
-.vinyl-card--exclusive:not(.release-card--playing) .concert-card__glitter::after {
+.concert-card--attending .concert-card__glitter::after {
   animation: glitter 4.3s ease-in-out 1.6s infinite;
 }
 
@@ -1564,17 +1558,13 @@ button[aria-disabled='true'] {
     transition: none;
   }
 
-  .concert-card--attending::after,
-  .vinyl-card--exclusive::after {
+  .concert-card--attending::after {
     animation: none;
   }
 
   .concert-card--attending .concert-card__glitter,
   .concert-card--attending .concert-card__glitter::before,
-  .concert-card--attending .concert-card__glitter::after,
-  .vinyl-card--exclusive .concert-card__glitter,
-  .vinyl-card--exclusive .concert-card__glitter::before,
-  .vinyl-card--exclusive .concert-card__glitter::after {
+  .concert-card--attending .concert-card__glitter::after {
     animation: none;
   }
 }
@@ -2565,6 +2555,142 @@ textarea.text-input {
   }
 }
 
+/* ---- A recommended artist just followed (followed-artists-graph.js,
+   celebrateFollow): its connected followed artists flash gold one by one,
+   each shooting a gold beam along the connection into it, adding to the
+   stash of coins above it; then it bursts, and turns into a followed
+   artist. The gold is the Gold Navbar's. */
+
+/* Nothing to drag, zoom or click while it plays. */
+.graph-canvas--celebrating svg {
+  pointer-events: none;
+}
+
+.graph-node--gold .graph-node__circle {
+  stroke: var(--rarity-gold-bright);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--rarity-gold-bright) 75%, transparent));
+  animation: graph-gold-flash 0.6s ease-out;
+}
+
+.graph-node--gold .graph-node__label {
+  fill: var(--rarity-gold-bright);
+}
+
+@keyframes graph-gold-flash {
+  0% { filter: none; }
+  30% { filter: brightness(1.6) drop-shadow(0 0 22px var(--rarity-gold-bright)); }
+  100% { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--rarity-gold-bright) 75%, transparent)); }
+}
+
+/* The turning gold frame round it: a gold gradient going round and round. */
+.graph-gold-ring {
+  fill: none;
+  stroke: url(#graph-gold);
+  stroke-width: 6;
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+  animation: gold-spin 2.4s linear infinite;
+}
+
+/* The beam: a white-gold head racing ahead of the gold trail it lays. */
+.graph-beam {
+  fill: none;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.graph-beam--trail {
+  stroke: var(--rarity-gold);
+  stroke-width: 5;
+  filter: drop-shadow(0 0 6px var(--rarity-gold-bright));
+}
+
+.graph-beam--head {
+  stroke: var(--rarity-gold-shine);
+  stroke-width: 11;
+  filter: drop-shadow(0 0 14px var(--rarity-gold-bright));
+}
+
+/* A connection that has paid out: gold, solid, glowing, until the
+   recommendation is followed and all its lines turn plain purple. */
+.graph-link.graph-link--gold {
+  stroke: var(--rarity-gold);
+  stroke-width: 4;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 6px var(--rarity-gold-bright));
+}
+
+/* Struck: the recommendation jumps and lights up gold for a moment. */
+.graph-node--hit .graph-node__circle {
+  animation: graph-hit 0.45s ease-out;
+}
+
+@keyframes graph-hit {
+  0% { transform: scale(1); filter: none; }
+  35% { transform: scale(1.22); filter: brightness(1.5) drop-shadow(0 0 18px var(--rarity-gold-bright)); }
+  100% { transform: scale(1); filter: none; }
+}
+
+/* The stash of coins above it, counting up. */
+.graph-stash {
+  pointer-events: none;
+}
+
+.graph-stash__inner {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.graph-stash rect {
+  fill: color-mix(in srgb, var(--rarity-gold) 18%, var(--color-black));
+  stroke: var(--rarity-gold);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--rarity-gold-bright) 45%, transparent));
+}
+
+.graph-stash__coin {
+  color: var(--coin-rim);
+}
+
+.graph-stash text {
+  fill: var(--rarity-gold-bright);
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The bang: rings of gold light bursting out. */
+.graph-shockwave {
+  fill: none;
+  stroke: var(--rarity-gold-bright);
+  filter: drop-shadow(0 0 12px var(--rarity-gold-bright));
+  pointer-events: none;
+}
+
+/* Followed at last: it grows to a followed artist's size and turns purple. */
+.graph-node--welcomed .graph-node__circle {
+  transition: r 0.5s ease, stroke 0.5s ease, transform 0.15s ease;
+}
+
+.graph-node--welcomed .graph-node__label {
+  transition: fill 0.5s ease;
+}
+
+.graph-followed-button {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-node--gold .graph-node__circle,
+  .graph-gold-ring,
+  .graph-node--hit .graph-node__circle {
+    animation: none;
+  }
+}
+
 /* The badge is a link into Concert History, not part of the draggable node. */
 .graph-badge {
   cursor: pointer;
@@ -3085,6 +3211,8 @@ textarea.text-input {
 }
 
 .track-option__add {
+  display: grid;
+  place-items: center;
   flex: none;
   width: 44px;
   height: 44px;
@@ -3505,13 +3633,15 @@ textarea.text-input {
 }
 
 @media (max-width: 600px) {
-  /* Its own full-width row under the button on a phone. */
+  /* Its own full-width row under the button on a phone - the filter tabs
+     first, the field a full-width row below them, as on the concerts page. */
   .release-search-wrap {
     flex-basis: 100%;
     margin-left: 0;
   }
 
   .release-search {
+    order: 1;
     width: 100%;
   }
 }
@@ -3869,6 +3999,17 @@ textarea.text-input {
      strip around it. */
   min-height: 10rem;
   padding: 1.125rem 1rem 1.25rem;
+}
+
+/* What the last check found (discogs.js): the concert cards' "new" look -
+   the accent border and a tinted body - and the same "New" tag
+   (.concert-card__tag). Hovered, the record's own glow takes the border. */
+.release-card--new:not(.release-card--playing) {
+  border-color: var(--color-primary);
+}
+
+.release-card--new .release-card__body {
+  background-color: var(--color-surface-new);
 }
 
 /* The record's pattern behind the card's text (vinyl.js backdrop()),
@@ -4556,6 +4697,11 @@ button.turntable__power:focus-visible {
 }
 
 .turntable__power-icon--on {
+  /* The unlit symbol's 55%, of the button itself: its light reaches 1px
+     past the button all round (inset: -1px), and 55% of that drew the lit
+     symbol a pixel bigger, so it seemed to shift as it came on or went off. */
+  width: calc((100% - 2px) * 0.55);
+  height: calc((100% - 2px) * 0.55);
   color: var(--color-purple-50);
   filter: drop-shadow(0 0 2px var(--color-purple-300)) drop-shadow(0 0 5px var(--color-purple-300));
 }
@@ -4666,7 +4812,8 @@ button.turntable__power:focus-visible {
   /* Ends just inside the headshell's top, so the two read as one piece. */
   bottom: 18%;
   left: 50%;
-  width: 3px;
+  /* Grows with the turntable, from 3px on the small ones. */
+  width: max(3px, 9%);
   translate: -50% 0;
   border-radius: 2px;
   background: linear-gradient(90deg, var(--vinyl-grey), var(--vinyl-silver), var(--vinyl-grey));
@@ -4689,6 +4836,202 @@ button.turntable__power:focus-visible {
   box-shadow:
     0 0 6px var(--color-purple-300),
     0 0 12px var(--color-purple-300);
+}
+
+/* ---- Vinyl player styles (the Store): the Collection's record player
+   (:root[data-player-style], wallet.js), and the Store's preview of it
+   (.player-preview). The Album Suggester's turntable keeps its own look.
+   Gold: the Gold Navbar's dark gold plate for the plinth, edged in gold,
+   glowing, with the gold shine sweeping across it; a polished gold
+   headshell; and the three buttons ringed in gold, lit in gold. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__plinth {
+  /* Edged like the Gold Navbar's items: its turning gold frame. */
+  border: 2px solid transparent;
+  background:
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--rarity-gold) 24%, var(--color-black)),
+      color-mix(in srgb, var(--rarity-gold-deep) 18%, var(--color-black)) 55%,
+      color-mix(in srgb, var(--rarity-gold) 14%, var(--color-black))) padding-box,
+    conic-gradient(from var(--name-angle),
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 18%,
+      var(--rarity-gold-shine) 25%,
+      var(--rarity-gold) 32%,
+      var(--rarity-gold-deep) 50%,
+      var(--rarity-gold) 68%,
+      var(--rarity-gold-shine) 75%,
+      var(--rarity-gold) 82%,
+      var(--rarity-gold-deep)) border-box;
+  animation: name-border-turn 2.4s linear infinite;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--rarity-gold-shine) 22%, transparent),
+    0 10px 30px color-mix(in srgb, var(--color-black) 60%, transparent),
+    0 0 26px color-mix(in srgb, var(--rarity-gold-bright) 22%, transparent);
+}
+
+/* The Gold Navbar's sweep, over the plate but under everything on it. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__plinth::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg,
+      transparent 44%,
+      color-mix(in srgb, var(--rarity-gold-shine) 40%, transparent) 50%,
+      transparent 56%)
+    no-repeat;
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: navbar-gold-sweep 4.5s ease-in-out infinite;
+}
+
+/* The power and track buttons, like the Gold Navbar's buttons: a gold ring
+   round a dark gold plate. Hovered, they get the navbar's hover - its
+   turning gold frame, and its band of light sweeping across (::after; the
+   track buttons' ::before is their bigger touch target). On - the power
+   switched on, a track button that can be used - they wear the navbar's
+   current page: the turning frame on a deeper plate, no glow behind it.
+   The ring is the frame's width throughout, so nothing moves as it
+   changes. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) :is(.turntable__power, .turntable__skip) {
+  --player-gold-fill: color-mix(in srgb, var(--rarity-gold) 22%, var(--color-black));
+  border: 2px solid color-mix(in srgb, var(--rarity-gold) 75%, transparent);
+  background: radial-gradient(circle at 40% 35%,
+    color-mix(in srgb, var(--rarity-gold) 42%, var(--color-black)),
+    color-mix(in srgb, var(--rarity-gold-deep) 22%, var(--color-black)));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--rarity-gold-shine) 22%, transparent),
+    0 2px 5px color-mix(in srgb, var(--color-black) 60%, transparent);
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) :is(.turntable__power--on, .turntable__skip:not(:disabled)),
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) :is(button.turntable__power, .turntable__skip:not(:disabled)):hover {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--player-gold-fill), var(--player-gold-fill)) padding-box,
+    conic-gradient(from var(--name-angle),
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 18%,
+      var(--rarity-gold-shine) 25%,
+      var(--rarity-gold) 32%,
+      var(--rarity-gold-deep) 50%,
+      var(--rarity-gold) 68%,
+      var(--rarity-gold-shine) 75%,
+      var(--rarity-gold) 82%,
+      var(--rarity-gold-deep)) border-box;
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--color-black) 60%, transparent);
+  animation: name-border-turn 2.4s linear infinite;
+  /* The frame and the light instead of turning brighter. */
+  filter: none;
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) :is(.turntable__power--on, .turntable__skip:not(:disabled)) {
+  --player-gold-fill: color-mix(in srgb, var(--rarity-gold) 26%, var(--color-black));
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) :is(button.turntable__power--on, .turntable__skip:not(:disabled)):hover {
+  --player-gold-fill: color-mix(in srgb, var(--rarity-gold) 36%, var(--color-black));
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) :is(.turntable__skip:not(:disabled)) {
+  color: var(--rarity-gold-shine);
+}
+
+/* The frame is the lit ring now: no glow ring of its own over it. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__power-on {
+  box-shadow: none;
+}
+
+/* The navbar's band of light, parked off to the side until hovered. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) :is(.turntable__power, .turntable__skip)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 50%;
+  opacity: 0;
+  background: linear-gradient(115deg,
+      transparent 35%,
+      color-mix(in srgb, var(--rarity-gold-shine) 45%, transparent) 50%,
+      transparent 65%)
+    no-repeat;
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  :is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) :is(button.turntable__power, .turntable__skip:not(:disabled)):hover::after {
+    opacity: 1;
+    animation: gold-shine 1.8s ease-in-out infinite;
+  }
+}
+
+/* In the Store's little preview, a 2px ring would swamp the buttons. */
+.player-preview[data-player-style="gold"] :is(.turntable__power, .turntable__skip) {
+  border-width: 1px;
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__power-icon--on {
+  color: var(--rarity-gold-shine);
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) :is(.turntable__power-icon--on, .turntable__skip:not(:disabled) .turntable__skip-icon) {
+  filter: drop-shadow(0 0 2px var(--rarity-gold-bright)) drop-shadow(0 0 5px var(--rarity-gold-bright));
+}
+
+/* The headshell in polished gold, glowing gold. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__head {
+  background: linear-gradient(160deg,
+    var(--rarity-gold-shine),
+    var(--rarity-gold-bright) 30%,
+    var(--rarity-gold) 60%,
+    var(--rarity-gold-deep));
+  box-shadow:
+    0 0 6px var(--rarity-gold-bright),
+    0 0 12px color-mix(in srgb, var(--rarity-gold) 70%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) .turntable__plinth,
+  :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) .turntable__plinth::before,
+  :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) :is(.turntable__power, .turntable__skip),
+  :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) :is(.turntable__power, .turntable__skip)::after {
+    animation: none !important;
+  }
+}
+
+/* The Store's preview: a small turntable, switched on, its needle on the
+   record - a picture, not a player. Its own stacking context, so the
+   turntable's z-index stays inside it, under the card's "Equipped" tag. */
+.player-preview {
+  --reel-cover: 100px;
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 132px;
+}
+
+
+.player-preview .turntable {
+  background: none;
+}
+
+.player-preview .turntable__skip {
+  pointer-events: none;
+  cursor: default;
+}
+
+.player-preview .turntable__power-on {
+  opacity: 1;
+}
+
+/* ARM_PLAY_DEG in turntable.js. */
+.player-preview .turntable__arm {
+  rotate: 35deg;
 }
 
 /* The flourish when the reel stops: a screen-wide flash of light and a burst
@@ -5341,6 +5684,15 @@ button.turntable__power:focus-visible {
   color: var(--coin-rim);
 }
 
+/* The check mark (#check-icon in the navbar's sprite): as big as the text
+   around it, in its color. */
+.check-icon {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  vertical-align: -0.125em;
+}
+
 /* The balance: next to the Store tab's label, and on its own in the navbar
    on phones. */
 .coin-balance {
@@ -5905,6 +6257,7 @@ button.turntable__power:focus-visible {
   display: inline;
 }
 
+.store-item--locked .store-item__preview > .player-preview,
 .store-item--locked .store-item__preview > .navbar-preview {
   filter: brightness(0.5) saturate(0.45);
 }
@@ -6181,10 +6534,20 @@ button.turntable__power:focus-visible {
       0 10px 28px color-mix(in srgb, var(--color-black) 50%, transparent),
       0 0 26px color-mix(in srgb, var(--color-accent) 40%, transparent);
   }
+
+  /* The record player's card only lifts: grown by 1%, its little turntable
+     was drawn again at a size between pixels, and the power button's ring
+     and symbol snapped apart - it visibly jumped. A whole-pixel lift draws
+     it just as it was. (Its own layer would have kept it still, but made
+     the record sometimes come in late as the page loaded.) */
+  .store-item:not(.store-item--short):has(.player-preview):hover {
+    transform: translateY(-3px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .store-item:not(.store-item--short):hover {
+  .store-item:not(.store-item--short):hover,
+  .store-item:not(.store-item--short):has(.player-preview):hover {
     transform: none;
   }
 }
@@ -6508,6 +6871,15 @@ button.turntable__power:focus-visible {
   margin-top: 1rem;
 }
 
+/* Where the exclusive's reveal keeps its X (.wheel-reveal__back), above
+   the light and the record. */
+.unbox__close {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  z-index: 2;
+}
+
 @media (max-width: 480px) {
   .unbox__stage {
     height: 280px;
@@ -6666,7 +7038,8 @@ button.turntable__power:focus-visible {
 }
 
 @media (max-width: 600px) {
-  /* Its own full-width row on a phone, the sort switch on the right below. */
+  /* Its own full-width row on a phone, the sort switch and the filter tabs
+     on the right below. */
   .collection-search {
     width: 100%;
   }
@@ -7105,6 +7478,17 @@ button.turntable__power:focus-visible {
   }
 }
 
+/* Scrolled out of view (vinyl.js pauseOffscreen): a card's or a record's
+   animations wait there, and pick up in step once it's back. */
+.vinyl-offscreen,
+.vinyl-offscreen::before,
+.vinyl-offscreen::after,
+.vinyl-offscreen *,
+.vinyl-offscreen *::before,
+.vinyl-offscreen *::after {
+  animation-play-state: paused !important;
+}
+
 /* ------------------------------------------------------------ daily spin */
 
 /* The wheel of fortune behind the navbar's wheel icon (daily-wheel.js). */
@@ -7169,7 +7553,8 @@ button.turntable__power:focus-visible {
 }
 
 .wheel .wheel__close,
-.wheel-showcase .wheel__close {
+.wheel-showcase .wheel__close,
+.unbox .wheel__close {
   width: 36px;
   height: 36px;
   min-width: 0;
@@ -7221,13 +7606,15 @@ button.turntable__power:focus-visible {
 }
 
 /* On the wheel's glowing purple, the gift, the ? and the X sit on a darker purple. */
-.wheel .wheel__close {
+.wheel .wheel__close,
+.unbox .wheel__close {
   border-color: var(--color-purple-800);
   background-color: var(--color-purple-900);
   color: var(--color-text);
 }
 
-.wheel .wheel__close:hover:not(:disabled):not([aria-disabled='true']) {
+.wheel .wheel__close:hover:not(:disabled):not([aria-disabled='true']),
+.unbox .wheel__close:hover:not(:disabled):not([aria-disabled='true']) {
   border-color: var(--color-purple-700);
   background-color: var(--color-purple-800);
 }
@@ -8083,6 +8470,11 @@ button.turntable__power:focus-visible {
 }
 
 .wheel-showcase__list {
+  /* Its own glow, fixed: the dialog's changes with every record picked,
+     and would restyle every record in the list each time. The picked item
+     is given the record's (daily-wheel.js). */
+  --record-glow: var(--color-accent);
+  --record-accent: var(--color-accent);
   flex: 1 1 auto;
   /* At least a row of records in view, however tall the stage above. */
   min-height: 8rem;
@@ -8134,6 +8526,10 @@ button.turntable__power:focus-visible {
   width: 100%;
   max-width: 92px;
   aspect-ratio: 1;
+  /* Records scrolled out of the list's view aren't styled or painted -
+     nor are the ones drawn there while the page is idle, until they're
+     scrolled to. Its size never depends on the record, so nothing moves. */
+  content-visibility: auto;
 }
 
 /* Not won yet: there to see, a shade dimmer. */
@@ -8150,17 +8546,18 @@ button.turntable__power:focus-visible {
 
 .wheel-showcase__check {
   position: absolute;
-  top: 0.375rem;
-  right: 0.375rem;
+  top: 0.25rem;
+  right: 0.25rem;
   display: grid;
   place-items: center;
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1.375rem;
+  height: 1.375rem;
   border-radius: 50%;
   background-color: var(--color-recommended);
   color: var(--color-black);
-  font-size: 0.75rem;
-  font-weight: 800;
+  font-size: 0.875rem;
+  /* A dark ring, so it stands clear of whatever record it sits on. */
+  box-shadow: 0 0 0 2px var(--color-surface), 0 2px 6px var(--color-black);
 }
 
 @media (max-width: 600px) {

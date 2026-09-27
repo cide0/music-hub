@@ -131,6 +131,21 @@ window.MusicHub = window.MusicHub || {};
     sfx.play(SOUNDS, name, delay, level);
   }
 
+  /**
+   * The waiting box's hop, for a box shaken elsewhere - the Store's offer,
+   * jiggling while Unbox is hovered: something rattling inside, then the
+   * landing `landAt` s later. Only once the page has had a click or a key:
+   * before that the browser holds the sound back, and would play every
+   * rattle held back at once when it's finally let go.
+   */
+  function rattle(landAt) {
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+      return;
+    }
+    sound('rattle', 0.08, 0.7);
+    sound('thud', landAt, 0.45);
+  }
+
   /* -------------------------------------------------------- album picker */
 
   // What the picker's search box holds, as typed.
@@ -295,6 +310,7 @@ window.MusicHub = window.MusicHub || {};
     els.stage.className = 'unbox__stage';
     els.record.textContent = '';
     els.result.hidden = true;
+    els.resultClose.hidden = true;
     els.hint.hidden = true;
     els.box.disabled = true;
     openRequest = null;
@@ -367,9 +383,10 @@ window.MusicHub = window.MusicHub || {};
           els.stage.classList.add('unbox__stage--revealed');
           MusicHub.vinyl.setPlaying(record, true);
           els.result.hidden = false;
+          els.resultClose.hidden = false;
           unboxing = false;
           changed();
-          els.resultClose.focus();
+          els.resultCollection.focus();
         });
       });
     });
@@ -763,6 +780,7 @@ window.MusicHub = window.MusicHub || {};
     els.resultName = document.getElementById('unbox-name');
     els.resultFamily = document.getElementById('unbox-family');
     els.resultClose = document.getElementById('unbox-close');
+    els.resultCollection = document.getElementById('unbox-collection');
     els.resultAlbum = document.getElementById('unbox-album');
     els.picker = document.getElementById('album-picker');
     els.pickerHint = document.getElementById('album-picker-hint');
@@ -822,6 +840,7 @@ window.MusicHub = window.MusicHub || {};
     PRICE: VINYL_PRICE,
     start: start,
     pickAlbum: pickAlbum,
+    rattle: rattle,
     free: free,
     affordable: affordable,
     busy: function () {

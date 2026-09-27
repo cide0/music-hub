@@ -29,6 +29,12 @@
 <dialog class="modal unbox" id="unbox-dialog" aria-labelledby="unbox-name">
   <!-- Across the whole dialog, so the light reaches behind the text too. -->
   <span class="unbox__rays" id="unbox-rays" aria-hidden="true"></span>
+  <!-- Once the record's out: the Daily Spin's X, in the top-right corner. -->
+  <button type="button" class="icon-button wheel__close unbox__close" id="unbox-close" aria-label="Close" title="Close" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  </button>
   <div class="unbox__stage" id="unbox-stage">
     <div class="unbox__record vinyl-stage" id="unbox-record"></div>
     <!-- Hops until it's clicked; only then does it open (unbox.js). -->
@@ -47,8 +53,7 @@
       <p class="unbox__album" id="unbox-album"></p>
       <p class="unbox__family" id="unbox-family"></p>
       <div class="modal__actions unbox__actions">
-        <a class="button button--primary" href="/collection">View collection</a>
-        <button type="button" class="button button--primary" id="unbox-close">Close</button>
+        <a class="button button--primary" id="unbox-collection" href="/collection">View collection</a>
       </div>
     </div>
   </div>

@@ -46,11 +46,11 @@ window.MusicHub = window.MusicHub || {};
     clearButton.addEventListener('click', function () {
       MusicHub.confirmDialog.open({
         title: 'Clear all saved data?',
-        text: 'Every page\u2019s saved data is removed from this browser: the concert list, '
-          + 'the artist graph, your concert history, the Discogs releases, your album history '
-          + 'and these settings. Your coins, bought Store items and vinyl collection are never '
-          + 'removed, and your Spotify and Google logins stay. Export your data first if you '
-          + 'want to keep a copy. This cannot be undone.',
+        text: 'All of Music Hub\u2019s saved data is removed from this browser: the concert list, '
+          + 'the artist graph, your concert history, the Discogs releases, your album history, '
+          + 'these settings - and your coins, bought Store items, vinyl collection and Daily Spin '
+          + 'too. Only your Spotify and Google logins stay. Export your data first if you want '
+          + 'to keep a copy. This cannot be undone.',
         action: 'Clear all data',
       }).then(function (confirmed) {
         if (confirmed) {

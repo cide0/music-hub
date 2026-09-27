@@ -68,6 +68,8 @@ public/js/           storage.js, navbar.js, auth.js, followed-artists.js,
                      vinyl.js (Discogs format -> CSS-drawn record),
                      vinyl-catalog.js (the Store's mystery vinyls + the
                      wheel exclusives), sfx.js (synthesised sounds),
+                     tear.js (a cover or card torn in two, with its
+                     ripping sound: Albums + Collection),
                      unbox.js (album picker + Mystery Vinyl unboxing, every
                      page), daily-wheel.js (the navbar's Daily Spin, every
                      page; its state lives in the `store` key's `wheel`),

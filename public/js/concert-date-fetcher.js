@@ -13,6 +13,9 @@ window.MusicHub = window.MusicHub || {};
   var REQUEST_DELAY_MS = 220;
   var TIMEZONE = 'Europe/Berlin';
   var DEFAULT_DURATION_HOURS = 3;
+  // Coins for going to a concert: paid the first time it's marked as
+  // attended, and never again for that concert (wallet.js earnOnce).
+  var ATTEND_COINS = 1000;
 
   var els = {};
   var state = null;
@@ -658,8 +661,16 @@ window.MusicHub = window.MusicHub || {};
     button.disabled = false;
   }
 
+  /** Going to `concert`: its coins fly out of `card` - the first time only. */
+  function rewardAttending(concert, card) {
+    MusicHub.wallet.earnOnce('concert:' + concert.id, ATTEND_COINS, { from: card });
+  }
+
   function markAttending(button, attending) {
-    button.textContent = attending ? "I'm attending ✓" : "I'm attending";
+    button.textContent = "I'm attending";
+    if (attending) {
+      button.appendChild(MusicHub.wallet.checkSvg());
+    }
     button.classList.toggle('toggle-button--on', attending);
     button.setAttribute('aria-pressed', attending ? 'true' : 'false');
   }
@@ -780,6 +791,7 @@ window.MusicHub = window.MusicHub || {};
         markAttending(attendingButton, true);
         card.classList.add('concert-card--attending');
         updateCountdown();
+        rewardAttending(concert, card);
       }).catch(function (err) {
         error.textContent = "Couldn't add to calendar: " + err.message;
         error.hidden = false;
@@ -808,6 +820,9 @@ window.MusicHub = window.MusicHub || {};
       markAttending(attendingButton, attending);
       card.classList.toggle('concert-card--attending', attending);
       updateCountdown();
+      if (attending) {
+        rewardAttending(concert, card);
+      }
 
       // Un-marking a concert while filtering by "attending" should drop it
       // out of the list right away.

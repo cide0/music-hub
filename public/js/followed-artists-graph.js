@@ -25,6 +25,8 @@ window.MusicHub = window.MusicHub || {};
   var view = null;
   // Position within the recommended artists while stepping through them.
   var recommendIndex = -1;
+  // While a just-followed recommendation's welcome plays (celebrateFollow).
+  var celebrating = false;
   // Show only artists that have concert folders in Concert History.
   var concertsOnly = false;
   // Draw genre outlines around the clusters.
@@ -112,6 +114,9 @@ window.MusicHub = window.MusicHub || {};
           spotifyUrl: artist.spotifyUrl || null,
           genres: Array.isArray(artist.genres) ? artist.genres : [],
           similarArtistNames: Array.isArray(artist.similarArtistNames) ? artist.similarArtistNames : [],
+          // Followed from the recommendations: its own similar artists are
+          // fetched with the next update (runGeneration).
+          similarPending: !!artist.similarPending,
         };
       }),
       edges: Array.isArray(raw.edges) ? raw.edges.filter(function (edge) {
@@ -724,7 +729,7 @@ window.MusicHub = window.MusicHub || {};
         var tagsKnown = previous && previous.genres && previous.genres.length;
         return {
           artist: artist,
-          needSimilar: mode === 'update' ? !previous : true,
+          needSimilar: mode === 'update' ? !previous || previous.similarPending : true,
           needTags: !tagsKnown,
         };
       }).filter(function (job) {
@@ -1662,6 +1667,8 @@ window.MusicHub = window.MusicHub || {};
   function updateStepper() {
     var nodes = recommendedNodes();
     els.stepper.hidden = !(showRecommended && nodes.length);
+    // Only with a recommended artist picked in the stepper to say it of.
+    els.followedButton.hidden = els.stepper.hidden || recommendIndex < 0 || !nodes[recommendIndex];
     if (els.stepper.hidden) {
       return;
     }
@@ -1687,12 +1694,414 @@ window.MusicHub = window.MusicHub || {};
   /** Focuses the next (or previous) recommended artist, wrapping around. */
   function stepRecommended(delta) {
     var nodes = recommendedNodes();
-    if (!nodes.length) {
+    if (!nodes.length || celebrating) {
       return;
     }
 
     recommendIndex = ((recommendIndex + delta) % nodes.length + nodes.length) % nodes.length;
     focusNode(nodes[recommendIndex]);
+    updateStepper();
+  }
+
+  /* ------------------------------------- following a recommended artist */
+
+  /*
+   * "Followed": every followed artist connected to the
+   * recommendation, one after another, is zoomed
+   * onto, flashes gold and shoots a gold beam along the connection - the
+   * view flying with it - that strikes the recommendation, adding
+   * COINS_PER_CONNECTION to a stash above it. Then the recommendation goes
+   * off with a bang, the stash flies into the wallet, and only then does it
+   * become a followed artist like the rest: purple, its dashed green
+   * connections plain purple lines.
+   */
+  var COINS_PER_CONNECTION = 100;
+  // Each connection's stages (ms), before the pace picks up.
+  var WELCOME_TIMES = { zoom: 650, flash: 500, beam: 900, rest: 280 };
+  var WELCOME_ZOOM = 1.4;
+  var FINALE_ZOOM = 1.8;
+
+  function reducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  var WELCOME_SOUNDS = {
+    // The followed artist flashing gold: a short run of little bells.
+    shimmer: function (ctx, at) {
+      MusicHub.sfx.chime(ctx, at, [1319, 1568, 1976], 0.035);
+    },
+    // The beam leaving: a rising whoosh as long as its flight.
+    zap: function (ctx, at, seconds) {
+      MusicHub.sfx.noise(ctx, at, seconds, 'bandpass', 700, 1.2, 0.18, seconds * 0.4, 4200);
+      MusicHub.sfx.tone(ctx, at, 420, 1500, 0.05, seconds, 'triangle');
+    },
+    // The beam striking the recommendation.
+    hit: function (ctx, at) {
+      MusicHub.sfx.tone(ctx, at, 980, 620, 0.14, 0.3, 'triangle');
+      MusicHub.sfx.noise(ctx, at, 0.05, 'highpass', 3000, 0.8, 0.2, 0.002);
+    },
+    // Turning into a followed artist: a warm swell rising into a soft,
+    // settled chord - arrived, rather than another win.
+    welcome: function (ctx, at) {
+      MusicHub.sfx.tone(ctx, at, 196, 392, 0.14, 0.7, 'triangle');
+      MusicHub.sfx.noise(ctx, at, 0.5, 'bandpass', 500, 1, 0.08, 0.35, 1800);
+      [392, 494, 587, 784].forEach(function (note, index) {
+        MusicHub.sfx.tone(ctx, at + 0.18 + index * 0.06, note, note, 0.07, 1.2, 'sine');
+      });
+    },
+    // The stash bursting open: a deep boom, a crack and a shower of bells.
+    bang: function (ctx, at) {
+      MusicHub.sfx.tone(ctx, at, 75, 30, 0.7, 1.3);
+      MusicHub.sfx.noise(ctx, at, 0.8, 'lowpass', 900, 0.7, 0.5, 0.003);
+      MusicHub.sfx.noise(ctx, at, 1.2, 'highpass', 5000, 0.7, 0.12, 0.01);
+      MusicHub.sfx.chime(ctx, at + 0.2, [1047, 1319, 1568, 2093, 2637], 0.05);
+    },
+  };
+
+  function welcomeSound(name, level) {
+    MusicHub.sfx.play(WELCOME_SOUNDS, name, 0, level);
+  }
+
+  function wait(ms) {
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  /**
+   * Taken at the user's word - no asking Spotify. Not really followed, the
+   * artist simply drops out again with the next update, as unfollowed ones do.
+   */
+  function followCurrentRecommendation() {
+    var node = recommendedNodes()[recommendIndex];
+    if (!node || celebrating) {
+      return;
+    }
+    els.followedButton.disabled = true;
+    celebrateFollow(node).catch(function (err) {
+      console.warn('Could not welcome ' + node.name, err);
+    }).then(function () {
+      els.followedButton.disabled = false;
+      updateStepper();
+    });
+  }
+
+  /** The followed artists joined to `node` by a dashed connection, as drawn. */
+  function connectedFollowed(node) {
+    var byId = {};
+    view.nodes.forEach(function (candidate) {
+      byId[candidate.id] = candidate;
+    });
+    var sources = [];
+    view.links.forEach(function (link) {
+      if (!link.dashed) {
+        return;
+      }
+      var ends = linkEnds(link);
+      var other = ends[0] === node.id ? ends[1] : ends[1] === node.id ? ends[0] : null;
+      if (other && byId[other] && byId[other].followed && sources.indexOf(byId[other]) === -1) {
+        sources.push(byId[other]);
+      }
+    });
+    return sources;
+  }
+
+  /** The view moved to put `node` in the middle at `scale`; resolves when it's there. */
+  function flyTo(node, ms, scale) {
+    var width = els.canvas.clientWidth || 1200;
+    var height = els.canvas.clientHeight || 700;
+    var to = window.d3.zoomIdentity.translate(width / 2, height / 2).scale(scale).translate(-node.x, -node.y);
+    if (!ms) {
+      view.svg.call(view.zoom.transform, to);
+      return Promise.resolve();
+    }
+    return view.svg.transition().duration(ms).ease(window.d3.easeCubicInOut)
+      .call(view.zoom.transform, to).end().catch(function () {});
+  }
+
+  function nodeGroupOf(node) {
+    return selection.node.filter(function (d) {
+      return d.id === node.id;
+    });
+  }
+
+  /** The gradient the gold rings are stroked with - the navbar's gold. */
+  function ensureGoldDefs() {
+    if (!view.defs.select('#graph-gold').empty()) {
+      return;
+    }
+    var gold = view.defs.append('linearGradient').attr('id', 'graph-gold')
+      .attr('x1', '0').attr('y1', '0').attr('x2', '1').attr('y2', '1');
+    [[0, '--rarity-gold-deep'], [0.25, '--rarity-gold-shine'], [0.4, '--rarity-gold'],
+      [0.6, '--rarity-gold-deep'], [0.75, '--rarity-gold-shine'], [1, '--rarity-gold']].forEach(function (stop) {
+      gold.append('stop').attr('offset', stop[0]).style('stop-color', 'var(' + stop[1] + ')');
+    });
+  }
+
+  /** Flashes `node` gold: its turning gold ring, glow and name. Returns what takes it off again. */
+  function goldFlash(node) {
+    ensureGoldDefs();
+    var group = nodeGroupOf(node);
+    group.classed('graph-node--gold', true);
+    var ring = group.insert('circle', '.graph-node__label')
+      .attr('class', 'graph-gold-ring')
+      .attr('r', nodeRadius(node) + 9);
+    return function () {
+      group.classed('graph-node--gold', false);
+      ring.remove();
+    };
+  }
+
+  /** Where a beam leaves `from` and meets `to`: their circles' edges. */
+  function beamEnds(from, to) {
+    var dx = to.x - from.x;
+    var dy = to.y - from.y;
+    var length = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / length;
+    var uy = dy / length;
+    return {
+      x1: from.x + ux * nodeRadius(from), y1: from.y + uy * nodeRadius(from),
+      x2: to.x - ux * nodeRadius(to), y2: to.y - uy * nodeRadius(to),
+      length: Math.max(1, length - nodeRadius(from) - nodeRadius(to)),
+    };
+  }
+
+  /**
+   * A gold beam shot along the connection from `from` to `to` over `ms`:
+   * a bright head racing ahead of the trail it lays down, which fades once
+   * it strikes. Resolves as it strikes.
+   */
+  function shootBeam(from, to, ms) {
+    var ends = beamEnds(from, to);
+    var HEAD = Math.min(70, ends.length / 3);
+    function line(className) {
+      return view.effectGroup.append('line').attr('class', 'graph-beam ' + className)
+        .attr('x1', ends.x1).attr('y1', ends.y1).attr('x2', ends.x2).attr('y2', ends.y2);
+    }
+    var trail = line('graph-beam--trail');
+    var head = line('graph-beam--head');
+    var easing = 'cubic-bezier(0.65, 0, 0.35, 1)';
+    trail.style('stroke-dasharray', ends.length + ' ' + ends.length);
+    head.style('stroke-dasharray', HEAD + ' ' + (ends.length + HEAD));
+    var drawn = trail.node().animate([
+      { strokeDashoffset: ends.length }, { strokeDashoffset: 0 },
+    ], { duration: ms, easing: easing, fill: 'forwards' });
+    head.node().animate([
+      { strokeDashoffset: HEAD }, { strokeDashoffset: -ends.length },
+    ], { duration: ms, easing: easing, fill: 'forwards' });
+    return drawn.finished.then(function () {
+      head.remove();
+      trail.node().animate([{ opacity: 1 }, { opacity: 0 }], { duration: 450, fill: 'forwards' })
+        .finished.then(function () {
+          trail.remove();
+        });
+    });
+  }
+
+  /** The stash of coins above `node`, counting up as the beams strike. */
+  function coinStash(node) {
+    var stash = view.overlayGroup.append('g')
+      .attr('class', 'graph-stash')
+      .attr('transform', 'translate(' + node.x + ', ' + (node.y - nodeRadius(node) - 38) + ')');
+    var inner = stash.append('g').attr('class', 'graph-stash__inner');
+    inner.append('rect').attr('x', -48).attr('y', -18).attr('width', 96).attr('height', 36).attr('rx', 18);
+    inner.append('use').attr('href', '#coin-icon').attr('x', -38).attr('y', -12).attr('width', 24).attr('height', 24)
+      .attr('class', 'graph-stash__coin');
+    var text = inner.append('text').attr('x', 8).attr('dy', '0.36em').attr('text-anchor', 'middle').text('0');
+    return {
+      node: stash.node(),
+      set: function (coins) {
+        text.text(MusicHub.wallet.format(coins));
+        if (!reducedMotion()) {
+          inner.node().animate([{ scale: '1' }, { scale: '1.3' }, { scale: '1' }], { duration: 320, easing: 'ease-out' });
+        }
+      },
+      remove: function () {
+        stash.remove();
+      },
+    };
+  }
+
+  /** Rings of light bursting out of `node`. */
+  function shockwave(node) {
+    [0, 140].forEach(function (delayMs) {
+      var ring = view.effectGroup.append('circle').attr('class', 'graph-shockwave')
+        .attr('cx', node.x).attr('cy', node.y).attr('r', nodeRadius(node));
+      ring.node().animate([
+        { r: nodeRadius(node) + 'px', opacity: 1, strokeWidth: '10px' },
+        { r: nodeRadius(node) * 6 + 'px', opacity: 0, strokeWidth: '2px' },
+      ], { duration: 900, delay: delayMs, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)', fill: 'both' })
+        .finished.then(function () {
+          ring.remove();
+        });
+    });
+  }
+
+  /** The drawn line joining `a` and `b`. */
+  function linkBetween(a, b) {
+    return selection.link.filter(function (link) {
+      var ends = linkEnds(link);
+      return (ends[0] === a.id && ends[1] === b.id) || (ends[0] === b.id && ends[1] === a.id);
+    });
+  }
+
+  /** One connection's turn: zoom onto it, the gold flash, the beam, the strike. */
+  function payOut(source, node, pace, still, stash, coins) {
+    var t = {};
+    Object.keys(WELCOME_TIMES).forEach(function (key) {
+      t[key] = WELCOME_TIMES[key] * pace;
+    });
+    var unflash = null;
+    return flyTo(source, still ? 0 : t.zoom, WELCOME_ZOOM).then(function () {
+      unflash = goldFlash(source);
+      welcomeSound('shimmer');
+      return wait(still ? 150 : t.flash);
+    }).then(function () {
+      if (still) {
+        return null;
+      }
+      welcomeSound('zap', t.beam / 1000);
+      // The view flies with the beam, which takes the same path and pace.
+      flyTo(node, t.beam, WELCOME_ZOOM);
+      return shootBeam(source, node, t.beam);
+    }).then(function () {
+      // Paid out: the connection stays gold, under the trail fading off it.
+      linkBetween(source, node).classed('graph-link--gold', true);
+      welcomeSound('hit');
+      MusicHub.wallet.clink(0.8);
+      var target = nodeGroupOf(node);
+      target.classed('graph-node--hit', false);
+      // Restarts the strike's pulse, however quickly the next one comes.
+      void target.node().getBoundingClientRect();
+      target.classed('graph-node--hit', true);
+      stash.set(coins);
+      unflash();
+      return wait(still ? 150 : t.rest);
+    });
+  }
+
+  /** Makes `node` a followed artist like the others - drawn, and stored. */
+  function becomeFollowed(node, sources) {
+    welcomeSound('welcome');
+    node.followed = true;
+    node.entering = false;
+    var group = nodeGroupOf(node);
+    group.classed('graph-node--recommended', false)
+      .classed('graph-node--entering', false)
+      .classed('graph-node--hit', false)
+      .classed('graph-node--welcomed', true);
+    group.select('title').text(node.name);
+    group.select('.graph-node__circle').attr('r', nodeRadius(node));
+    group.select('.graph-node__label').attr('y', nodeRadius(node) + 20);
+
+    view.links.forEach(function (link) {
+      var ends = linkEnds(link);
+      if (link.dashed && (ends[0] === node.id || ends[1] === node.id)) {
+        link.dashed = false;
+      }
+    });
+    // The gold ones too: now they're plain lines like any other.
+    selection.link.classed('graph-link--dashed', function (link) {
+      return link.dashed;
+    }).classed('graph-link--gold', false);
+    view.simulation.force('collide').radius(function (d) {
+      return nodeRadius(d) + 160;
+    });
+
+    // Out of the recommendations, into the graph.
+    var artist = recommended.nodes.filter(function (candidate) {
+      return candidate.spotifyArtistId === node.id;
+    })[0] || { spotifyArtistId: node.id, name: node.name, imageUrl: node.imageUrl, spotifyUrl: null };
+    recommended.nodes = recommended.nodes.filter(function (candidate) {
+      return candidate !== artist;
+    });
+    recommended.links = recommended.links.filter(function (link) {
+      return link.source !== node.id && link.target !== node.id;
+    });
+    graph.artists.push({
+      spotifyArtistId: node.id,
+      name: node.name,
+      imageUrl: node.imageUrl,
+      spotifyUrl: artist.spotifyUrl || null,
+      genres: [],
+      similarArtistNames: [],
+      similarPending: true,
+    });
+    sources.forEach(function (source) {
+      graph.edges.push([source.id, node.id]);
+    });
+    save();
+    renderControls();
+  }
+
+  function celebrateFollow(node) {
+    celebrating = true;
+    var still = reducedMotion();
+    // Nothing else to press, drag or zoom while it plays.
+    els.canvas.classList.add('graph-canvas--celebrating');
+    els.overlayLeft.inert = true;
+    els.overlayRight.inert = true;
+    focusNode(node);
+    // Held still so nothing moves out from under the view; set going again
+    // afterwards only if it hadn't settled yet - restarted, the whole graph
+    // would drift about round the grown node.
+    var settling = view.simulation.alpha() > view.simulation.alphaMin();
+    view.simulation.stop();
+
+    var sources = connectedFollowed(node);
+    var stash = coinStash(node);
+    var coins = 0;
+    var chain = wait(still ? 0 : 500);
+    sources.forEach(function (source, index) {
+      chain = chain.then(function () {
+        // The first few at full length, then quicker, so a long list flows.
+        var pace = Math.max(0.5, 1 - Math.max(0, index - 2) * 0.12);
+        coins += COINS_PER_CONNECTION;
+        return payOut(source, node, pace, still, stash, coins);
+      });
+    });
+
+    return chain.then(function () {
+      return flyTo(node, still ? 0 : 700, FINALE_ZOOM);
+    }).then(function () {
+      return wait(still ? 0 : 250);
+    }).then(function () {
+      welcomeSound('bang');
+      if (!still) {
+        shockwave(node);
+        var flash = goldFlash(node);
+        window.setTimeout(flash, 1100);
+      }
+      var landed = coins ? MusicHub.wallet.earn(coins, { from: stash.node }) : Promise.resolve();
+      stash.remove();
+      return landed;
+    }).then(function () {
+      becomeFollowed(node, sources);
+      showToast('Now following ' + node.name + (coins
+        ? ' — ' + sources.length + (sources.length === 1 ? ' connection' : ' connections')
+          + ' paid out ' + MusicHub.wallet.format(coins) + ' coins.'
+        : '.'));
+    }).then(function () {
+      finishCelebration(settling);
+    }, function (err) {
+      finishCelebration(settling);
+      throw err;
+    });
+  }
+
+  function finishCelebration(settling) {
+    celebrating = false;
+    els.canvas.classList.remove('graph-canvas--celebrating');
+    els.overlayLeft.inert = false;
+    els.overlayRight.inert = false;
+    if (view && settling) {
+      view.simulation.restart();
+    }
+    // The stepper stays where it was: on whoever is next in line.
+    var remaining = recommendedNodes();
+    if (recommendIndex >= remaining.length) {
+      recommendIndex = -1;
+    }
     updateStepper();
   }
 
@@ -1927,7 +2336,11 @@ window.MusicHub = window.MusicHub || {};
       defs: defs,
       hullGroup: root.append('g'),
       linkGroup: root.append('g'),
+      // Beams and shockwaves (celebrateFollow): over the lines, under the nodes.
+      effectGroup: root.append('g'),
       nodeGroup: root.append('g'),
+      // The coin stash, over everything.
+      overlayGroup: root.append('g'),
       simulation: simulation,
       nodes: [],
       links: [],
@@ -2435,6 +2848,8 @@ window.MusicHub = window.MusicHub || {};
     els.searchResults = document.getElementById('graph-search-results');
     els.stepper = document.getElementById('recommend-stepper');
     els.stepperLabel = document.getElementById('recommend-position');
+    els.followedButton = document.getElementById('recommend-followed');
+    els.followedButton.addEventListener('click', followCurrentRecommendation);
 
     graph = load();
 
@@ -2507,7 +2922,8 @@ window.MusicHub = window.MusicHub || {};
     });
 
     window.addEventListener('resize', function () {
-      if (graph.artists.length) {
+      // Not in the middle of a welcome: it would lose the nodes it's on.
+      if (graph.artists.length && !celebrating) {
         render();
       }
     });

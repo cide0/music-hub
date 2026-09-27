@@ -18,14 +18,15 @@
     root.classList.toggle('is-logged-out', !loggedIn);
 
     /*
-     * The styles bought in the Store - the profile pill's name style and
-     * the navbar's style - on the navbar from the first paint too. Must stay
+     * The styles bought in the Store - the profile pill's name style, the
+     * navbar's style and the Collection's record player's - from the first
+     * paint too. Must stay
      * in sync with STORE_KEY, STYLE_ATTRIBUTES and the owned ids in
      * public/js/wallet.js.
      */
     try {
       var store = JSON.parse(localStorage.getItem('store') || 'null');
-      var slots = { username: 'data-name-style', navbar: 'data-navbar-style' };
+      var slots = { username: 'data-name-style', navbar: 'data-navbar-style', player: 'data-player-style' };
       Object.keys(slots).forEach(function (slot) {
         var style = store && store.equipped && store.equipped[slot];
         if (style && Array.isArray(store.owned) && store.owned.indexOf(slot + ':' + style) !== -1) {

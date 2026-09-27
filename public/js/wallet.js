@@ -28,6 +28,9 @@ window.MusicHub = window.MusicHub || {};
   // At most this many clinks per shower; with more coins, not every one
   // clinks - the ear can't count them anyway, and each is dozens of nodes.
   var MAX_CLINKS = 30;
+  // Clinks closer together than this are spaced out to it: on top of each
+  // other they'd only sound like one coin stuttering.
+  var MIN_CLINK_GAP_MS = 25;
   // How much of a coin's flight is the burst out of where it was won.
   var BURST_SHARE = 0.28;
   var COUNT_DOWN_MS = 600;
@@ -81,6 +84,12 @@ window.MusicHub = window.MusicHub || {};
         return vinyl && typeof vinyl.format === 'string';
       }) : [],
       wheel: loadWheel(stored.wheel),
+      // What has paid out its coins once and never will again (earnOnce),
+      // e.g. "concert:<id>" - kept here, not with what it was for, so
+      // clearing that data doesn't make it pay again.
+      rewarded: Array.isArray(stored.rewarded) ? stored.rewarded.filter(function (key) {
+        return typeof key === 'string';
+      }) : [],
     };
   }
 
@@ -206,7 +215,7 @@ window.MusicHub = window.MusicHub || {};
 
   // Each Store slot's equipped style goes on <html> as this attribute.
   // Must stay in sync with the inline script in views/partials/head.ejs.
-  var STYLE_ATTRIBUTES = { username: 'data-name-style', navbar: 'data-navbar-style' };
+  var STYLE_ATTRIBUTES = { username: 'data-name-style', navbar: 'data-navbar-style', player: 'data-player-style' };
 
   /** The equipped styles on <html>, where the navbar's CSS picks them up. */
   function applyStyles() {
@@ -326,8 +335,8 @@ window.MusicHub = window.MusicHub || {};
     return coinBus;
   }
 
-  /** A sine that strikes and rings out: one mode of a ringing coin. */
-  function ring(ctx, at, frequency, peak, decay) {
+  /** A sine that strikes and rings out into `out`: one mode of a ringing coin. */
+  function ring(ctx, out, at, frequency, peak, decay) {
     var osc = ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.value = frequency;
@@ -335,7 +344,7 @@ window.MusicHub = window.MusicHub || {};
     gain.gain.setValueAtTime(0.0001, at);
     gain.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), at + 0.001);
     gain.gain.exponentialRampToValueAtTime(0.0001, at + decay);
-    osc.connect(gain).connect(coinOutput(ctx));
+    osc.connect(gain).connect(out);
     osc.start(at);
     osc.stop(at + decay + 0.02);
   }
@@ -343,7 +352,7 @@ window.MusicHub = window.MusicHub || {};
   var noise = null;
 
   /** The strike itself: a few milliseconds of hard, bright contact. */
-  function tick(ctx, at, peak) {
+  function tick(ctx, out, at, peak) {
     if (!noise) {
       noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.1), ctx.sampleRate);
       var data = noise.getChannelData(0);
@@ -359,7 +368,7 @@ window.MusicHub = window.MusicHub || {};
     var gain = ctx.createGain();
     gain.gain.setValueAtTime(peak, at);
     gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.006);
-    source.connect(filter).connect(gain).connect(coinOutput(ctx));
+    source.connect(filter).connect(gain).connect(out);
     source.start(at, Math.random() * 0.09);
     source.stop(at + 0.01);
   }
@@ -380,14 +389,14 @@ window.MusicHub = window.MusicHub || {};
   ];
 
   /** One coin struck once: `base` is its lowest mode, `loud` 0-1. */
-  function strike(ctx, at, base, loud) {
-    tick(ctx, at, 0.22 * loud);
+  function strike(ctx, out, at, base, loud) {
+    tick(ctx, out, at, 0.22 * loud);
     COIN_MODES.forEach(function (mode) {
       var frequency = base * mode[0];
       // The pair a few hertz apart, beating slightly differently every coin.
       var split = 1 + 0.003 + Math.random() * 0.005;
-      ring(ctx, at, frequency, mode[1] * loud, mode[2]);
-      ring(ctx, at, frequency * split, mode[1] * 0.8 * loud, mode[2] * 0.9);
+      ring(ctx, out, at, frequency, mode[1] * loud, mode[2]);
+      ring(ctx, out, at, frequency * split, mode[1] * 0.8 * loud, mode[2] * 0.9);
     });
   }
 
@@ -396,23 +405,118 @@ window.MusicHub = window.MusicHub || {};
    * - quicker and quieter each time, ringing at its own pitch - and
    * knocks a neighbour, which rings at another.
    */
+  function dropCoin(ctx, out, at, loud) {
+    var base = 2450 + Math.random() * 950;
+    strike(ctx, out, at, base, loud);
+    var gap = 0.07 + Math.random() * 0.04;
+    strike(ctx, out, at + gap, base, 0.45 * loud);
+    if (Math.random() < 0.7) {
+      strike(ctx, out, at + gap * 1.6, base, 0.2 * loud);
+    }
+    if (Math.random() < 0.5) {
+      strike(ctx, out, at + 0.02 + Math.random() * 0.06, 2350 + Math.random() * 1250, 0.3 * loud);
+    }
+  }
+
+  /*
+   * A clink is some forty oscillators: a shower's worth of them, live, was
+   * more than the audio thread could keep up with, and it stuttered. So a
+   * handful are rendered once, off the page, and each landing plays one
+   * back - a single node - a touch faster or slower for a pitch of its own.
+   */
+  var CLINK_VARIANTS = 10;
+  // Long enough for the last bounce to ring out.
+  var CLINK_SECONDS = 0.8;
+  var clinkBank = null;
+  var clinkBuffers = null;
+  var lastVariant = -1;
+
+  /** Renders the clinks, once; resolves to them (null without offline rendering). */
+  function renderClinks(ctx) {
+    if (!clinkBank) {
+      var Offline = window.OfflineAudioContext;
+      var renders = [];
+      for (var i = 0; Offline && i < CLINK_VARIANTS; i += 1) {
+        var offline = new Offline(1, Math.ceil(ctx.sampleRate * CLINK_SECONDS), ctx.sampleRate);
+        dropCoin(offline, offline.destination, 0, 1);
+        renders.push(offline.startRendering());
+      }
+      clinkBank = Promise.all(renders)
+        .then(function (buffers) {
+          clinkBuffers = buffers.length ? buffers : null;
+          return clinkBuffers;
+        })
+        .catch(function () {
+          return null;
+        });
+    }
+    return clinkBank;
+  }
+
+  /** One coin landing at `at` on the audio clock, `loud` 0-1: a rendered clink, or live without them. */
+  function playClink(ctx, at, loud) {
+    if (!clinkBuffers) {
+      dropCoin(ctx, coinOutput(ctx), at, loud);
+      return;
+    }
+    // Never the same one twice running.
+    var variant = Math.floor(Math.random() * (clinkBuffers.length - 1));
+    variant = variant >= lastVariant ? variant + 1 : variant;
+    lastVariant = variant;
+    var source = ctx.createBufferSource();
+    source.buffer = clinkBuffers[variant];
+    source.playbackRate.value = 0.95 + Math.random() * 0.1;
+    var gain = ctx.createGain();
+    gain.gain.value = loud;
+    source.connect(gain).connect(coinOutput(ctx));
+    source.start(at);
+  }
+
   function clink(level, delay) {
     var ctx = audioContext();
     if (!ctx) {
       return;
     }
-    var at = ctx.currentTime + (delay || 0);
-    var loud = level === undefined ? 1 : level;
-    var base = 2450 + Math.random() * 950;
-    strike(ctx, at, base, loud);
-    var gap = 0.07 + Math.random() * 0.04;
-    strike(ctx, at + gap, base, 0.45 * loud);
-    if (Math.random() < 0.7) {
-      strike(ctx, at + gap * 1.6, base, 0.2 * loud);
+    playClink(ctx, ctx.currentTime + (delay || 0), level === undefined ? 1 : level);
+    renderClinks(ctx);
+  }
+
+  /** The audio clock's time for `time` on the page's clock (performance.now()), heard then. */
+  function audioTimeAt(ctx, time) {
+    var stamp = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+    var at = stamp && stamp.performanceTime
+      ? stamp.contextTime + (time - stamp.performanceTime) / 1000
+      : ctx.currentTime + (time - performance.now()) / 1000;
+    return Math.max(ctx.currentTime, at);
+  }
+
+  /**
+   * A shower's clinks, set on the audio clock for the moment each coin
+   * lands - not struck when a frame gets round to landing it, which a
+   * busy frame held back and bunched up. `clinks` of them, spread evenly
+   * over `landings` (page-clock times), none right on top of another.
+   */
+  function clinkLandings(landings, clinks, loud) {
+    var ctx = audioContext();
+    if (!ctx) {
+      return;
     }
-    if (Math.random() < 0.5) {
-      strike(ctx, at + 0.02 + Math.random() * 0.06, 2350 + Math.random() * 1250, 0.3 * loud);
-    }
+    var times = landings.slice().sort(function (a, b) {
+      return a - b;
+    });
+    var picked = [];
+    times.forEach(function (time, index) {
+      var due = Math.floor((index + 1) * clinks / times.length) > Math.floor(index * clinks / times.length);
+      if (due) {
+        picked.push(picked.length ? Math.max(time, picked[picked.length - 1] + MIN_CLINK_GAP_MS) : time);
+      }
+    });
+    // The first coin lands a second out: plenty of time to render the clinks.
+    renderClinks(ctx).then(function () {
+      picked.forEach(function (time) {
+        playClink(ctx, audioTimeAt(ctx, time), loud);
+      });
+    });
   }
 
   /** Coins spilling out where they were won: a quick, soft jingle. */
@@ -424,20 +528,30 @@ window.MusicHub = window.MusicHub || {};
     var taps = Math.min(6, 2 + Math.floor(count / 4));
     for (var i = 0; i < taps; i += 1) {
       var at = ctx.currentTime + i * 0.035 + Math.random() * 0.02;
-      strike(ctx, at, 2350 + Math.random() * 1250, 0.3 + Math.random() * 0.15);
+      strike(ctx, coinOutput(ctx), at, 2350 + Math.random() * 1250, 0.3 + Math.random() * 0.15);
     }
   }
 
   /* ------------------------------------------------------ coin shower */
 
-  function coinSvg(className) {
+  /** An icon from the navbar's sprite (views/partials/navbar.ejs), by its id. */
+  function spriteSvg(id, className) {
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', className);
     svg.setAttribute('aria-hidden', 'true');
     var use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', '#coin-icon');
+    use.setAttribute('href', '#' + id);
     svg.appendChild(use);
     return svg;
+  }
+
+  function coinSvg(className) {
+    return spriteSvg('coin-icon', className);
+  }
+
+  /** The check mark, for anything done or picked - in the text's color. */
+  function checkSvg(className) {
+    return spriteSvg('check-icon', className ? 'check-icon ' + className : 'check-icon');
   }
 
   /** The balance's coin coins fly to: whichever balance is on screen. */
@@ -733,7 +847,7 @@ window.MusicHub = window.MusicHub || {};
    * One coin's flight: a burst out to a random spot around where it was
    * won, then a curve up to the balance, speeding up as it goes, flipping
    * all the way. `showerSize` is how many fly with it. Calls `landed`
-   * when it gets there.
+   * when it gets there; returns when that will be (performance.now()).
    */
   function flyCoin(sky, from, to, delay, showerSize, landed) {
     // Out and mostly up, like coins spilling from an opened chest.
@@ -744,6 +858,7 @@ window.MusicHub = window.MusicHub || {};
     // The curve bows away from the straight line, to one side or the other.
     var side = Math.random() < 0.5 ? -1 : 1;
     var duration = FLY_MS + Math.random() * 250;
+    var start = performance.now() + delay;
     sky.coins.push({
       from: from,
       burst: burst,
@@ -752,7 +867,7 @@ window.MusicHub = window.MusicHub || {};
         y: Math.min(burst.y, to.y) + (lerp(burst.y, to.y, 0.5) - Math.min(burst.y, to.y)) * 0.3,
       },
       to: to,
-      start: performance.now() + delay,
+      start: start,
       duration: duration,
       flips: duration / (280 + Math.random() * 220),
       landed: landed,
@@ -762,6 +877,7 @@ window.MusicHub = window.MusicHub || {};
         drawCoins(sky, time);
       });
     }
+    return start + duration;
   }
 
   /**
@@ -820,22 +936,36 @@ window.MusicHub = window.MusicHub || {};
     var sky = skyIn(layer || document.body);
     // Each coin carries an equal share; the last one tops it up to the exact amount.
     var share = Math.floor(amount / count);
+    var landings = [];
     for (var i = 0; i < count; i += 1) {
-      flyCoin(sky, from, goal, i * stagger, count, function () {
+      landings.push(flyCoin(sky, from, goal, i * stagger, count, function () {
         landedCoins += 1;
         inFlight -= landedCoins === count ? amount - share * (count - 1) : share;
         showLanding();
-        // `clinks` of them, spread evenly over the landings.
-        if (Math.floor(landedCoins * clinks / count) > Math.floor((landedCoins - 1) * clinks / count)) {
-          clink(Math.max(0.35, 1 - clinks * 0.025));
-        }
         if (landedCoins === count) {
           letGo();
           allLanded();
         }
-      });
+      }));
     }
+    clinkLandings(landings, clinks, Math.max(0.35, 1 - clinks * 0.025));
     return landing;
+  }
+
+  /**
+   * earn(), for something that only ever pays out once - `key` names it
+   * ("concert:<id>"). Done again, even after its own data is cleared, it
+   * pays nothing. Returns earn()'s promise, or null when already paid.
+   */
+  function earnOnce(key, amount, options) {
+    var first = update(function (state) {
+      if (state.rewarded.indexOf(key) !== -1) {
+        return false;
+      }
+      state.rewarded.push(key);
+      return true;
+    });
+    return first ? earn(amount, options) : null;
   }
 
   // A frame's landings shown at once: the count and the hop, once a frame
@@ -872,6 +1002,7 @@ window.MusicHub = window.MusicHub || {};
   MusicHub.wallet = {
     balance: balance,
     earn: earn,
+    earnOnce: earnOnce,
     owns: owns,
     buy: buy,
     equipped: equipped,
@@ -883,11 +1014,14 @@ window.MusicHub = window.MusicHub || {};
     updateWheel: updateWheel,
     format: format,
     coinSvg: coinSvg,
+    checkSvg: checkSvg,
     flipWidth: flipWidth,
     paint: paint,
     drawCoin: drawCoin,
     // The Store's own sounds share this context and limiter.
     audioContext: audioContext,
+    // One coin landing on the pile, as each one of a shower does.
+    clink: clink,
     audioOutput: output,
     flyingCount: flyingCount,
   };

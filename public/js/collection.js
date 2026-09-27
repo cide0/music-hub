@@ -15,6 +15,12 @@ window.MusicHub = window.MusicHub || {};
   var els = {};
   // Draws each card's record as it scrolls into view on touch screens.
   var recordObserver = null;
+  // Holds the animations of the cards scrolled out of view (vinyl.pauseOffscreen).
+  var offscreen = null;
+  // Each vinyl's card in the grid, for tearing it up when it's removed.
+  var cardOf = new WeakMap();
+  // While a removed vinyl's card tears apart, the grid waits to redraw.
+  var tearing = false;
   // Bumped each time the player opens or closes, so a slow answer from
   // Spotify for a record no longer playing is ignored.
   var playRun = 0;
@@ -55,6 +61,8 @@ window.MusicHub = window.MusicHub || {};
   // What the search box holds, as typed, and the date sort's direction.
   var query = '';
   var sortDir = 'desc';
+  // 'all' | 'exclusive': every vinyl, or only the Daily Spin's wheel exclusives.
+  var activeFilter = 'all';
   // The vinyl the remove dialog is asking about.
   var pendingRemoval = null;
 
@@ -209,11 +217,9 @@ window.MusicHub = window.MusicHub || {};
   function card(vinyl) {
     var album = vinyl.album || null;
     var node = el('article', 'release-card vinyl-card');
-    // A wheel exclusive shimmers and sparkles like a concert you're going to
-    // - until it's hovered, when the record comes out as on any other card.
+    // A wheel exclusive: its turning gold frame and gold style label.
     if (isExclusive(vinyl)) {
       node.classList.add('vinyl-card--exclusive');
-      node.appendChild(el('span', 'concert-card__glitter'));
     }
 
     var cover = el('div', 'release-card__cover');
@@ -309,9 +315,26 @@ window.MusicHub = window.MusicHub || {};
     els.sortDate.setAttribute('aria-label', 'Sorted by date, ' + (newest ? 'newest first' : 'oldest first'));
   }
 
+  /** "Exclusives" only with one to show - otherwise back to All. */
+  function renderFilters(all) {
+    var exclusiveButton = els.filters.querySelector('[data-filter="exclusive"]');
+    exclusiveButton.disabled = !all.some(isExclusive);
+    if (exclusiveButton.disabled && activeFilter === 'exclusive') {
+      activeFilter = 'all';
+    }
+    Array.prototype.forEach.call(els.filters.querySelectorAll('.filter-button'), function (button) {
+      var active = button.getAttribute('data-filter') === activeFilter;
+      button.classList.toggle('filter-button--active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
   function render() {
     var all = MusicHub.wallet.vinyls();
-    var shown = all.filter(matchesQuery).sort(function (a, b) {
+    renderFilters(all);
+    var shown = all.filter(function (vinyl) {
+      return (activeFilter !== 'exclusive' || isExclusive(vinyl)) && matchesQuery(vinyl);
+    }).sort(function (a, b) {
       var order = String(b.unboxedAt || '').localeCompare(String(a.unboxedAt || ''));
       return sortDir === 'desc' ? order : -order;
     });
@@ -320,13 +343,21 @@ window.MusicHub = window.MusicHub || {};
     els.toolbar.hidden = !all.length;
     els.searchClear.hidden = !query;
     els.noMatch.hidden = !all.length || shown.length > 0;
-    els.noMatch.textContent = 'No vinyls match \u201c' + query.trim() + '\u201d.';
+    els.noMatch.textContent = (activeFilter === 'exclusive' ? 'No wheel exclusives' : 'No vinyls')
+      + ' match \u201c' + query.trim() + '\u201d.';
     els.count.textContent = MusicHub.wallet.format(all.length) + ' of '
       + MusicHub.wallet.format(MusicHub.vinylCatalog.size) + ' collected';
     renderSort();
     shown.forEach(function (vinyl) {
-      els.grid.appendChild(card(vinyl));
+      var node = card(vinyl);
+      cardOf.set(vinyl, node);
+      els.grid.appendChild(node);
     });
+    // The exclusives' gold frames and labels only turn on screen.
+    if (offscreen) {
+      offscreen.disconnect();
+    }
+    offscreen = MusicHub.vinyl.pauseOffscreen(els.grid.children);
   }
 
   function setQuery(value) {
@@ -358,6 +389,23 @@ window.MusicHub = window.MusicHub || {};
     els.removeDialog.showModal();
     // Cancel is the safe default for Enter.
     els.removeCancel.focus();
+  }
+
+  /**
+   * Takes a vinyl out of the collection - stored straight away, so leaving
+   * mid-tear loses nothing - and tears its card in two, as the Album
+   * Suggester tears a dismissed cover (tear.js). The grid closes the gap
+   * once the halves are gone.
+   */
+  function removeVinyl(vinyl) {
+    var node = cardOf.get(vinyl);
+    tearing = true;
+    MusicHub.wallet.removeVinyl(vinyl);
+    var torn = node && node.isConnected ? MusicHub.tear.apart(node) : Promise.resolve();
+    torn.then(function () {
+      tearing = false;
+      render();
+    });
   }
 
   /* --------------------------------------------------------------- player */
@@ -876,6 +924,7 @@ window.MusicHub = window.MusicHub || {};
     els.search = document.getElementById('collection-search');
     els.searchClear = document.getElementById('collection-search-clear');
     els.sortDate = document.getElementById('collection-sort-date');
+    els.filters = document.getElementById('collection-filters');
     els.noMatch = document.getElementById('collection-no-match');
 
     els.removeDialog = document.getElementById('remove-vinyl-dialog');
@@ -886,9 +935,8 @@ window.MusicHub = window.MusicHub || {};
       event.preventDefault();
       var vinyl = pendingRemoval;
       els.removeDialog.close();
-      // The collection redraws itself on the wallet's change.
       if (vinyl) {
-        MusicHub.wallet.removeVinyl(vinyl);
+        removeVinyl(vinyl);
       }
     });
     els.removeCancel.addEventListener('click', function () {
@@ -919,6 +967,14 @@ window.MusicHub = window.MusicHub || {};
       setQuery('');
       els.search.focus();
     });
+    els.filters.addEventListener('click', function (event) {
+      var button = event.target.closest('.filter-button');
+      if (!button || button.disabled) {
+        return;
+      }
+      activeFilter = button.getAttribute('data-filter');
+      render();
+    });
     els.sortDate.addEventListener('click', function () {
       sortDir = sortDir === 'desc' ? 'asc' : 'desc';
       render();
@@ -935,7 +991,7 @@ window.MusicHub = window.MusicHub || {};
 
   // Unboxed in another tab.
   document.addEventListener('musichub:walletchange', function () {
-    if (els.grid) {
+    if (els.grid && !tearing) {
       render();
     }
   });

@@ -15,7 +15,9 @@
             <span class="toolbar__meta" id="collection-count"></span>
           </div>
 
-          <!-- Search on the left, the date sort on the right - once there's a vinyl. -->
+          <!-- Search on the left; the date sort and the filter tabs on the
+               right, the tabs at the far end where the other pages keep their
+               filters - once there's a vinyl. -->
           <div class="toolbar" id="collection-toolbar" hidden>
             <div class="collection-search">
               <label class="visually-hidden" for="collection-search">Search your vinyls</label>
@@ -29,9 +31,15 @@
                 </button>
               </div>
             </div>
-            <!-- One sort; clicking it flips the direction. -->
-            <div class="filter-group" id="collection-sort" role="group" aria-label="Sort vinyls">
-              <button type="button" class="filter-button filter-button--active" id="collection-sort-date" aria-pressed="true">Date ↓</button>
+            <div class="toolbar__end">
+              <!-- One sort; clicking it flips the direction. -->
+              <div class="filter-group" id="collection-sort" role="group" aria-label="Sort vinyls">
+                <button type="button" class="filter-button filter-button--active" id="collection-sort-date" aria-pressed="true">Date ↓</button>
+              </div>
+              <div class="filter-group" id="collection-filters" role="group" aria-label="Filter vinyls">
+                <button type="button" class="filter-button filter-button--active" data-filter="all" aria-pressed="true">All</button>
+                <button type="button" class="filter-button" data-filter="exclusive" aria-pressed="false" disabled>Exclusives</button>
+              </div>
             </div>
           </div>
 
@@ -99,6 +107,7 @@
     <script src="/js/vinyl.js"></script>
     <script src="/js/vinyl-catalog.js"></script>
     <script src="/js/sfx.js"></script>
+    <script src="/js/tear.js"></script>
     <script src="/js/unbox.js"></script>
     <script src="/js/daily-wheel.js"></script>
     <script src="/js/confirm-dialog.js"></script>
