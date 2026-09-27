@@ -1384,7 +1384,8 @@ button[aria-disabled='true'] {
    past concerts. */
 .concert-card::after,
 .history-item::after,
-.past-show::after {
+.past-show::after,
+.vinyl-card--exclusive::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1457,8 +1458,10 @@ button[aria-disabled='true'] {
 
 /* A concert the user is going to shimmers on its own: the same sheen at the
    same strength as on hover, with the highlight sweeping across as though a
-   cursor were moving over it. */
-.concert-card--attending::after {
+   cursor were moving over it. So does a wheel exclusive in the Collection,
+   until the record comes out (.release-card--playing). */
+.concert-card--attending::after,
+.vinyl-card--exclusive:not(.release-card--playing)::after {
   opacity: 0.55;
   animation: foil-drift 9s ease-in-out infinite;
 }
@@ -1525,15 +1528,18 @@ button[aria-disabled='true'] {
     84% 12%, 84% 12%, 26% 8%, 26% 8%;
 }
 
-.concert-card--attending .concert-card__glitter {
+.concert-card--attending .concert-card__glitter,
+.vinyl-card--exclusive:not(.release-card--playing) .concert-card__glitter {
   animation: glitter 2.9s ease-in-out infinite;
 }
 
-.concert-card--attending .concert-card__glitter::before {
+.concert-card--attending .concert-card__glitter::before,
+.vinyl-card--exclusive:not(.release-card--playing) .concert-card__glitter::before {
   animation: glitter 3.7s ease-in-out 0.8s infinite;
 }
 
-.concert-card--attending .concert-card__glitter::after {
+.concert-card--attending .concert-card__glitter::after,
+.vinyl-card--exclusive:not(.release-card--playing) .concert-card__glitter::after {
   animation: glitter 4.3s ease-in-out 1.6s infinite;
 }
 
@@ -1558,13 +1564,17 @@ button[aria-disabled='true'] {
     transition: none;
   }
 
-  .concert-card--attending::after {
+  .concert-card--attending::after,
+  .vinyl-card--exclusive::after {
     animation: none;
   }
 
   .concert-card--attending .concert-card__glitter,
   .concert-card--attending .concert-card__glitter::before,
-  .concert-card--attending .concert-card__glitter::after {
+  .concert-card--attending .concert-card__glitter::after,
+  .vinyl-card--exclusive .concert-card__glitter,
+  .vinyl-card--exclusive .concert-card__glitter::before,
+  .vinyl-card--exclusive .concert-card__glitter::after {
     animation: none;
   }
 }
@@ -1604,7 +1614,8 @@ button[aria-disabled='true'] {
   border-color: var(--color-purple-400);
 }
 
-.concert-card--attending .concert-card__body {
+.concert-card--attending .concert-card__body,
+.vinyl-card--exclusive:not(.release-card--playing) .release-card__body {
   background-color: var(--color-surface-attending);
 }
 
@@ -5371,31 +5382,16 @@ button.turntable__power:focus-visible {
   }
 }
 
-/* A coin on its way up to the balance (wallet.js moves it), flipping as
-   it goes. */
-.flying-coin {
+/* Coins on their way up to the balance, flipping as they go: drawn by
+   wallet.js on a canvas over the page (or over an open modal, in earn's
+   layer) - one canvas however many coins, rather than an element each. */
+.coin-shower {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0;
   z-index: 1000;
-  width: 26px;
-  height: 26px;
-  pointer-events: none;
-  will-change: transform;
-}
-
-.flying-coin__face {
-  display: block;
   width: 100%;
   height: 100%;
-  color: var(--coin-rim);
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--coin-bright) 70%, transparent));
-  animation: coin-flip var(--flip-ms, 400ms) linear infinite;
-}
-
-@keyframes coin-flip {
-  0%, 100% { transform: scaleX(1); }
-  50% { transform: scaleX(0.12); }
+  pointer-events: none;
 }
 
 /* "+50" where the coins came from. */
@@ -5416,6 +5412,30 @@ button.turntable__power:focus-visible {
 .coin-float .coin {
   width: 24px;
   height: 24px;
+}
+
+/* The balance lifted over an open modal's backdrop while coins land in it:
+   a copy wallet.js lays right over the real one, sized to match. */
+.coin-balance--lifted {
+  position: fixed;
+  display: inline-flex;
+  box-sizing: border-box;
+  margin: 0;
+  background-color: color-mix(in srgb, var(--coin-face) 30%, var(--color-surface));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--coin-bright) 45%, transparent);
+  text-decoration: none;
+  pointer-events: none;
+}
+
+.coin-balance--lifted .coin {
+  width: var(--lifted-coin, 18px);
+  height: var(--lifted-coin, 18px);
+}
+
+:root[data-navbar-style="gold"] .coin-balance--lifted {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--rarity-gold) 70%, transparent),
+    0 0 16px color-mix(in srgb, var(--coin-bright) 45%, transparent);
 }
 
 /* ------------------------------------------------------------ name styles */
@@ -5533,7 +5553,12 @@ button.turntable__power:focus-visible {
 }
 
 :root[data-name-style="gold"] .navbar__user > span,
-.name-pill[data-name-style="gold"] .name-pill__name {
+.name-pill[data-name-style="gold"] .name-pill__name,
+.wheel__banner-text,
+.vinyl-card--exclusive .vinyl-card__style-name,
+.wheel__title,
+.wheel__prizes-number,
+.wheel__prizes-icon {
   /* Two layers: the band of light, sliding, over the polished gold, which
      stays put. The band sits in the middle of its 2.5x-wide layer with
      nothing either side, so it starts and ends fully off the name - every
@@ -5581,7 +5606,12 @@ button.turntable__power:focus-visible {
   :root[data-name-style] .navbar__user,
   .name-pill[data-name-style],
   :root[data-name-style] .navbar__user > span,
-  .name-pill[data-name-style] .name-pill__name {
+  .name-pill[data-name-style] .name-pill__name,
+  .wheel__banner-text,
+  .vinyl-card--exclusive .vinyl-card__style-name,
+  .wheel__title,
+  .wheel__prizes-number,
+  .wheel__prizes-icon {
     animation: none;
   }
 
@@ -5589,10 +5619,6 @@ button.turntable__power:focus-visible {
   .name-pill[data-name-style="gold"]::after {
     animation: none;
     opacity: 1;
-  }
-
-  .flying-coin__face {
-    animation: none;
   }
 }
 
@@ -6081,6 +6107,14 @@ button.turntable__power:focus-visible {
   height: 22px;
 }
 
+/* How many mystery vinyls won on the Daily Spin wait to be unboxed, in
+   the box's corner. */
+.store-offer__free {
+  z-index: 3;
+  background-color: var(--color-recommended);
+  color: var(--color-black);
+}
+
 /* A mystery vinyl won on the Daily Spin, waiting to be unboxed. */
 .price--free {
   color: var(--color-recommended);
@@ -6539,8 +6573,90 @@ button.turntable__power:focus-visible {
 .vinyl-card__style {
   max-width: calc(100% - 1rem);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.vinyl-card__style-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A wheel exclusive: the album history's gold frame - light circling a
+   thicker gold border (--gold-angle, history-gold-turn) - and its gold
+   glow. Hovered too: the record still comes out, the frame stays. */
+.vinyl-card--exclusive {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    conic-gradient(from var(--gold-angle),
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 18%,
+      var(--rarity-gold-shine) 25%,
+      var(--rarity-gold) 32%,
+      var(--rarity-gold-deep) 50%,
+      var(--rarity-gold) 68%,
+      var(--rarity-gold-shine) 75%,
+      var(--rarity-gold) 82%,
+      var(--rarity-gold-deep)) border-box;
+  box-shadow: 0 0 26px color-mix(in srgb, var(--rarity-gold-bright) 45%, transparent);
+  animation: history-gold-turn 2.4s linear infinite;
+}
+
+.vinyl-card--exclusive.release-card--playing {
+  border-color: transparent;
+}
+
+/* Its style in the gold username's pill (Gold Shine): a turning gold frame
+   round a dark gold plate, polished-gold lettering (the lettering rule is
+   the name's own) and a sparkle twinkling at the corner. */
+.vinyl-card--exclusive .vinyl-card__style {
+  --name-fill: color-mix(in srgb, var(--rarity-gold) 22%, var(--color-black));
+  overflow: visible;
+  padding: calc(0.1875rem - 2px) calc(0.625rem - 2px);
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--name-fill), var(--name-fill)) padding-box,
+    conic-gradient(from var(--name-angle),
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 18%,
+      var(--rarity-gold-shine) 25%,
+      var(--rarity-gold) 32%,
+      var(--rarity-gold-deep) 50%,
+      var(--rarity-gold) 68%,
+      var(--rarity-gold-shine) 75%,
+      var(--rarity-gold) 82%,
+      var(--rarity-gold-deep)) border-box;
+  box-shadow:
+    0 2px 8px color-mix(in srgb, var(--color-black) 55%, transparent),
+    0 0 16px color-mix(in srgb, var(--rarity-gold-bright) 45%, transparent);
+  animation: name-border-turn 2.4s linear infinite;
+}
+
+.vinyl-card--exclusive .vinyl-card__style::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: 6px;
+  width: 10px;
+  aspect-ratio: 1;
+  background-color: var(--rarity-gold-shine);
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  opacity: 0;
+  pointer-events: none;
+  animation: gold-twinkle 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vinyl-card--exclusive,
+  .vinyl-card--exclusive .vinyl-card__style {
+    animation: none;
+  }
+
+  .vinyl-card--exclusive .vinyl-card__style::after {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 /* Filters the collection as you type. Sized like .release-search. */
@@ -6863,7 +6979,7 @@ button.turntable__power:focus-visible {
 
 /* ------------------------------------------------------ wheel exclusives */
 
-/* The Daily Spin's ten wheel-only records (vinyl.js) wear a turning
+/* The Daily Spin's forty wheel-only records (vinyl.js) wear a turning
    rainbow halo round the rim, wherever they're shown. Painted first, so it
    sits behind the disc. */
 .vinyl--exclusive::before {
@@ -6883,20 +6999,108 @@ button.turntable__power:focus-visible {
   opacity: 0.9;
 }
 
-/* Holographic foil: every colour shifting through every other. */
-.vinyl--holographic .vinyl__surface,
-.vinyl--holographic .vinyl__finish {
-  animation: holo-shift 5s linear infinite;
+/* Holographic foil: the rainbow it throws, which - like a real hologram's
+   or a CD's - stays put while the record turns under it (vinyl.js draws
+   the foil itself: silver, prismatic grain, flakes). Bands of spectrum
+   over it, swaying as though the record were tilted in the light, a band
+   of rainbow sweeping across now and then, and a hot white glint where
+   the light strikes - under the sheen's bright bow-tie. */
+.vinyl__holo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  pointer-events: none;
 }
 
-@keyframes holo-shift {
-  to { filter: hue-rotate(360deg); }
+.vinyl__holo::before,
+.vinyl__holo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.vinyl__holo::before {
+  /* The spectrum twice round, laid over the foil as colour only - the
+     silver, its grain and flakes still show through, tinted - so bands of
+     rainbow sit across the record, still as it turns under them. */
+  background: conic-gradient(from 0deg,
+    var(--vinyl-red), var(--vinyl-orange), var(--vinyl-yellow), var(--vinyl-green),
+    var(--vinyl-teal), var(--vinyl-blue), var(--vinyl-purple), var(--vinyl-pink),
+    var(--vinyl-red), var(--vinyl-orange), var(--vinyl-yellow), var(--vinyl-green),
+    var(--vinyl-teal), var(--vinyl-blue), var(--vinyl-purple), var(--vinyl-pink),
+    var(--vinyl-red));
+  mix-blend-mode: color;
+  opacity: 0.9;
+  animation: holo-tilt 5.5s ease-in-out infinite alternate;
+}
+
+.vinyl__holo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.vinyl__holo::before {
+  background: conic-gradient(from -40deg,
+    transparent 0deg,
+    color-mix(in srgb, var(--vinyl-red) 80%, transparent) 10deg,
+    color-mix(in srgb, var(--vinyl-orange) 85%, transparent) 20deg,
+    color-mix(in srgb, var(--vinyl-yellow) 85%, transparent) 30deg,
+    color-mix(in srgb, var(--vinyl-green) 85%, transparent) 40deg,
+    color-mix(in srgb, var(--vinyl-teal) 85%, transparent) 50deg,
+    color-mix(in srgb, var(--vinyl-blue) 85%, transparent) 60deg,
+    color-mix(in srgb, var(--vinyl-purple) 80%, transparent) 70deg,
+    transparent 82deg 180deg,
+    color-mix(in srgb, var(--vinyl-red) 80%, transparent) 190deg,
+    color-mix(in srgb, var(--vinyl-orange) 85%, transparent) 200deg,
+    color-mix(in srgb, var(--vinyl-yellow) 85%, transparent) 210deg,
+    color-mix(in srgb, var(--vinyl-green) 85%, transparent) 220deg,
+    color-mix(in srgb, var(--vinyl-teal) 85%, transparent) 230deg,
+    color-mix(in srgb, var(--vinyl-blue) 85%, transparent) 240deg,
+    color-mix(in srgb, var(--vinyl-purple) 80%, transparent) 250deg,
+    transparent 262deg);
+  mix-blend-mode: color-dodge;
+  animation: holo-tilt 5.5s ease-in-out infinite alternate;
+}
+
+.vinyl__holo::after {
+  background:
+    radial-gradient(circle at var(--light-x, 30%) var(--light-y, 25%),
+      color-mix(in srgb, var(--color-text) 55%, transparent), transparent 22%),
+    linear-gradient(115deg,
+      transparent 38%,
+      color-mix(in srgb, var(--vinyl-pink) 55%, transparent) 43%,
+      color-mix(in srgb, var(--vinyl-yellow) 60%, transparent) 47%,
+      color-mix(in srgb, var(--color-text) 75%, transparent) 50%,
+      color-mix(in srgb, var(--vinyl-teal) 60%, transparent) 53%,
+      color-mix(in srgb, var(--vinyl-blue) 55%, transparent) 57%,
+      transparent 62%);
+  background-size: 100% 100%, 300% 300%;
+  background-position: 0 0, 100% 100%;
+  background-repeat: no-repeat;
+  mix-blend-mode: screen;
+  animation: holo-sweep 3.4s ease-in-out infinite;
+}
+
+/* Tilted this way and that: the fans of spectrum swing round the record. */
+@keyframes holo-tilt {
+  from { rotate: -40deg; }
+  to { rotate: 45deg; }
+}
+
+/* The band of rainbow crossing corner to corner, then a pause. */
+@keyframes holo-sweep {
+  0% { background-position: 0 0, 100% 100%; }
+  65%, 100% { background-position: 0 0, 0% 0%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .vinyl--exclusive::before,
-  .vinyl--holographic .vinyl__surface,
-  .vinyl--holographic .vinyl__finish {
+  .vinyl__holo::before,
+  .vinyl__holo::after {
     animation: none;
   }
 }
@@ -6908,10 +7112,15 @@ button.turntable__power:focus-visible {
    grows the modal downwards instead of moving the wheel. */
 .wheel {
   --wheel-size: min(460px, calc(100vw - 4.5rem), calc(100dvh - 17rem));
-  margin-top: max(0.75rem, calc((100dvh - var(--wheel-size) - 13rem) / 2));
+  /* A third of the room left above it, two thirds below: a little higher
+     than centred. */
+  --wheel-top: max(0.75rem, calc((100dvh - var(--wheel-size) - 13rem) / 3));
+  margin-top: var(--wheel-top);
   --win-color: var(--color-accent);
   width: min(560px, calc(100vw - 1.5rem));
-  max-height: calc(100dvh - 1.5rem);
+  /* No further than the screen's bottom edge, wherever the top sits: on a
+     screen too short for it all, it scrolls. */
+  max-height: calc(100dvh - var(--wheel-top) - 0.75rem);
   overflow-x: hidden;
   overflow-y: auto;
   background:
@@ -6955,7 +7164,7 @@ button.turntable__power:focus-visible {
 }
 
 .wheel__title {
-  color: var(--rarity-gold-bright);
+  /* Polished-gold lettering, like the Gold Shine name (see there). */
   letter-spacing: 0.02em;
 }
 
@@ -6966,6 +7175,61 @@ button.turntable__power:focus-visible {
   min-width: 0;
   min-height: 0;
   padding: 0;
+}
+
+/* The gift button: how many prizes wait, on a badge at its corner - the
+   Gold Shine name in small: a dark gold plate in a gold ring, polished-gold
+   lettering. */
+.wheel__prizes-open {
+  position: relative;
+}
+
+/* The gift itself: the polished gold (the lettering rule, under the Gold
+   Shine name) showing through the icon's lines. */
+.wheel__prizes-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='8' width='17' height='4' rx='1'/%3E%3Cpath d='M5 12v8h14v-8'/%3E%3Cline x1='12' y1='8' x2='12' y2='20'/%3E%3Cpath d='M12 8c-1.2-2.8-5-3.6-5-1.2C7 8 9.5 8 12 8zM12 8c1.2-2.8 5-3.6 5-1.2C17 8 14.5 8 12 8z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='8' width='17' height='4' rx='1'/%3E%3Cpath d='M5 12v8h14v-8'/%3E%3Cline x1='12' y1='8' x2='12' y2='20'/%3E%3Cpath d='M12 8c-1.2-2.8-5-3.6-5-1.2C7 8 9.5 8 12 8zM12 8c1.2-2.8 5-3.6 5-1.2C17 8 14.5 8 12 8z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.wheel__prizes-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  box-sizing: border-box;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 0.3rem;
+  border: 1px solid var(--rarity-gold);
+  border-radius: var(--radius-pill);
+  background-color: color-mix(in srgb, var(--rarity-gold) 22%, var(--color-black));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--rarity-gold-bright) 45%, transparent);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  line-height: 17px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.wheel__prizes-count[hidden] {
+  display: none;
+}
+
+/* On the wheel's glowing purple, the gift, the ? and the X sit on a darker purple. */
+.wheel .wheel__close {
+  border-color: var(--color-purple-800);
+  background-color: var(--color-purple-900);
+  color: var(--color-text);
+}
+
+.wheel .wheel__close:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: var(--color-purple-700);
+  background-color: var(--color-purple-800);
 }
 
 .wheel__machine {
@@ -7077,13 +7341,43 @@ button.turntable__power:focus-visible {
   filter: saturate(0.4);
 }
 
-.wheel__slice--won {
-  animation: wheel-slice-won 0.8s ease-in-out infinite alternate;
+/* The won slice lighting up, pulsing in the win's colour (.wheel__glow,
+   turned with the disc): drawn over the wheel on a layer of its own, so
+   the pulse is only that layer's opacity - the compositor's job - rather
+   than a filter that had the whole wheel painted again every frame. */
+.wheel__glow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform-origin: 50% 50%;
+  opacity: 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  will-change: transform, opacity;
 }
 
-@keyframes wheel-slice-won {
-  from { filter: brightness(1.05) drop-shadow(0 0 2px var(--win-color)); }
-  to { filter: brightness(1.45) drop-shadow(0 0 7px var(--win-color)); }
+.wheel__glow path {
+  fill: color-mix(in srgb, var(--win-color) 40%, transparent);
+  stroke: var(--win-color);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px var(--win-color));
+}
+
+.wheel__glow--on {
+  animation: wheel-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes wheel-glow {
+  from { opacity: 0.3; }
+  to { opacity: 0.9; }
+}
+
+/* Nothing: drained of colour like the rest of the wheel. */
+.wheel--sad .wheel__glow {
+  filter: grayscale(1);
 }
 
 .wheel__hub {
@@ -7136,14 +7430,20 @@ button.turntable__power:focus-visible {
 }
 
 .wheel__pointer-body {
-  fill: var(--rarity-gold-bright);
+  fill: url(#wheel-pointer-gold);
   stroke: var(--rarity-gold-deep);
   stroke-width: 1.5;
 }
 
+/* The band of light sweeping across it, inside the outline. */
+.wheel__pointer-glare {
+  fill: url(#wheel-pointer-glare);
+  stroke: none;
+}
+
 .wheel__pointer-pin {
   fill: var(--color-primary);
-  stroke: var(--rarity-gold-shine);
+  stroke: var(--rarity-gold-deep);
   stroke-width: 1.5;
 }
 
@@ -7196,7 +7496,7 @@ button.turntable__power:focus-visible {
   scale: calc(1 + var(--wheel-charge) * 0.08);
   filter: brightness(calc(1 + var(--wheel-charge) * 0.9));
   animation:
-    wheel-charge 1.6s ease-in forwards,
+    wheel-charge 2.4s ease-in forwards,
     wheel-jitter 70ms linear infinite;
 }
 
@@ -7217,14 +7517,7 @@ button.turntable__power:focus-visible {
   z-index: 3;
   margin: 0;
   translate: -50% -50%;
-  color: var(--rarity-gold-bright);
-  background: linear-gradient(100deg,
-    var(--rarity-gold-deep) 0%, var(--rarity-gold-bright) 30%, var(--rarity-gold-shine) 45%,
-    var(--rarity-gold-bright) 60%, var(--rarity-gold) 100%) 0 0 / 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 3px 0 var(--rarity-gold-deep)) drop-shadow(0 6px 16px var(--color-black));
+  display: grid;
   font-size: clamp(2.25rem, 12vw, 3.5rem);
   font-weight: 900;
   letter-spacing: 0.02em;
@@ -7234,23 +7527,49 @@ button.turntable__power:focus-visible {
   pointer-events: none;
 }
 
+/* The lettering - the Daily Spin title's polished gold, its band of light
+   sweeping across (the lettering rule, under the Gold Shine name) - and
+   its shadow in the same spot, the shadow underneath. */
+.wheel__banner-shadow,
+.wheel__banner-text {
+  grid-area: 1 / 1;
+}
+
+/* A hard gold edge below and a dark blur: painted once, on a layer of its
+   own, so the shine sweeping the lettering never paints it again. */
+.wheel__banner-shadow {
+  color: var(--rarity-gold-deep);
+  text-shadow:
+    0 3px 0 var(--rarity-gold-deep),
+    0 6px 16px var(--color-black);
+  will-change: transform;
+}
+
+/* Positioned, so it's painted over the shadow: the shadow's own layer
+   (will-change) puts it with the positioned boxes, which are painted after
+   plain text - it covered the gold lettering entirely. */
+.wheel__banner-text {
+  position: relative;
+}
+
+/* Slammed down, held for as long as the win's celebration runs
+   (--banner-hold, set by daily-wheel.js), then blown away. */
 .wheel__banner--show {
   animation:
-    wheel-banner 2.8s cubic-bezier(0.2, 0.8, 0.3, 1.2) forwards,
-    wheel-banner-shine 1.2s linear infinite;
+    wheel-banner-in 0.85s cubic-bezier(0.2, 0.8, 0.3, 1.2) forwards,
+    wheel-banner-out 0.5s ease-in calc(0.85s + var(--banner-hold, 1.45s)) forwards;
 }
 
-@keyframes wheel-banner {
+@keyframes wheel-banner-in {
   0% { opacity: 0; transform: scale(3) rotate(-14deg); }
-  14% { opacity: 1; transform: scale(0.9) rotate(-7deg); }
-  22% { transform: scale(1.06) rotate(-7deg); }
-  30% { transform: scale(1) rotate(-7deg); }
-  82% { opacity: 1; transform: scale(1) rotate(-7deg); }
-  100% { opacity: 0; transform: scale(1.35) rotate(-7deg); }
+  47% { opacity: 1; transform: scale(0.9) rotate(-7deg); }
+  73% { transform: scale(1.06) rotate(-7deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-7deg); }
 }
 
-@keyframes wheel-banner-shine {
-  to { background-position: -250% 0; }
+@keyframes wheel-banner-out {
+  from { opacity: 1; transform: scale(1) rotate(-7deg); }
+  to { opacity: 0; transform: scale(1.35) rotate(-7deg); }
 }
 
 /* What was won. */
@@ -7328,13 +7647,43 @@ button.turntable__power:focus-visible {
   flex: none;
 }
 
-/* Won, not taken yet: a mystery vinyl to unbox, an exclusive to press. */
+/* ---- The prizes modal (the wheel's gift button): what was won and not
+   taken yet - a mystery vinyl to unbox, an exclusive to press. */
+.wheel-prizes {
+  width: min(480px, calc(100vw - 1.5rem));
+  max-height: calc(100dvh - 1.5rem);
+  padding: 1.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.wheel-prizes__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.wheel-prizes .wheel__close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.wheel-prizes__empty {
+  margin: 1rem 0 0;
+  color: var(--color-text-soft);
+  font-size: 0.9375rem;
+}
+
 .wheel__claims {
   display: flex;
   flex-direction: column;
-  align-self: stretch;
   gap: 0.5rem;
-  margin: 0;
+  margin: 1rem 0 0;
   padding: 0;
   list-style: none;
 }
@@ -7343,26 +7692,36 @@ button.turntable__power:focus-visible {
   display: none;
 }
 
-.wheel__claim {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.375rem 0.375rem 0.375rem 0.875rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background-color: var(--color-surface-raised);
-  font-size: 0.875rem;
+/* Each prize: an album history card (.history-item) - lifting in purple
+   under the pointer, or in the history's gold for an exclusive - the whole
+   card the button. */
+.wheel-prize__button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
 
-.wheel__claim--exclusive {
-  border-color: var(--rarity-gold);
+/* The cover and the text let clicks through to the button under them. */
+.wheel-prize > :not(.wheel-prize__button) {
+  pointer-events: none;
 }
 
-.wheel__claim-button {
-  flex: none;
-  min-height: 36px;
-  padding: 0.25rem 1rem;
+.wheel-prize__record {
+  position: relative;
+  border-radius: 50%;
+}
+
+/* The Store's mystery box, shrunk to a cover. */
+.wheel-prize__mailer {
+  width: 56px;
+  height: 56px;
+}
+
+.wheel-prize__mailer .mailer__mark {
+  font-size: 1.75rem;
 }
 
 /* ---- Winning a wheel exclusive: the record rising out of a burst of
@@ -7422,6 +7781,56 @@ button.turntable__power:focus-visible {
   animation: wheel-halo 2.2s ease-in-out infinite alternate;
 }
 
+/* The second fan: finer rays, fainter, turning the other way. */
+.wheel-reveal__rays--counter {
+  width: 820px;
+  -webkit-mask-image:
+    repeating-conic-gradient(var(--color-black) 0deg 2deg, transparent 2deg 9deg),
+    radial-gradient(circle, var(--color-black) 6%, transparent 42%);
+  mask-image:
+    repeating-conic-gradient(var(--color-black) 0deg 2deg, transparent 2deg 9deg),
+    radial-gradient(circle, var(--color-black) 6%, transparent 42%);
+  opacity: 0.45;
+  animation: gold-spin 26s linear infinite reverse;
+}
+
+/* Stars circling the record (its middle, like the halo's), each on its
+   own spoke, twinkling one after another. */
+.wheel-reveal__orbit {
+  --orbit: min(150px, 38vw);
+  position: absolute;
+  top: 36%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  animation: gold-spin 9s linear infinite;
+}
+
+.wheel-reveal__star {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: rotate(calc(var(--star) * 45deg)) translateY(calc(var(--orbit) * -1));
+}
+
+.wheel-reveal__star > span {
+  display: block;
+  width: 16px;
+  aspect-ratio: 1;
+  margin: -8px 0 0 -8px;
+  background-color: var(--rarity-gold-shine);
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  opacity: 0;
+  animation: gold-twinkle 1.8s ease-in-out infinite;
+  animation-delay: calc(var(--star) * 0.225s);
+}
+
+.wheel-reveal__star:nth-child(even) > span {
+  width: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  background-color: var(--record-glow);
+}
+
 @keyframes wheel-halo {
   from { scale: 0.9; opacity: 0.75; }
   to { scale: 1.12; opacity: 1; }
@@ -7431,6 +7840,55 @@ button.turntable__power:focus-visible {
   position: relative;
   width: min(230px, 58vw);
   aspect-ratio: 1;
+}
+
+/* Not yet pressed: the record is the button - it grows under the pointer,
+   and a click presses it on an album. */
+.wheel-reveal__record--pressable {
+  border-radius: 50%;
+  cursor: pointer;
+  transition: scale 0.25s cubic-bezier(0.2, 0.8, 0.3, 1.4);
+}
+
+.wheel-reveal__record--pressable:hover,
+.wheel-reveal__record--pressable:focus-visible {
+  scale: 1.12;
+}
+
+.wheel-reveal__record--pressable:active {
+  scale: 1.06;
+}
+
+.wheel-reveal__record--pressable:focus-visible {
+  outline: 3px solid var(--rarity-gold-shine);
+  outline-offset: 6px;
+}
+
+/* Back to the wheel, where the wheel's own X would be. */
+.wheel-reveal__back {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  z-index: 1;
+}
+
+/* While the reveal shows, it's all the modal holds: no taller than it needs,
+   rather than laid over the whole wheel. */
+.wheel--revealing .wheel__view {
+  display: none;
+}
+
+.wheel--revealing .wheel-reveal {
+  /* The record's middle: the padding above it and half the record
+     (.wheel-reveal__record's width) - where its light is centred. */
+  --record-middle: calc(3.5rem + min(230px, 58vw) / 2);
+  position: relative;
+  inset: auto;
+  padding-top: 3.5rem;
+}
+
+.wheel--revealing :is(.wheel-reveal__rays, .wheel-reveal__halo, .wheel-reveal__orbit) {
+  top: var(--record-middle);
 }
 
 .wheel-reveal .vinyl__disc,
@@ -7492,6 +7950,24 @@ button.turntable__power:focus-visible {
     wheel-reveal-rays 1.4s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
 
+.wheel-reveal--fresh .wheel-reveal__rays--counter {
+  animation:
+    gold-spin 26s linear infinite reverse,
+    wheel-reveal-rays 1.8s 0.15s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* The stars fly out to their orbit as the record arrives. */
+.wheel-reveal--fresh .wheel-reveal__orbit {
+  animation:
+    gold-spin 9s linear infinite,
+    wheel-orbit-in 1.3s 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+}
+
+@keyframes wheel-orbit-in {
+  from { scale: 0; opacity: 0; }
+  to { scale: 1; opacity: 1; }
+}
+
 @keyframes wheel-reveal-rays {
   from { scale: 0; opacity: 0; }
   30% { opacity: 1; }
@@ -7517,22 +7993,28 @@ button.turntable__power:focus-visible {
   animation: reveal-in 0.5s 1.9s ease-out both;
 }
 
-/* ---- The showcase of all ten, one at a time on the big stage. */
+/* ---- The showcase of all forty, one at a time on the big stage. */
 .wheel-showcase {
   --record-glow: var(--color-accent);
   --record-accent: var(--color-accent);
   width: min(760px, calc(100vw - 1.5rem));
   max-height: calc(100dvh - 1.5rem);
   padding: 1.25rem;
-  overflow-x: hidden;
-  overflow-y: auto;
+  /* Only the list scrolls (below); the header and the big record stay put. */
+  overflow: hidden;
   background: radial-gradient(circle at 22% 32%,
     color-mix(in srgb, var(--record-glow) 22%, var(--color-surface)),
     var(--color-surface) 58%);
   transition: background 0.5s ease;
 }
 
+.wheel-showcase[open] {
+  display: flex;
+  flex-direction: column;
+}
+
 .wheel-showcase__header {
+  flex: none;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -7540,6 +8022,7 @@ button.turntable__power:focus-visible {
 }
 
 .wheel-showcase__feature {
+  flex: none;
   display: grid;
   grid-template-columns: minmax(0, 250px) 1fr;
   align-items: center;
@@ -7549,7 +8032,8 @@ button.turntable__power:focus-visible {
 
 .wheel-showcase__stage {
   position: relative;
-  width: min(250px, 66vw);
+  /* Shrinks on a short screen, so the list below keeps room to scroll. */
+  width: min(250px, 66vw, 34dvh);
   aspect-ratio: 1;
 }
 
@@ -7599,11 +8083,19 @@ button.turntable__power:focus-visible {
 }
 
 .wheel-showcase__list {
+  flex: 1 1 auto;
+  /* At least a row of records in view, however tall the stage above. */
+  min-height: 8rem;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.625rem;
-  margin: 0;
-  padding: 0;
+  /* Room inside the scroll box for a hovered item's lift and the chosen
+     one's glow, taken back out so the grid still lines up with the header. */
+  margin: 0 -0.75rem -1.25rem;
+  padding: 0.25rem 0.75rem 1.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
 }
 
@@ -7718,33 +8210,13 @@ button.turntable__power:focus-visible {
   z-index: 20;
 }
 
-.confetti {
+/* The confetti and sparkles' canvas (daily-wheel.js drawSky), the size of
+   the screen, under the rest. */
+.wheel-fx__sky {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 9px;
-  height: 14px;
-  margin: -7px 0 0 -4.5px;
-  border-radius: 2px;
-  background-color: var(--confetti-color);
-  will-change: transform;
-}
-
-.confetti--round {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-}
-
-.confetti--star {
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
-  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
-}
-
-.wheel-fx__coin {
-  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .wheel-fx__flash {
@@ -7753,13 +8225,107 @@ button.turntable__power:focus-visible {
   background-color: var(--color-text);
 }
 
+/* Winding up to a wheel exclusive (daily-wheel.js chargeUp): the screen
+   going dark all round the wheel, which stays lit. */
+.wheel-fx__dim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--x) var(--y),
+    transparent 0,
+    transparent 180px,
+    color-mix(in srgb, var(--color-black) 55%, transparent) 360px,
+    color-mix(in srgb, var(--color-black) 85%, transparent) 100%);
+  opacity: 0;
+}
+
+/* ... and sparks of every colour streaking in to it like comets: a long
+   tail fading out behind a bright white head, the end nearest the wheel. */
+.wheel-fx__spark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 78px;
+  height: 3px;
+  margin: -1.5px 0 0 -78px;
+  border-radius: 0 2px 2px 0;
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in srgb, var(--spark-color) 35%, transparent) 40%,
+    var(--spark-color) 78%,
+    var(--color-text) 96%);
+  transform-origin: 100% 50%;
+  will-change: transform, opacity;
+}
+
+/* The head: a small glowing ball. */
+.wheel-fx__spark::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    var(--color-text) 30%,
+    color-mix(in srgb, var(--spark-color) 60%, transparent) 55%,
+    transparent 72%);
+}
+
+/* Bursting: rings of rainbow light shooting out across the screen... */
+.wheel-fx__ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 200px;
+  margin: -100px 0 0 -100px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--vinyl-red), var(--vinyl-orange), var(--vinyl-yellow), var(--vinyl-green),
+    var(--vinyl-teal), var(--vinyl-blue), var(--vinyl-purple), var(--vinyl-pink), var(--vinyl-red));
+  -webkit-mask-image: radial-gradient(circle, transparent 58%, var(--color-black) 64%, var(--color-black) 68%, transparent 72%);
+  mask-image: radial-gradient(circle, transparent 58%, var(--color-black) 64%, var(--color-black) 68%, transparent 72%);
+  will-change: transform, opacity;
+}
+
+/* ... and beams of every colour, sweeping round from where it burst. */
+.wheel-fx__beams {
+  position: absolute;
+  top: var(--y);
+  left: var(--x);
+  width: min(1600px, 160vmax);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: conic-gradient(from 0deg,
+    var(--vinyl-red), var(--vinyl-orange), var(--vinyl-yellow), var(--vinyl-green),
+    var(--vinyl-teal), var(--vinyl-blue), var(--vinyl-purple), var(--vinyl-pink), var(--vinyl-red));
+  -webkit-mask-image:
+    repeating-conic-gradient(var(--color-black) 0deg 4deg, transparent 4deg 18deg),
+    radial-gradient(circle, var(--color-black) 6%, transparent 48%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    repeating-conic-gradient(var(--color-black) 0deg 4deg, transparent 4deg 18deg),
+    radial-gradient(circle, var(--color-black) 6%, transparent 48%);
+  mask-composite: intersect;
+  mix-blend-mode: screen;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wheel__rays,
-  .wheel__slice--won,
+  .wheel__glow--on,
   .wheel--sad .wheel__result-line,
   .wheel__result--shown .wheel__result-line,
   .wheel--charging .wheel__machine,
   .wheel-reveal__rays,
+  .wheel-reveal__rays--counter,
+  .wheel-reveal__orbit,
+  .wheel-reveal__star > span,
+  .wheel-reveal--fresh .wheel-reveal__rays--counter,
+  .wheel-reveal--fresh .wheel-reveal__orbit,
   .wheel-reveal__halo,
   .wheel-showcase__glow,
   .wheel-reveal--in,
@@ -7777,10 +8343,19 @@ button.turntable__power:focus-visible {
     transform: rotate(-7deg);
   }
 
+  .wheel__glow--on {
+    opacity: 0.8;
+  }
+
+  .wheel-reveal__star > span {
+    opacity: 1;
+  }
+
   .wheel__disc,
   .wheel__slice,
   .wheel__machine,
-  .wheel-showcase__item {
+  .wheel-showcase__item,
+  .wheel-reveal__record--pressable {
     transition: none;
   }
 }

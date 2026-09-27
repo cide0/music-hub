@@ -1,10 +1,11 @@
 /*
  * The Daily Spin, on every page: a wheel of fortune behind the navbar's
  * wheel icon, free once a (local) day, plus any respins won on it - kept
- * for later, as many as the user likes. It pays out coins (flying up to
- * the balance once the wheel closes, like everywhere else), a Mystery
- * Vinyl (the Store's own unboxing, free) or one of ten wheel exclusives,
- * records nothing else in the app hands out (vinyl-catalog.js).
+ * for later, as many as the user likes. It pays out coins (flying out of
+ * the wheel's middle up to the balance, the wheel staying open for the
+ * next spin), a Mystery Vinyl (the Store's own unboxing, free) or one of
+ * forty wheel exclusives, records nothing else in the app hands out
+ * (vinyl-catalog.js).
  *
  * The prize is decided and stored (wallet.js, `store.wheel.unclaimed`) the
  * moment the wheel is spun; the wheel is then only turned to land on it,
@@ -44,8 +45,22 @@ window.MusicHub = window.MusicHub || {};
   var EXCLUSIVE_FALLBACK_COINS = 10000;
   var MYSTERY_FALLBACK_COINS = 1000;
 
+  // The coins flying up to the balance, by the amount won: [from amount,
+  // coins, how long they keep setting off (ms)] - more of them and for
+  // longer each step up, the jackpot pouring on and on.
+  var COIN_SHOWERS = [
+    [0, 30, 900],
+    [1000, 55, 1400],
+    [2500, 90, 2200],
+    [5000, 140, 3400],
+    [7500, 220, 6500],
+  ];
+
   // The spin: a little wind-back, then round and round, slowing down.
   var WIND_UP_MS = 380;
+  // Winding up to a wheel exclusive, before it bursts. Must match
+  // wheel-charge's length in style.css (.wheel--charging .wheel__machine).
+  var CHARGE_MS = 2400;
   var WIND_UP_DEGREES = 14;
   var SPIN_MS = 6200;
   var MIN_TURNS = 5;
@@ -55,15 +70,20 @@ window.MusicHub = window.MusicHub || {};
   var FLAP_STIFFNESS = 700;
   var FLAP_DAMPING = 34;
   var FLAP_MAX = 28;
-  // How long a win shows before the wheel closes itself, by tier.
-  var CLOSE_AFTER_MS = { none: 2600, common: 2300, good: 2400, rare: 3000, epic: 3800, jackpot: 4400 };
+  // How long a win's celebration plays, at least, by tier - the wheel can't
+  // be spun again until it's over and every coin has landed (fxSettled).
+  var WIN_SHOW_MS = { none: 2600, common: 2300, good: 2400, rare: 3000, epic: 5300, jackpot: 7800 };
+  // How long "Big win!" and "Jackpot!" stay up between slamming down and
+  // blowing away: through the coins' shower (COIN_SHOWERS), about.
+  var BANNER_HOLD_MS = { epic: 4000, jackpot: 6500 };
 
   var els = {};
   var rotation = 0;
   var spinning = false;
-  // Run once the wheel is closed, e.g. the coins flying up to the balance.
+  // The win still playing out (a token per win); no spinning again till it's done.
+  var celebration = null;
+  // Run once the wheel is closed: off to the Store, from the prizes' Mystery Vinyl card.
   var afterClose = null;
-  var closeTimer = null;
   var statusTimer = null;
 
   /* ------------------------------------------------------------ helpers */
@@ -185,11 +205,11 @@ window.MusicHub = window.MusicHub || {};
     // Nothing: the sad trombone - four notes sliding down, the last one wobbling.
     nothing: function (ctx, at) {
       [[392, 370], [370, 349], [349, 330]].forEach(function (note, index) {
-        sfx.tone(ctx, at + index * 0.32, note[0], note[1], 0.12, 0.3, 'triangle');
+        sfx.tone(ctx, at + index * 0.32, note[0], note[1], 0.2, 0.3, 'triangle');
       });
       var last = at + 0.96;
       for (var i = 0; i < 6; i += 1) {
-        sfx.tone(ctx, last + i * 0.13, 330 - i * 4, 318 - i * 5, 0.11 - i * 0.012, 0.16, 'triangle');
+        sfx.tone(ctx, last + i * 0.13, 330 - i * 4, 318 - i * 5, 0.19 - i * 0.02, 0.16, 'triangle');
       }
     },
     common: function (ctx, at) {
@@ -233,9 +253,24 @@ window.MusicHub = window.MusicHub || {};
     },
     // Winding up to a wheel exclusive: noise and a tone rising and rising.
     riser: function (ctx, at) {
-      sfx.noise(ctx, at, 1.6, 'bandpass', 200, 2, 0.3, 1.4, 7000);
-      sfx.tone(ctx, at, 180, 1400, 0.08, 1.6, 'sawtooth');
-      sfx.tone(ctx, at, 270, 2100, 0.05, 1.6, 'triangle');
+      var length = CHARGE_MS / 1000;
+      sfx.noise(ctx, at, length, 'bandpass', 200, 2, 0.3, length - 0.2, 7000);
+      sfx.tone(ctx, at, 180, 1400, 0.08, length, 'sawtooth');
+      sfx.tone(ctx, at, 270, 2100, 0.05, length, 'triangle');
+    },
+    // Under the wind-up: a heartbeat, a low double thump.
+    heartbeat: function (ctx, at) {
+      sfx.tone(ctx, at, 78, 42, 0.42, 0.22);
+      sfx.tone(ctx, at + 0.15, 70, 38, 0.3, 0.2);
+    },
+    // A firework going off: a crack, then a crackle of sparks.
+    pop: function (ctx, at) {
+      sfx.noise(ctx, at, 0.35, 'lowpass', 1400, 0.8, 0.32, 0.002);
+      sfx.tone(ctx, at, 160, 50, 0.22, 0.3);
+      for (var i = 0; i < 9; i += 1) {
+        sfx.noise(ctx, at + 0.12 + i * 0.045 + Math.random() * 0.03, 0.03, 'highpass', 4500, 1, 0.1, 0.001);
+      }
+      sparkles(ctx, at + 0.1, 5);
     },
     // ... and it bursts: a deep boom and a cascade of bells, up two octaves.
     legendary: function (ctx, at) {
@@ -461,6 +496,7 @@ window.MusicHub = window.MusicHub || {};
   function setRotation(degrees) {
     rotation = degrees;
     els.disc.style.transform = 'rotate(' + degrees.toFixed(3) + 'deg)';
+    els.glow.style.transform = els.disc.style.transform;
   }
 
   function sliceAt(degrees) {
@@ -560,13 +596,18 @@ window.MusicHub = window.MusicHub || {};
       var won = slices[index].prize === prize;
       group.classList.toggle('wheel__slice--won', won);
       group.classList.toggle('wheel__slice--dim', !won);
+      if (won) {
+        els.glowSlice.setAttribute('d', slicePath(92, slices[index].start, slices[index].end));
+      }
     });
+    els.glow.classList.add('wheel__glow--on');
   }
 
   function clearHighlight() {
     els.slices.forEach(function (group) {
       group.classList.remove('wheel__slice--won', 'wheel__slice--dim');
     });
+    els.glow.classList.remove('wheel__glow--on');
   }
 
   /* ------------------------------------------------------ celebrations */
@@ -590,23 +631,89 @@ window.MusicHub = window.MusicHub || {};
         els.dialog.appendChild(overlay);
       }
     }
-    if (overlay.hasAttribute('popover')) {
-      // Re-shown every time, so it's the newest thing in the top layer.
-      if (overlay.matches(':popover-open')) {
-        overlay.hidePopover();
-      }
+    if (overlay.hasAttribute('popover') && !overlay.matches(':popover-open')) {
       overlay.showPopover();
     }
     return overlay;
   }
 
-  function hideFx() {
-    if (overlay) {
-      overlay.textContent = '';
-      if (overlay.hasAttribute('popover') && overlay.matches(':popover-open')) {
-        overlay.hidePopover();
-      }
+  /**
+   * The overlay, shown again so it's the newest thing in the top layer -
+   * over the wheel, even if it was up before the wheel opened. Once when a
+   * celebration starts, not for every burst: each re-show works out the
+   * styles of everything in it again.
+   */
+  function raiseFx() {
+    var layer = fxLayer();
+    if (layer.hasAttribute('popover')) {
+      layer.hidePopover();
+      layer.showPopover();
     }
+    return layer;
+  }
+
+  /**
+   * Puts `pieces` ({ node, frames, timing }) on the overlay in one go, then
+   * sets them all moving - each gone once it lands. Animating each as it's
+   * added would work the styles out again for every piece: a big win's
+   * hundreds of them froze the first frame.
+   */
+  function launch(pieces) {
+    var layer = fxLayer();
+    var batch = document.createDocumentFragment();
+    pieces.forEach(function (piece) {
+      batch.appendChild(piece.node);
+    });
+    layer.appendChild(batch);
+    pieces.forEach(function (piece) {
+      piece.node.animate(piece.frames, piece.timing).onfinish = piece.node.remove.bind(piece.node);
+    });
+  }
+
+  /** Clears the celebration away - the wallet's coins still on their way up fly on. */
+  function hideFx() {
+    if (!overlay) {
+      return;
+    }
+    clearSky();
+    Array.prototype.forEach.call(overlay.querySelectorAll('.wheel-fx__flash, .wheel-fx__fx'), function (node) {
+      node.remove();
+    });
+    // Empty but for the (cleared) canvas: out of the way.
+    if (!overlay.querySelector(':scope > :not(.wheel-fx__sky)') && overlay.hasAttribute('popover') && overlay.matches(':popover-open')) {
+      overlay.hidePopover();
+    }
+  }
+
+  /**
+   * Where won coins fly (wallet.earn's `layer`): the overlay, over the open
+   * wheel and its backdrop. Without popovers, the page as ever.
+   */
+  function coinLayer() {
+    if (!els.dialog.open || (overlay && !overlay.hasAttribute('popover')) || typeof HTMLElement.prototype.showPopover !== 'function') {
+      return null;
+    }
+    return raiseFx();
+  }
+
+  /**
+   * Resolves once everything still playing over the wheel has finished:
+   * confetti, raining coins, the coins flying up to the balance, the "+500"
+   * and the balance fading back down. (The coins' endless flip doesn't count.)
+   */
+  function fxSettled() {
+    if (!overlay || typeof overlay.getAnimations !== 'function') {
+      return Promise.resolve();
+    }
+    var playing = overlay.getAnimations({ subtree: true }).filter(function (animation) {
+      return animation.playState === 'running' && animation.effect && animation.effect.getComputedTiming().endTime !== Infinity;
+    });
+    if (!playing.length && !sky.pieces.length) {
+      return Promise.resolve();
+    }
+    return Promise.all(playing.map(function (animation) {
+      return animation.finished.catch(function () {});
+    }).concat(skyClear())).then(fxSettled);
   }
 
   function centreOf(node) {
@@ -624,64 +731,202 @@ window.MusicHub = window.MusicHub || {};
     legendary: ['var(--vinyl-red)', 'var(--vinyl-orange)', 'var(--vinyl-yellow)', 'var(--vinyl-green)', 'var(--vinyl-teal)', 'var(--vinyl-blue)', 'var(--vinyl-purple)', 'var(--vinyl-pink)'],
   };
 
+  /*
+   * Confetti and sparkles, drawn on one canvas over the whole screen (the
+   * overlay's .wheel-fx__sky) rather than an element each: a jackpot's
+   * hundreds of pieces were hundreds of layers for the graphics card to put
+   * together every frame. Every piece is still there, moving as before.
+   */
+  var sky = { canvas: null, ctx: null, ratio: 1, pieces: [], frame: 0, idle: [] };
+  // The star sparkle's outline, and a strip of paper, both 1px across -
+  // scaled to size as they're drawn.
+  var STAR_PATH = [[0.5, 0], [0.61, 0.39], [1, 0.5], [0.61, 0.61], [0.5, 1], [0.39, 0.61], [0, 0.5], [0.39, 0.39]];
+  var CONFETTI_GRAVITY = 520;
+
+  /** The canvas, on the overlay, sized to the screen. */
+  function skyCanvas() {
+    var layer = fxLayer();
+    if (!sky.canvas) {
+      sky.canvas = el('canvas', 'wheel-fx__sky');
+      sky.ctx = sky.canvas.getContext('2d');
+    }
+    if (sky.canvas.parentNode !== layer) {
+      layer.insertBefore(sky.canvas, layer.firstChild);
+    }
+    sky.ratio = Math.min(window.devicePixelRatio || 1, 2);
+    var width = Math.round(window.innerWidth * sky.ratio);
+    var height = Math.round(window.innerHeight * sky.ratio);
+    if (sky.canvas.width !== width || sky.canvas.height !== height) {
+      sky.canvas.width = width;
+      sky.canvas.height = height;
+    }
+    return sky.canvas;
+  }
+
   /**
    * `count` pieces of confetti bursting out of `from` ({x, y}) and falling
    * away under gravity, tumbling as they go. `options.stars`: sparkles
    * rather than paper.
    */
   function confetti(count, from, colors, options) {
-    if (reducedMotion() || !document.body.animate) {
+    if (reducedMotion() || !skyCanvas().getContext) {
       return;
     }
-    var layer = fxLayer();
     var power = (options && options.power) || 1;
+    var now = performance.now();
     for (var i = 0; i < count; i += 1) {
-      var piece = el('span', 'confetti' + (options && options.stars ? ' confetti--star' : i % 3 === 0 ? ' confetti--round' : ''));
-      piece.style.setProperty('--confetti-color', colors[i % colors.length]);
-      layer.appendChild(piece);
       var angle = (options && options.angle !== undefined ? options.angle : -Math.PI / 2) + (Math.random() - 0.5) * ((options && options.spread) || Math.PI * 1.6);
       var speed = between(320, 820) * power;
-      var vx = Math.cos(angle) * speed;
-      var vy = Math.sin(angle) * speed;
-      var spin = between(-900, 900);
-      var duration = between(1600, 2800);
-      var frames = [];
-      for (var f = 0; f <= 12; f += 1) {
-        var t = f / 12 * duration / 1000;
-        // Air drag slows it down, gravity pulls it down.
-        var drag = (1 - Math.exp(-2.2 * t)) / 2.2;
-        var x = from.x + vx * drag + Math.sin(t * 6 + i) * 12;
-        var y = from.y + vy * drag + 520 * t * t * 0.5;
-        frames.push({
-          transform: 'translate(' + x.toFixed(1) + 'px, ' + y.toFixed(1) + 'px) rotate(' + (spin * t).toFixed(0) + 'deg) rotateX(' + (spin * t * 1.7).toFixed(0) + 'deg)',
-          opacity: f > 9 ? (12 - f) / 3 : 1,
-        });
-      }
-      var animation = piece.animate(frames, { duration: duration, delay: Math.random() * 120, easing: 'linear', fill: 'both' });
-      animation.onfinish = piece.remove.bind(piece);
+      sky.pieces.push({
+        shape: options && options.stars ? 'star' : i % 3 === 0 ? 'round' : 'strip',
+        color: wallet.paint(colors[i % colors.length]),
+        x: from.x,
+        y: from.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        spin: between(-900, 900),
+        wobble: i,
+        start: now + Math.random() * 120,
+        duration: between(1600, 2800),
+      });
+    }
+    if (!sky.frame) {
+      sky.frame = window.requestAnimationFrame(drawSky);
     }
   }
 
-  /** Coins raining down the whole screen, flipping as they fall. */
-  function coinRain(count) {
-    if (reducedMotion() || !document.body.animate) {
+  /** One frame of every piece in the air - and the next, while any are. */
+  function drawSky(now) {
+    var ctx = sky.ctx;
+    var ratio = sky.ratio;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, sky.canvas.width, sky.canvas.height);
+    sky.pieces = sky.pieces.filter(function (piece) {
+      var elapsed = now - piece.start;
+      if (elapsed > piece.duration) {
+        return false;
+      }
+      if (elapsed < 0) {
+        return true;
+      }
+      if (piece.shape === 'coin') {
+        var p = elapsed / piece.duration;
+        ctx.globalAlpha = 1;
+        wallet.drawCoin(ctx, ratio, piece.x + piece.drift * p, -40 + (window.innerHeight + 80) * fallen(p), piece.scale, wallet.flipWidth(p * piece.flips));
+        return true;
+      }
+      var t = elapsed / 1000;
+      // Air drag slows it down, gravity pulls it down.
+      var drag = (1 - Math.exp(-2.2 * t)) / 2.2;
+      var x = piece.x + piece.vx * drag + Math.sin(t * 6 + piece.wobble) * 12;
+      var y = piece.y + piece.vy * drag + CONFETTI_GRAVITY * t * t * 0.5;
+      // Turning in the screen's plane, tumbling end over end (the flip
+      // squashing it top to bottom), and fading over its last quarter.
+      var turn = piece.spin * t * Math.PI / 180;
+      var tumble = Math.cos(piece.spin * t * 1.7 * Math.PI / 180);
+      var cos = Math.cos(turn);
+      var sin = Math.sin(turn);
+      var left = elapsed / piece.duration;
+      ctx.globalAlpha = left > 0.75 ? (1 - left) * 4 : 1;
+      ctx.fillStyle = piece.color;
+      ctx.setTransform(ratio * cos, ratio * sin, -ratio * sin * tumble, ratio * cos * tumble, x * ratio, y * ratio);
+      ctx.beginPath();
+      if (piece.shape === 'star') {
+        STAR_PATH.forEach(function (point, index) {
+          ctx[index ? 'lineTo' : 'moveTo']((point[0] - 0.5) * 14, (point[1] - 0.5) * 14);
+        });
+      } else if (piece.shape === 'round') {
+        ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+      } else {
+        ctx.rect(-4.5, -7, 9, 14);
+      }
+      ctx.fill();
+      return true;
+    });
+    ctx.globalAlpha = 1;
+    if (sky.pieces.length) {
+      sky.frame = window.requestAnimationFrame(drawSky);
       return;
     }
-    var layer = fxLayer();
-    for (var i = 0; i < count; i += 1) {
-      var coin = el('span', 'flying-coin wheel-fx__coin');
-      coin.appendChild(wallet.coinSvg('flying-coin__face'));
-      coin.style.setProperty('--flip-ms', Math.round(between(260, 520)) + 'ms');
-      layer.appendChild(coin);
-      var x = Math.random() * window.innerWidth;
-      var drift = between(-60, 60);
-      var scale = between(0.7, 1.5);
-      var animation = coin.animate([
-        { transform: 'translate(' + x.toFixed(0) + 'px, -40px) scale(' + scale.toFixed(2) + ')' },
-        { transform: 'translate(' + (x + drift).toFixed(0) + 'px, ' + (window.innerHeight + 40) + 'px) scale(' + scale.toFixed(2) + ')' },
-      ], { duration: between(1300, 2300), delay: Math.random() * 1500, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'both' });
-      animation.onfinish = coin.remove.bind(coin);
+    sky.frame = 0;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, sky.canvas.width, sky.canvas.height);
+    var waiting = sky.idle;
+    sky.idle = [];
+    waiting.forEach(function (resolve) {
+      resolve();
+    });
+  }
+
+  /** Resolves once the last piece of confetti has fallen. */
+  function skyClear() {
+    if (!sky.pieces.length) {
+      return Promise.resolve();
     }
+    return new Promise(function (resolve) {
+      sky.idle.push(resolve);
+    });
+  }
+
+  /** Every piece gone at once - a new spin. */
+  function clearSky() {
+    sky.pieces = [];
+    if (sky.frame) {
+      window.cancelAnimationFrame(sky.frame);
+      sky.frame = 0;
+    }
+    if (sky.ctx) {
+      sky.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      sky.ctx.clearRect(0, 0, sky.canvas.width, sky.canvas.height);
+    }
+    var waiting = sky.idle;
+    sky.idle = [];
+    waiting.forEach(function (resolve) {
+      resolve();
+    });
+  }
+
+  /** Coins raining down the whole screen, flipping as they fall - on the confetti's canvas. */
+  function coinRain(count) {
+    if (reducedMotion() || !skyCanvas().getContext) {
+      return;
+    }
+    var now = performance.now();
+    for (var i = 0; i < count; i += 1) {
+      var duration = between(1300, 2300);
+      sky.pieces.push({
+        shape: 'coin',
+        x: Math.random() * window.innerWidth,
+        drift: between(-60, 60),
+        scale: between(0.7, 1.5),
+        flips: duration / between(260, 520),
+        start: now + Math.random() * 1500,
+        duration: duration,
+      });
+    }
+    if (!sky.frame) {
+      sky.frame = window.requestAnimationFrame(drawSky);
+    }
+  }
+
+  /**
+   * How far down a falling coin is, `p` of the way through its fall: the
+   * old cubic-bezier(0.4, 0, 1, 1) - slow to start, then dropping fast.
+   */
+  function fallen(p) {
+    var low = 0;
+    var high = 1;
+    for (var i = 0; i < 14; i += 1) {
+      var mid = (low + high) / 2;
+      var x = 3 * (1 - mid) * (1 - mid) * mid * 0.4 + 3 * (1 - mid) * mid * mid + mid * mid * mid;
+      if (x < p) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    var s = (low + high) / 2;
+    return 3 * (1 - s) * s * s + s * s * s;
   }
 
   /** The whole screen lighting up for a moment. */
@@ -711,8 +956,14 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /** "BIG WIN!" or "JACKPOT!" slamming onto the wheel. */
-  function banner(text) {
-    els.banner.textContent = text;
+  function banner(text, holdMs) {
+    els.banner.style.setProperty('--banner-hold', holdMs + 'ms');
+    // The lettering, and its hard gold shadow on a still layer of its own
+    // underneath: a filter on the moving, shining text would be worked out
+    // again every frame.
+    els.banner.textContent = '';
+    els.banner.appendChild(el('span', 'wheel__banner-shadow', text));
+    els.banner.appendChild(el('span', 'wheel__banner-text', text));
     els.banner.classList.remove('wheel__banner--show');
     // Restart its animation.
     void els.banner.offsetWidth;
@@ -745,7 +996,7 @@ window.MusicHub = window.MusicHub || {};
     } else if (prize.kind === 'respins') {
       note = 'Saved for whenever you like.';
     } else if (prize.kind === 'mystery') {
-      note = 'Unbox it for free in the Store…';
+      note = 'Waiting in your prizes - unbox it free in the Store.';
     } else if (prize.kind === 'nothing') {
       note = 'Better luck next spin.';
     }
@@ -759,6 +1010,7 @@ window.MusicHub = window.MusicHub || {};
     var tier = record.coins && prize.kind !== 'coins' ? 'epic' : prize.tier;
     var from = centreOf(els.machine);
     els.dialog.dataset.win = tier;
+    raiseFx();
     highlight(prize);
     showResult(prize, record);
 
@@ -787,7 +1039,7 @@ window.MusicHub = window.MusicHub || {};
         els.dialog.classList.add('wheel--rays');
         flash(tier === 'jackpot' ? 0.9 : 0.6);
         shake(els.dialog, tier === 'jackpot' ? 10 : 7);
-        banner(tier === 'jackpot' ? 'Jackpot!' : 'Big win!');
+        banner(tier === 'jackpot' ? 'Jackpot!' : 'Big win!', BANNER_HOLD_MS[tier]);
         confetti(tier === 'jackpot' ? 160 : 110, from, TIER_COLORS[tier], { power: 1.2 });
         // Cannons from both bottom corners.
         confetti(50, { x: 0, y: window.innerHeight }, TIER_COLORS[tier], { angle: -Math.PI / 3, spread: 0.7, power: 1.5 });
@@ -849,14 +1101,14 @@ window.MusicHub = window.MusicHub || {};
     }
     var coins = claim(record);
     if (coins) {
-      wallet.earn(coins, { from: els.open });
+      wallet.earn(coins, { from: els.dialog.open ? els.disc : els.open, layer: coinLayer() });
     }
   }
 
   /* ---------------------------------------------------------------- spin */
 
   function spin() {
-    if (spinning) {
+    if (spinning || celebration) {
       return;
     }
     claimLeftover();
@@ -896,7 +1148,6 @@ window.MusicHub = window.MusicHub || {};
     }
 
     spinning = true;
-    window.clearTimeout(closeTimer);
     hideFx();
     resetCelebration();
     els.result.className = 'wheel__result';
@@ -920,6 +1171,7 @@ window.MusicHub = window.MusicHub || {};
   /**
    * A mystery vinyl is unboxed in the Store - its offer is free while one
    * won here is waiting. Already there, the wheel just closes onto it.
+   * Only ever asked for, from the prizes' card: winning one doesn't leave.
    */
   function goToStore() {
     if (window.location.pathname !== '/store') {
@@ -927,23 +1179,34 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
-  /** After the celebration: close by itself, or send the user to the Store. */
+  /** Pays `coins`, flying out of the wheel's middle in its COIN_SHOWERS shower. */
+  function earnShower(coins) {
+    var shower = COIN_SHOWERS.filter(function (step) {
+      return coins >= step[0];
+    }).pop();
+    return wallet.earn(coins, { from: els.disc, layer: coinLayer(), coins: shower[1], launchMs: shower[2] });
+  }
+
+  /**
+   * After the wheel stops: coins fly straight out of its middle up to the
+   * balance, and the wheel stays open for the next spin - a Mystery Vinyl
+   * too, which waits in the prizes (the gift button) to be unboxed.
+   */
   function finishWin(prize, record, coins) {
-    if (prize.kind === 'respins') {
-      // Straight back to spinning, if they like.
-      els.machine.focus();
-      return;
-    }
+    var landed = coins ? earnShower(coins) : null;
+    // The wheel stays out of reach until the whole celebration has played.
     var tier = record.coins && prize.kind !== 'coins' ? 'epic' : prize.tier;
-    var from = centreOf(els.machine);
-    afterClose = function () {
-      if (coins) {
-        wallet.earn(coins, { from: from });
-      } else if (prize.kind === 'mystery') {
-        goToStore();
+    var token = {};
+    celebration = token;
+    render();
+    Promise.all([wait(reducedMotion() ? 600 : WIN_SHOW_MS[tier] || 2500), landed]).then(fxSettled).then(function () {
+      if (celebration === token) {
+        celebration = null;
+        render();
       }
-    };
-    closeTimer = window.setTimeout(close, CLOSE_AFTER_MS[tier] || 2500);
+    });
+    // Straight back to spinning, if they like.
+    els.machine.focus();
   }
 
   /* ----------------------------------------------------------- exclusive */
@@ -959,14 +1222,22 @@ window.MusicHub = window.MusicHub || {};
     showResult(prize, record);
     els.dialog.classList.add('wheel--charging');
     sound('riser');
-    return wait(motion ? 1600 : 200).then(function () {
+    if (motion) {
+      chargeUp();
+    }
+    return wait(motion ? CHARGE_MS : 200).then(function () {
       claim(record);
       spinning = false;
       sound('legendary');
       flash(1);
       resetCelebration();
       showReveal(record, true);
+      // Out of the record itself, now it's up in the reveal.
       var from = centreOf(els.revealRecord);
+      if (motion) {
+        burst(from);
+        fireworks(6);
+      }
       var glow = MusicHub.vinyl.glowColors(MusicHub.vinyl.describe(record.format));
       confetti(90, from, [glow.glow, glow.accent, 'var(--color-text)', 'var(--rarity-gold-shine)'], { stars: true, spread: Math.PI * 2, power: 0.9 });
       confetti(120, { x: window.innerWidth / 2, y: window.innerHeight * 0.1 }, TIER_COLORS.legendary, { angle: Math.PI / 2, spread: Math.PI * 1.2, power: 0.5 });
@@ -976,6 +1247,115 @@ window.MusicHub = window.MusicHub || {};
       }, 500);
       render();
     });
+  }
+
+  // The screen darkening round the wheel as an exclusive winds up.
+  var chargeDim = null;
+
+  /**
+   * The wind-up to a wheel exclusive, over CHARGE_MS: the screen going
+   * dark round the wheel, sparks of every colour pulled in from the edges
+   * - more and faster as it goes - and a heartbeat quickening under it.
+   */
+  function chargeUp() {
+    var centre = centreOf(els.machine);
+    raiseFx();
+    chargeDim = el('span', 'wheel-fx__fx wheel-fx__dim');
+    chargeDim.style.setProperty('--x', centre.x + 'px');
+    chargeDim.style.setProperty('--y', centre.y + 'px');
+    fxLayer().appendChild(chargeDim);
+    chargeDim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: CHARGE_MS, easing: 'ease-in', fill: 'forwards' });
+
+    var reach = Math.hypot(window.innerWidth, window.innerHeight) * 0.6;
+    var count = 130;
+    var pieces = [];
+    for (var i = 0; i < count; i += 1) {
+      var progress = i / count;
+      var angle = Math.random() * Math.PI * 2;
+      var distance = reach * between(0.65, 1.1);
+      var start = { x: centre.x + Math.cos(angle) * distance, y: centre.y + Math.sin(angle) * distance };
+      var near = { x: centre.x + Math.cos(angle) * distance * 0.55, y: centre.y + Math.sin(angle) * distance * 0.55 };
+      // Pointing the way it flies: in, towards the wheel.
+      var heading = angle * 180 / Math.PI + 180;
+      var spark = el('span', 'wheel-fx__fx wheel-fx__spark');
+      spark.style.setProperty('--spark-color', TIER_COLORS.legendary[i % TIER_COLORS.legendary.length]);
+      pieces.push({
+        node: spark,
+        frames: [
+          { transform: sparkAt(start, heading, 0.7), opacity: 0 },
+          { transform: sparkAt(near, heading, 1.5), opacity: 1, offset: 0.55 },
+          { transform: sparkAt(centre, heading, 0.55), opacity: 0.35 },
+        ],
+        timing: {
+          duration: 950 - progress * 500,
+          delay: Math.pow(progress, 0.75) * (CHARGE_MS - 650),
+          easing: 'cubic-bezier(0.5, 0, 0.9, 0.5)',
+          fill: 'both',
+        },
+      });
+    }
+    launch(pieces);
+    // Quicker and quicker, up to the burst.
+    [0, 0.72, 1.28, 1.7, 2.0, 2.2, 2.33].forEach(function (seconds) {
+      sound('heartbeat', seconds);
+    });
+  }
+
+  /** A spark at `point`, pointing `heading` degrees, drawn out `stretch` times its length. */
+  function sparkAt(point, heading, stretch) {
+    return 'translate(' + point.x.toFixed(1) + 'px, ' + point.y.toFixed(1) + 'px) rotate(' + heading.toFixed(1) + 'deg) scaleX(' + stretch + ')';
+  }
+
+  /**
+   * The exclusive bursting out at `from` (the record's middle): the dark lifting as rings of
+   * rainbow light shoot out across the screen, beams of every colour
+   * sweeping round, and the whole wheel shaking.
+   */
+  function burst(from) {
+    if (chargeDim) {
+      var dim = chargeDim;
+      chargeDim = null;
+      dim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, easing: 'ease-out', fill: 'forwards' }).onfinish = dim.remove.bind(dim);
+    }
+    var pieces = [];
+    for (var i = 0; i < 3; i += 1) {
+      var ring = el('span', 'wheel-fx__fx wheel-fx__ring');
+      var place = 'translate(' + from.x.toFixed(0) + 'px, ' + from.y.toFixed(0) + 'px) ';
+      pieces.push({
+        node: ring,
+        frames: [{ transform: place + 'scale(0.1)', opacity: 1 }, { transform: place + 'scale(' + (7 + i * 1.5) + ')', opacity: 0 }],
+        timing: { duration: 1300 + i * 200, delay: i * 180, easing: 'cubic-bezier(0.1, 0.7, 0.3, 1)', fill: 'both' },
+      });
+    }
+    var beams = el('span', 'wheel-fx__fx wheel-fx__beams');
+    beams.style.setProperty('--x', from.x + 'px');
+    beams.style.setProperty('--y', from.y + 'px');
+    pieces.push({
+      node: beams,
+      frames: [
+        { opacity: 0, rotate: '0deg' },
+        { opacity: 0.85, offset: 0.12 },
+        { opacity: 0.6, offset: 0.5 },
+        { opacity: 0, rotate: '70deg' },
+      ],
+      timing: { duration: 2600, easing: 'ease-out', fill: 'both' },
+    });
+    launch(pieces);
+    shake(els.dialog, 12);
+  }
+
+  /** `count` fireworks going off across the screen, one after another, while the record's shown. */
+  function fireworks(count) {
+    for (var i = 0; i < count; i += 1) {
+      window.setTimeout(function () {
+        if (!els.dialog.open || els.reveal.hidden) {
+          return;
+        }
+        var at = { x: between(0.12, 0.88) * window.innerWidth, y: between(0.12, 0.5) * window.innerHeight };
+        confetti(36, at, TIER_COLORS.legendary, { stars: true, spread: Math.PI * 2, power: 0.5 });
+        sound('pop');
+      }, 900 + i * 430 + Math.random() * 160);
+    }
   }
 
   // The exclusive the reveal shows: { format, family, seed }.
@@ -1007,13 +1387,14 @@ window.MusicHub = window.MusicHub || {};
       letter.style.setProperty('--letter', index);
       els.revealName.appendChild(letter);
     });
-    var held = heldCount();
     els.revealEyebrow.textContent = fresh ? 'Wheel Exclusive unlocked' : 'Wheel Exclusive';
-    els.revealNote.textContent = held + ' of ' + MusicHub.vinylCatalog.exclusives.length + ' wheel exclusives won';
-    els.revealActions.hidden = false;
+    els.revealNote.hidden = true;
     els.revealDone.hidden = true;
+    setPressable(exclusive);
 
     els.reveal.hidden = false;
+    // Just the reveal, the wheel behind it out of the way: the modal only as tall as it needs.
+    els.dialog.classList.add('wheel--revealing');
     els.reveal.classList.toggle('wheel-reveal--fresh', !!fresh);
     els.view.setAttribute('inert', '');
     els.reveal.classList.remove('wheel-reveal--in');
@@ -1030,7 +1411,23 @@ window.MusicHub = window.MusicHub || {};
     if (!els.dialog.open) {
       els.dialog.showModal();
     }
-    els.revealPress.focus({ preventScroll: true });
+    els.revealRecord.focus({ preventScroll: true });
+  }
+
+  /** The record as the button that presses `exclusive` on an album - or, with none, just a record. */
+  function setPressable(exclusive) {
+    var record = els.revealRecord;
+    record.classList.toggle('wheel-reveal__record--pressable', !!exclusive);
+    if (exclusive) {
+      record.setAttribute('role', 'button');
+      record.setAttribute('tabindex', '0');
+      record.setAttribute('aria-label', 'Press ' + exclusive.format + ' on an album');
+      record.setAttribute('title', 'Press it on an album');
+    } else {
+      ['role', 'tabindex', 'aria-label', 'title'].forEach(function (name) {
+        record.removeAttribute(name);
+      });
+    }
   }
 
   function hideReveal() {
@@ -1040,11 +1437,19 @@ window.MusicHub = window.MusicHub || {};
     MusicHub.vinyl.setPlaying(els.revealRecord, false);
     els.revealRecord.textContent = '';
     els.reveal.hidden = true;
+    els.dialog.classList.remove('wheel--revealing');
+    setPressable(null);
     els.view.removeAttribute('inert');
     els.dialog.style.removeProperty('--record-glow');
     els.dialog.style.removeProperty('--record-accent');
     revealing = null;
     render();
+  }
+
+  /** Out of the reveal, back on the wheel - the exclusive waits there if it wasn't pressed. */
+  function backToWheel() {
+    hideReveal();
+    els.machine.focus();
   }
 
   /**
@@ -1084,14 +1489,15 @@ window.MusicHub = window.MusicHub || {};
 
   function onRevealPress() {
     var exclusive = revealing;
-    if (!exclusive) {
+    if (!exclusive || !els.revealRecord.classList.contains('wheel-reveal__record--pressable')) {
       return;
     }
     pressExclusive(exclusive).then(function (album) {
       if (!album) {
-        els.revealPress.focus();
+        els.revealRecord.focus();
         return;
       }
+      setPressable(null);
       // Now with the album's cover on its label.
       var spec = MusicHub.vinyl.describe(exclusive.format);
       els.revealRecord.textContent = '';
@@ -1104,9 +1510,9 @@ window.MusicHub = window.MusicHub || {};
       sound('good');
       els.revealEyebrow.textContent = 'Added to your collection';
       els.revealNote.textContent = 'Pressed for ' + album.name + ' — ' + album.artist;
+      els.revealNote.hidden = false;
       // No entrance delays any more: the buttons are wanted straight away.
       els.reveal.classList.remove('wheel-reveal--fresh');
-      els.revealActions.hidden = true;
       els.revealDone.hidden = false;
       els.revealClose.focus();
     });
@@ -1157,7 +1563,7 @@ window.MusicHub = window.MusicHub || {};
     // The spins left - today's free one and the saved respins - in the
     // middle of the wheel, which is itself the button that spins it.
     var count = (left.free ? 1 : 0) + left.respins;
-    var canSpin = !spinning && count > 0;
+    var canSpin = !spinning && !celebration && count > 0;
     els.count.textContent = String(count);
     els.countLabel.textContent = count === 1 ? 'spin' : 'spins';
     els.machine.setAttribute('aria-disabled', String(!canSpin));
@@ -1173,40 +1579,130 @@ window.MusicHub = window.MusicHub || {};
     els.timer.textContent = left.free ? '' : countdown();
     els.status.setAttribute('title', left.free ? '' : 'Next free spin at midnight');
 
+    renderPrizesButton(wheel);
     renderClaims(wheel);
   }
 
-  /** Prizes won but not taken yet: a mystery vinyl to unbox, an exclusive to press. */
-  function renderClaims(wheel) {
-    els.claims.textContent = '';
-    if (spinning) {
-      return;
-    }
-    if (wheel.freeVinyls > 0) {
-      els.claims.appendChild(claimRow(
-        plural(wheel.freeVinyls, 'Mystery Vinyl', 'Mystery Vinyls') + ' waiting to be unboxed',
-        'Unbox',
-        function () {
-          afterClose = goToStore;
-          close();
-        },
-      ));
-    }
-    wheel.exclusives.forEach(function (exclusive) {
-      els.claims.appendChild(claimRow(exclusive.format + ' waiting to be pressed', 'Press', function () {
-        showReveal(exclusive, false);
-      }, true));
-    });
+  /* -------------------------------------------------------------- prizes */
+
+  /** How many prizes wait: every Mystery Vinyl to unbox and exclusive to press. */
+  function waitingCount(wheel) {
+    return wheel.freeVinyls + wheel.exclusives.length;
   }
 
-  function claimRow(text, action, onClick, special) {
-    var item = el('li', 'wheel__claim' + (special ? ' wheel__claim--exclusive' : ''));
-    item.appendChild(el('span', 'wheel__claim-text', text));
-    var button = el('button', 'button button--primary wheel__claim-button', action);
+  // The count the gift button's badge showed last, so a new prize can pop it.
+  var shownWaiting = null;
+
+  /** The gift button in the header: how many prizes wait, on a badge. */
+  function renderPrizesButton(wheel) {
+    var count = waitingCount(wheel);
+    els.prizesCount.hidden = count < 1;
+    els.prizesNumber.textContent = count > 99 ? '99+' : String(count);
+    els.prizesOpen.setAttribute('aria-label', count ? 'Your prizes - ' + count + ' waiting' : 'Your prizes');
+    // Not mid-spin: the prize being spun for lands here once the wheel stops.
+    els.prizesOpen.disabled = spinning;
+    if (shownWaiting !== null && count > shownWaiting && els.prizesCount.animate && !reducedMotion()) {
+      els.prizesCount.animate([
+        { transform: 'scale(1)' },
+        { transform: 'scale(1.6)', offset: 0.35 },
+        { transform: 'scale(1)' },
+      ], { duration: 500, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1.4)' });
+    }
+    shownWaiting = count;
+  }
+
+  /**
+   * The prizes modal's list, as cards like the album history's: the
+   * Mystery Vinyls to unbox, then every exclusive to press - those in the
+   * history's gold, turning frame and all. The whole card is the button.
+   */
+  function renderClaims(wheel) {
+    els.claims.textContent = '';
+    if (wheel.freeVinyls > 0) {
+      var box = el('div', 'mailer history-item__cover wheel-prize__mailer');
+      box.setAttribute('aria-hidden', 'true');
+      box.appendChild(el('span', 'mailer__lid'));
+      var front = el('span', 'mailer__front');
+      front.appendChild(el('span', 'mailer__tape'));
+      front.appendChild(el('span', 'mailer__mark', '?'));
+      box.appendChild(front);
+      els.claims.appendChild(prizeCard({
+        cover: box,
+        title: plural(wheel.freeVinyls, 'Mystery Vinyl', 'Mystery Vinyls'),
+        lines: ['Waiting to be unboxed', 'Free in the Store'],
+        label: 'Unbox ' + plural(wheel.freeVinyls, 'Mystery Vinyl', 'Mystery Vinyls') + ' in the Store',
+        onClick: function () {
+          // Unboxed in the Store: both modals close onto it.
+          afterClose = goToStore;
+          els.prizes.close();
+          close();
+        },
+      }));
+    }
+    wheel.exclusives.forEach(function (exclusive) {
+      var thumb = el('div', 'history-item__cover wheel-prize__record vinyl-stage');
+      thumb.setAttribute('aria-hidden', 'true');
+      var record = MusicHub.vinyl.render(MusicHub.vinyl.describe(exclusive.format), { seed: exclusive.seed });
+      record.classList.add('vinyl--house');
+      MusicHub.vinyl.setPlaying(record, false);
+      thumb.appendChild(record);
+      var card = prizeCard({
+        cover: thumb,
+        title: exclusive.format,
+        lines: ['Wheel Exclusive · waiting to be pressed', exclusive.wonAt ? 'Won ' + formatWonAt(exclusive.wonAt) : ''],
+        label: 'Press ' + exclusive.format + ' on an album',
+        onClick: function () {
+          els.prizes.close();
+          showReveal(exclusive, false);
+        },
+      });
+      card.dataset.rarity = 'gold';
+      els.claims.appendChild(card);
+    });
+    els.prizesEmpty.hidden = waitingCount(wheel) > 0;
+  }
+
+  /** "27 Sep 2026", when an exclusive was won. */
+  function formatWonAt(iso) {
+    var date = new Date(iso);
+    return isNaN(date) ? '' : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  /**
+   * One prize as an album history card (.history-item): its cover, a title
+   * and a line or two, the whole card one button (the history's overlay
+   * link), the foil sheen following the pointer.
+   */
+  function prizeCard(options) {
+    var item = el('li', 'history-item wheel-prize');
+    var button = el('button', 'history-item__link wheel-prize__button');
     button.type = 'button';
-    button.addEventListener('click', onClick);
+    button.setAttribute('aria-label', options.label);
+    button.addEventListener('click', options.onClick);
     item.appendChild(button);
+    item.appendChild(options.cover);
+    var text = el('div', 'history-item__text');
+    text.appendChild(el('p', 'history-item__title', options.title));
+    if (options.lines[0]) {
+      text.appendChild(el('p', 'history-item__artist', options.lines[0]));
+    }
+    if (options.lines[1]) {
+      text.appendChild(el('p', 'history-item__date', options.lines[1]));
+    }
+    item.appendChild(text);
+    item.addEventListener('pointermove', function (event) {
+      var rect = item.getBoundingClientRect();
+      item.style.setProperty('--foil-x', ((event.clientX - rect.left) / rect.width * 100) + '%');
+      item.style.setProperty('--foil-y', ((event.clientY - rect.top) / rect.height * 100) + '%');
+    });
     return item;
+  }
+
+  function openPrizes() {
+    renderClaims(wallet.wheel());
+    els.prizes.showModal();
+    var first = els.claims.querySelector('button') || els.prizesClose;
+    first.focus();
   }
 
   /* ------------------------------------------------------------ showcase */
@@ -1316,7 +1812,6 @@ window.MusicHub = window.MusicHub || {};
     if (spinning) {
       return;
     }
-    window.clearTimeout(closeTimer);
     if (els.dialog.open) {
       els.dialog.close();
     }
@@ -1325,13 +1820,16 @@ window.MusicHub = window.MusicHub || {};
   /** The wheel's gone: stop the moving parts, then whatever the win left to do. */
   function onClosed() {
     window.clearInterval(statusTimer);
-    window.clearTimeout(closeTimer);
+    // The celebration went with the wheel.
+    celebration = null;
+    // Whatever was won meanwhile, no pop for it when the wheel opens again.
+    shownWaiting = null;
     hideReveal();
     resetCelebration();
     els.result.textContent = '';
     // Confetti still falling may finish; the overlay goes once it's empty.
     window.setTimeout(function () {
-      if (!els.dialog.open && overlay && !overlay.querySelector('.confetti, .wheel-fx__coin')) {
+      if (!els.dialog.open && overlay && !sky.pieces.length) {
         hideFx();
       }
     }, 3200);
@@ -1358,12 +1856,26 @@ window.MusicHub = window.MusicHub || {};
     els.machine = document.getElementById('wheel-machine');
     els.disc = document.getElementById('wheel-disc');
     els.frame = document.getElementById('wheel-frame');
+    els.glow = document.getElementById('wheel-glow');
+    els.glowSlice = els.glow.querySelector('path');
     els.pointer = document.getElementById('wheel-pointer');
+    // The needle's band of light (SMIL, out of CSS's reach) stays parked with reduced motion.
+    if (reducedMotion()) {
+      Array.prototype.forEach.call(els.pointer.querySelectorAll('animateTransform'), function (node) {
+        node.remove();
+      });
+    }
     els.banner = document.getElementById('wheel-banner');
     els.result = document.getElementById('wheel-result');
     els.status = document.getElementById('wheel-status');
     els.timer = document.getElementById('wheel-timer');
     els.claims = document.getElementById('wheel-claims');
+    els.prizes = document.getElementById('wheel-prizes');
+    els.prizesOpen = document.getElementById('wheel-prizes-open');
+    els.prizesCount = document.getElementById('wheel-prizes-count');
+    els.prizesNumber = document.getElementById('wheel-prizes-number');
+    els.prizesClose = document.getElementById('wheel-prizes-close');
+    els.prizesEmpty = document.getElementById('wheel-prizes-empty');
     els.count = document.getElementById('wheel-count');
     els.countLabel = document.getElementById('wheel-count-label');
     els.showcaseOpen = document.getElementById('wheel-showcase-open');
@@ -1372,10 +1884,8 @@ window.MusicHub = window.MusicHub || {};
     els.revealEyebrow = document.getElementById('wheel-reveal-eyebrow');
     els.revealName = document.getElementById('wheel-reveal-name');
     els.revealNote = document.getElementById('wheel-reveal-note');
-    els.revealActions = document.getElementById('wheel-reveal-actions');
     els.revealDone = document.getElementById('wheel-reveal-done');
-    els.revealPress = document.getElementById('wheel-reveal-press');
-    els.revealLater = document.getElementById('wheel-reveal-later');
+    els.revealBack = document.getElementById('wheel-reveal-back');
     els.revealClose = document.getElementById('wheel-reveal-close');
     els.showcase = document.getElementById('wheel-showcase');
     els.showcaseClose = document.getElementById('wheel-showcase-close');
@@ -1400,6 +1910,25 @@ window.MusicHub = window.MusicHub || {};
         spin();
       }
     });
+    els.prizesOpen.addEventListener('click', openPrizes);
+    els.prizesClose.addEventListener('click', function () {
+      els.prizes.close();
+    });
+    els.prizes.addEventListener('close', function () {
+      // Back on the wheel - unless a prize was taken: the reveal or the Store has the focus now.
+      if (els.dialog.open && els.reveal.hidden) {
+        els.prizesOpen.focus();
+      }
+    });
+    els.prizes.addEventListener('click', function (event) {
+      if (event.target !== els.prizes) {
+        return;
+      }
+      var rect = els.prizes.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
+        els.prizes.close();
+      }
+    });
     els.showcaseOpen.addEventListener('click', openShowcase);
     els.showcaseClose.addEventListener('click', function () {
       els.showcase.close();
@@ -1418,9 +1947,15 @@ window.MusicHub = window.MusicHub || {};
         els.showcase.close();
       }
     });
-    els.revealPress.addEventListener('click', onRevealPress);
-    els.revealLater.addEventListener('click', hideReveal);
-    els.revealClose.addEventListener('click', hideReveal);
+    els.revealRecord.addEventListener('click', onRevealPress);
+    els.revealRecord.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onRevealPress();
+      }
+    });
+    els.revealBack.addEventListener('click', backToWheel);
+    els.revealClose.addEventListener('click', backToWheel);
 
     // No closing mid-spin; otherwise Escape closes like the X.
     els.dialog.addEventListener('cancel', function (event) {

@@ -41,8 +41,10 @@ window.MusicHub = window.MusicHub || {};
   var RESTART_AFTER_MS = 3000;
   // Listening pays: LISTEN_COINS for every LISTEN_MS of the album played
   // with the page open in front - counted each LISTEN_TICK_MS, flying out
-  // of the record into the balance.
+  // of the record into the balance. A wheel exclusive on the turntable
+  // pays EXCLUSIVE_LISTEN_FACTOR times as much.
   var LISTEN_COINS = 5;
+  var EXCLUSIVE_LISTEN_FACTOR = 2;
   var LISTEN_MS = 20000;
   var LISTEN_TICK_MS = 1000;
   var listenTimer = 0;
@@ -197,9 +199,22 @@ window.MusicHub = window.MusicHub || {};
     recordObserver.observe(card);
   }
 
+  /** A record only the Daily Spin hands out (vinyl-catalog.js). */
+  function isExclusive(vinyl) {
+    return MusicHub.vinylCatalog.exclusives.some(function (exclusive) {
+      return exclusive.format === vinyl.format;
+    });
+  }
+
   function card(vinyl) {
     var album = vinyl.album || null;
     var node = el('article', 'release-card vinyl-card');
+    // A wheel exclusive shimmers and sparkles like a concert you're going to
+    // - until it's hovered, when the record comes out as on any other card.
+    if (isExclusive(vinyl)) {
+      node.classList.add('vinyl-card--exclusive');
+      node.appendChild(el('span', 'concert-card__glitter'));
+    }
 
     var cover = el('div', 'release-card__cover');
     // The sleeve: the album's cover, or the app's logo without one.
@@ -214,7 +229,10 @@ window.MusicHub = window.MusicHub || {};
     cover.appendChild(sleeve);
     // The record's style, as a tag in the cover's top-left corner.
     if (album) {
-      var style = el('span', 'vinyl-card__style', vinyl.format);
+      var style = el('span', 'vinyl-card__style');
+      // An exclusive's in the gold username's pill: its polished-gold
+      // lettering needs a box of its own, inside the gold frame.
+      style.appendChild(el('span', 'vinyl-card__style-name', vinyl.format));
       style.title = vinyl.format;
       cover.appendChild(style);
     }
@@ -323,9 +341,20 @@ window.MusicHub = window.MusicHub || {};
   function confirmRemove(vinyl) {
     pendingRemoval = vinyl;
     var album = vinyl.album;
-    els.removeText.textContent = (album ? album.name + ' by ' + album.artist + ' (' + vinyl.format + ')' : vinyl.format)
-      + ' will be removed from your collection, and its style can be unboxed again in the Store. '
-      + "The coins it cost aren't refunded, and this can't be undone.";
+    var what = album ? album.name + ' by ' + album.artist + ' (' + vinyl.format + ')' : vinyl.format;
+    if (isExclusive(vinyl)) {
+      // Won on the Daily Spin, not bought: nothing to refund, and it goes
+      // back on the wheel (pickExclusive skips only the ones held).
+      els.removeTitle.textContent = 'Remove this Wheel Exclusive?';
+      els.removeText.textContent = what + ' will be removed from your collection. '
+        + vinyl.format + ' goes back on the Daily Spin, where it can be won again - '
+        + "but only there, and this can't be undone.";
+    } else {
+      els.removeTitle.textContent = 'Remove this vinyl?';
+      els.removeText.textContent = what
+        + ' will be removed from your collection, and its style can be unboxed again in the Store. '
+        + "The coins it cost aren't refunded, and this can't be undone.";
+    }
     els.removeDialog.showModal();
     // Cancel is the safe default for Enter.
     els.removeCancel.focus();
@@ -718,7 +747,9 @@ window.MusicHub = window.MusicHub || {};
     var run = playRun;
     var on = !playerParts.on;
     MusicHub.turntable.setPower(playerParts, on, { still: reducedMotion() });
-    MusicHub.vinyl.setPlaying(player.record, on && !reducedMotion());
+    // Ordinary patterns only move while it plays; a wheel exclusive's art
+    // keeps going with the platter stopped.
+    MusicHub.vinyl.setPlaying(player.record, (on || isExclusive(player.vinyl)) && !reducedMotion());
     updateTrackButtons();
 
     if (!player.started) {
@@ -787,12 +818,13 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * Counts the time listened, and pays LISTEN_COINS for each LISTEN_MS
-   * of it. A tick the browser held back counts for no more than two, so
-   * none is ever made up in a burst.
+   * of it - twice that for a wheel exclusive. A tick the browser held back
+   * counts for no more than two, so none is ever made up in a burst.
    */
   function startListenClock() {
     window.clearInterval(listenTimer);
     var last = Date.now();
+    var coins = LISTEN_COINS * (isExclusive(player.vinyl) ? EXCLUSIVE_LISTEN_FACTOR : 1);
     listenTimer = window.setInterval(function () {
       var now = Date.now();
       var elapsed = Math.min(now - last, LISTEN_TICK_MS * 2);
@@ -804,7 +836,7 @@ window.MusicHub = window.MusicHub || {};
       if (player.listenedMs >= LISTEN_MS) {
         player.listenedMs -= LISTEN_MS;
         // One flying coin for each coin earned.
-        MusicHub.wallet.earn(LISTEN_COINS, { from: playerParts.record, coins: LISTEN_COINS });
+        MusicHub.wallet.earn(coins, { from: playerParts.record, coins: coins });
       }
     }, LISTEN_TICK_MS);
   }
@@ -848,6 +880,7 @@ window.MusicHub = window.MusicHub || {};
 
     els.removeDialog = document.getElementById('remove-vinyl-dialog');
     els.removeText = document.getElementById('remove-vinyl-dialog-text');
+    els.removeTitle = document.getElementById('remove-vinyl-dialog-title');
     els.removeCancel = document.getElementById('remove-vinyl-cancel');
     document.getElementById('remove-vinyl-form').addEventListener('submit', function (event) {
       event.preventDefault();

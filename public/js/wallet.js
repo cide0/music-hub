@@ -22,6 +22,9 @@ window.MusicHub = window.MusicHub || {};
   // shower comes thicker rather than taking longer.
   var MAX_LAUNCH_MS = 1800;
   var MAX_FLYING_COINS = 90;
+  // A shower asked for in so many coins (earn's `options.coins`, e.g. the
+  // Daily Spin's big wins) may be bigger - but never more than this.
+  var MAX_SHOWER_COINS = 240;
   // At most this many clinks per shower; with more coins, not every one
   // clinks - the ear can't count them anyway, and each is dozens of nodes.
   var MAX_CLINKS = 30;
@@ -233,7 +236,12 @@ window.MusicHub = window.MusicHub || {};
     }
     Array.prototype.forEach.call(document.querySelectorAll('.coin-balance'), function (node) {
       if (node.animate) {
-        node.animate(
+        // A hop at a time: a shower lands faster than one hop takes, so it
+        // hops on and on while they pour in rather than piling hops up.
+        if (node.coinHop && node.coinHop.playState === 'running') {
+          return;
+        }
+        node.coinHop = node.animate(
           [{ transform: 'scale(1)' }, { transform: 'scale(1.22)' }, { transform: 'scale(1)' }],
           { duration: 220, easing: 'ease-out' },
         );
@@ -438,10 +446,56 @@ window.MusicHub = window.MusicHub || {};
     for (var i = 0; i < candidates.length; i += 1) {
       var rect = candidates[i].getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
-        return rect;
+        return candidates[i];
       }
     }
     return null;
+  }
+
+  // The balance lifted over an open modal: { node, users }.
+  var lifted = null;
+
+  /**
+   * Under an open modal (the Daily Spin) the navbar's balance sits beneath
+   * the backdrop, so a copy of it goes in `layer` right over the real one:
+   * the coins are seen landing and counting up. Shared by showers in the
+   * air at once; returns the function that lets it go again.
+   */
+  function liftBalance(layer, coinTarget) {
+    var chip = coinTarget.closest('.coin-balance');
+    if (!chip) {
+      return function () {};
+    }
+    if (!lifted) {
+      var rect = chip.getBoundingClientRect();
+      var node = chip.cloneNode(true);
+      node.removeAttribute('href');
+      node.removeAttribute('title');
+      node.setAttribute('aria-hidden', 'true');
+      node.querySelector('[data-coin-target]').removeAttribute('data-coin-target');
+      node.classList.add('coin-balance--lifted');
+      node.style.left = rect.left + 'px';
+      node.style.top = rect.top + 'px';
+      node.style.width = rect.width + 'px';
+      node.style.height = rect.height + 'px';
+      node.style.setProperty('--lifted-coin', coinTarget.getBoundingClientRect().width + 'px');
+      layer.appendChild(node);
+      node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
+      lifted = { node: node, users: 0 };
+    }
+    var mine = lifted;
+    mine.users += 1;
+    return function () {
+      mine.users -= 1;
+      if (mine.users > 0) {
+        return;
+      }
+      if (lifted === mine) {
+        lifted = null;
+      }
+      mine.node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, delay: 500, easing: 'ease-in', fill: 'forwards' })
+        .onfinish = mine.node.remove.bind(mine.node);
+    };
   }
 
   function centreOf(from) {
@@ -466,14 +520,14 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /** "+50" rising out of where the coins came from. */
-  function floatLabel(amount, at) {
+  function floatLabel(amount, at, layer) {
     var label = document.createElement('div');
     label.className = 'coin-float';
     label.appendChild(coinSvg('coin'));
     label.appendChild(document.createTextNode('+' + format(amount)));
     label.style.left = at.x + 'px';
     label.style.top = at.y + 'px';
-    document.body.appendChild(label);
+    (layer || document.body).appendChild(label);
     var animation = label.animate(
       [
         { opacity: 0, transform: 'translate(-50%, -30%) scale(0.6)' },
@@ -493,19 +547,195 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * How wide a spinning coin shows, `turns` half-turns into its spin: full
+   * face on, a sliver edge on.
+   */
+  function flipWidth(turns) {
+    return 0.12 + 0.88 * Math.abs(Math.cos(Math.PI * turns));
+  }
+
+  // Palette colours as a canvas takes them: "var(--coin-bright)",
+  // "color-mix(...)" and the like, worked out once to rgb().
+  var paints = {};
+
+  function paint(color) {
+    if (!paints[color]) {
+      var probe = document.createElement('span');
+      probe.style.color = color;
+      document.body.appendChild(probe);
+      paints[color] = getComputedStyle(probe).color;
+      probe.remove();
+    }
+    return paints[color];
+  }
+
+  /*
+   * The coin for showers drawn on a canvas: #coin-icon - its gold rim and
+   * face, the quaver pressed into it - with its soft glow round it, drawn
+   * once, big enough to stay sharp scaled up. COIN_SIZE across (the coin),
+   * COIN_SPRITE_SIZE with the glow.
+   */
+  var COIN_SIZE = 26;
+  var COIN_SPRITE_SIZE = 42;
+  var COIN_SPRITE_SCALE = 3;
+  var QUAVER_FLAG = 'M12.6 6.3c.25 1.7 1.45 2.5 2.5 3.4 1.05.95 1.6 2.1 1.1 3.8-.15-1.35-.8-2.1-1.6-2.7-.65-.5-1.4-.8-2-1.1z';
+  var sprite = null;
+
+  function coinSprite() {
+    if (sprite) {
+      return sprite;
+    }
+    sprite = document.createElement('canvas');
+    sprite.width = sprite.height = COIN_SPRITE_SIZE * COIN_SPRITE_SCALE;
+    var ctx = sprite.getContext('2d');
+    var centre = sprite.width / 2;
+    // The glow: as the flying coins' always was, out to 7px past the rim.
+    var glow = ctx.createRadialGradient(centre, centre, 0, centre, centre, (COIN_SIZE / 2 + 7) * COIN_SPRITE_SCALE);
+    glow.addColorStop(0.35, paint('color-mix(in srgb, var(--coin-bright) 60%, transparent)'));
+    glow.addColorStop(0.55, paint('color-mix(in srgb, var(--coin-bright) 22%, transparent)'));
+    glow.addColorStop(0.7, paint('transparent'));
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, sprite.width, sprite.height);
+
+    // The coin itself, in #coin-icon's 24-unit box.
+    var unit = COIN_SIZE / 24 * COIN_SPRITE_SCALE;
+    ctx.setTransform(unit, 0, 0, unit, centre - 12 * unit, centre - 12 * unit);
+    function gradient(x1, y1, x2, y2, stops) {
+      var fill = ctx.createLinearGradient(x1, y1, x2, y2);
+      stops.forEach(function (stop) {
+        fill.addColorStop(stop[0], paint(stop[1]));
+      });
+      return fill;
+    }
+    // The rim: #coin-rim-gradient across the circle's box, corner to corner.
+    ctx.beginPath();
+    ctx.arc(12, 12, 11.2, 0, Math.PI * 2);
+    ctx.fillStyle = gradient(0.8, 0.8, 23.2, 23.2, [[0, 'var(--coin-bright)'], [0.5, 'var(--coin-face)'], [1, 'var(--coin-rim)']]);
+    ctx.fill();
+    // The face: #coin-face-gradient, ringed in the rim's colour.
+    ctx.beginPath();
+    ctx.arc(12, 12, 8.7, 0, Math.PI * 2);
+    ctx.fillStyle = gradient(3.3 + 0.2 * 17.4, 3.3, 3.3 + 0.8 * 17.4, 20.7, [[0, 'var(--coin-shine)'], [0.45, 'var(--coin-bright)'], [1, 'var(--coin-face)']]);
+    ctx.fill();
+    ctx.lineWidth = 0.9;
+    ctx.strokeStyle = paint('var(--coin-rim)');
+    ctx.stroke();
+    // The quaver.
+    ctx.fillStyle = paint('var(--coin-rim)');
+    ctx.beginPath();
+    ctx.ellipse(10.1, 15.7, 2.55, 1.95, -22 * Math.PI / 180, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(11.95, 6.3, 1.35, 9.6, 0.5);
+    } else {
+      ctx.rect(11.95, 6.3, 1.35, 9.6);
+    }
+    ctx.fill();
+    ctx.fill(new Path2D(QUAVER_FLAG));
+    return sprite;
+  }
+
+  /**
+   * Draws the coin sprite centred on `x`, `y` (page pixels) on `ctx`,
+   * `scale` times its size, flipped to `width` of its face.
+   */
+  function drawCoin(ctx, ratio, x, y, scale, width) {
+    ctx.setTransform(ratio * scale * width, 0, 0, ratio * scale, x * ratio, y * ratio);
+    ctx.drawImage(coinSprite(), -COIN_SPRITE_SIZE / 2, -COIN_SPRITE_SIZE / 2, COIN_SPRITE_SIZE, COIN_SPRITE_SIZE);
+  }
+
+  /*
+   * Coins in the air, drawn on a canvas over the page - or in earn's
+   * `layer` - rather than an element each: a big shower was hundreds of
+   * layers for the graphics card to put together every frame. One canvas
+   * for each place they fly in, there only while coins are.
+   */
+  var skies = [];
+
+  function skyIn(parent) {
+    var sky = skies.filter(function (each) {
+      return each.parent === parent;
+    })[0];
+    if (!sky) {
+      var canvas = document.createElement('canvas');
+      canvas.className = 'coin-shower';
+      sky = { parent: parent, canvas: canvas, ctx: canvas.getContext('2d'), coins: [], frame: 0, ratio: 1 };
+      skies.push(sky);
+    }
+    if (!sky.canvas.isConnected) {
+      parent.appendChild(sky.canvas);
+    }
+    sky.ratio = Math.min(window.devicePixelRatio || 1, 2);
+    var width = Math.round(window.innerWidth * sky.ratio);
+    var height = Math.round(window.innerHeight * sky.ratio);
+    if (sky.canvas.width !== width || sky.canvas.height !== height) {
+      sky.canvas.width = width;
+      sky.canvas.height = height;
+    }
+    return sky;
+  }
+
+  /** Where a coin is `t` of the way through its flight (0-1), and how big. */
+  function coinAt(coin, t) {
+    if (t <= BURST_SHARE) {
+      var u = 1 - Math.pow(1 - t / BURST_SHARE, 2);
+      return { x: lerp(coin.from.x, coin.burst.x, u), y: lerp(coin.from.y, coin.burst.y, u), scale: lerp(0.3, 1.15, u) };
+    }
+    // Ease in: it lingers at the top of the burst, then gets pulled in.
+    var v = Math.pow((t - BURST_SHARE) / (1 - BURST_SHARE), 1.7);
+    var a = (1 - v) * (1 - v);
+    var b = 2 * (1 - v) * v;
+    var c = v * v;
+    return {
+      x: a * coin.burst.x + b * coin.control.x + c * coin.to.x,
+      y: a * coin.burst.y + b * coin.control.y + c * coin.to.y,
+      scale: lerp(1.15, 0.6, v),
+    };
+  }
+
+  /** One frame of a sky's coins - landing any that have got there - and the next, while any fly. */
+  function drawCoins(sky, now) {
+    var ctx = sky.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, sky.canvas.width, sky.canvas.height);
+    var landing = [];
+    sky.coins = sky.coins.filter(function (coin) {
+      var elapsed = now - coin.start;
+      if (elapsed >= coin.duration) {
+        landing.push(coin);
+        return false;
+      }
+      if (elapsed < 0) {
+        return true;
+      }
+      var t = elapsed / coin.duration;
+      var at = coinAt(coin, t);
+      ctx.globalAlpha = t < 1 / 16 ? t * 16 : t > 0.97 ? 0.4 : 1;
+      drawCoin(ctx, sky.ratio, at.x, at.y, at.scale, flipWidth(t * coin.flips));
+      return true;
+    });
+    ctx.globalAlpha = 1;
+    landing.forEach(function (coin) {
+      coin.landed();
+    });
+    if (sky.coins.length) {
+      sky.frame = window.requestAnimationFrame(function (time) {
+        drawCoins(sky, time);
+      });
+      return;
+    }
+    sky.frame = 0;
+    sky.canvas.remove();
+  }
+
+  /**
    * One coin's flight: a burst out to a random spot around where it was
    * won, then a curve up to the balance, speeding up as it goes, flipping
    * all the way. `showerSize` is how many fly with it. Calls `landed`
    * when it gets there.
    */
-  function flyCoin(from, to, delay, showerSize, landed) {
-    var size = 26;
-    var coin = document.createElement('div');
-    coin.className = 'flying-coin';
-    coin.appendChild(coinSvg('flying-coin__face'));
-    coin.style.setProperty('--flip-ms', Math.round(280 + Math.random() * 220) + 'ms');
-    document.body.appendChild(coin);
-
+  function flyCoin(sky, from, to, delay, showerSize, landed) {
     // Out and mostly up, like coins spilling from an opened chest.
     var angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.3;
     // A bigger shower spreads wider, so it doesn't bunch into one clump.
@@ -513,50 +743,25 @@ window.MusicHub = window.MusicHub || {};
     var burst = { x: from.x + Math.cos(angle) * reach, y: from.y + Math.sin(angle) * reach };
     // The curve bows away from the straight line, to one side or the other.
     var side = Math.random() < 0.5 ? -1 : 1;
-    var control = {
-      x: lerp(burst.x, to.x, 0.5) + side * (60 + Math.random() * 120),
-      y: Math.min(burst.y, to.y) + (lerp(burst.y, to.y, 0.5) - Math.min(burst.y, to.y)) * 0.3,
-    };
-
-    var frames = [];
-    var steps = 16;
-    for (var i = 0; i <= steps; i += 1) {
-      var t = i / steps;
-      var point;
-      var scale;
-      if (t <= BURST_SHARE) {
-        var u = 1 - Math.pow(1 - t / BURST_SHARE, 2);
-        point = { x: lerp(from.x, burst.x, u), y: lerp(from.y, burst.y, u) };
-        scale = lerp(0.3, 1.15, u);
-      } else {
-        // Ease in: it lingers at the top of the burst, then gets pulled in.
-        var v = Math.pow((t - BURST_SHARE) / (1 - BURST_SHARE), 1.7);
-        var a = (1 - v) * (1 - v);
-        var b = 2 * (1 - v) * v;
-        var c = v * v;
-        point = {
-          x: a * burst.x + b * control.x + c * to.x,
-          y: a * burst.y + b * control.y + c * to.y,
-        };
-        scale = lerp(1.15, 0.6, v);
-      }
-      frames.push({
-        transform: 'translate(' + (point.x - size / 2).toFixed(1) + 'px, ' + (point.y - size / 2).toFixed(1) + 'px) scale(' + scale.toFixed(3) + ')',
-        opacity: t === 0 ? 0 : t > 0.97 ? 0.4 : 1,
-        offset: t,
+    var duration = FLY_MS + Math.random() * 250;
+    sky.coins.push({
+      from: from,
+      burst: burst,
+      control: {
+        x: lerp(burst.x, to.x, 0.5) + side * (60 + Math.random() * 120),
+        y: Math.min(burst.y, to.y) + (lerp(burst.y, to.y, 0.5) - Math.min(burst.y, to.y)) * 0.3,
+      },
+      to: to,
+      start: performance.now() + delay,
+      duration: duration,
+      flips: duration / (280 + Math.random() * 220),
+      landed: landed,
+    });
+    if (!sky.frame) {
+      sky.frame = window.requestAnimationFrame(function (time) {
+        drawCoins(sky, time);
       });
     }
-
-    var animation = coin.animate(frames, {
-      duration: FLY_MS + Math.random() * 250,
-      delay: delay,
-      easing: 'linear',
-      fill: 'both',
-    });
-    animation.onfinish = function () {
-      coin.remove();
-      landed();
-    };
   }
 
   /**
@@ -564,12 +769,16 @@ window.MusicHub = window.MusicHub || {};
    * the page mid-flight loses nothing - and shows them flying from
    * `options.from` (an element, or {x, y}; the middle of the screen when
    * left out) up to the navbar - `options.coins` of them, or as many as
-   * flyingCount gives the amount.
+   * flyingCount gives the amount. `options.launchMs`: how long they keep
+   * setting off, for a shower that runs longer the bigger the win (at most
+   * MAX_LAUNCH_MS otherwise). `options.layer`: where they fly instead of
+   * the page, e.g. a popover over an open modal - the balance is then
+   * lifted up there with them. Resolves once the last coin has landed.
    */
   function earn(amount, options) {
     amount = Math.floor(Number(amount) || 0);
     if (amount <= 0) {
-      return;
+      return Promise.resolve();
     }
     update(function (state) {
       state.credits += amount;
@@ -577,6 +786,7 @@ window.MusicHub = window.MusicHub || {};
     });
 
     var from = centreOf(options && options.from);
+    var layer = (options && options.layer) || null;
     var to = target();
 
     if (reducedMotion() || !to || !document.body.animate) {
@@ -584,34 +794,63 @@ window.MusicHub = window.MusicHub || {};
       bump();
       clink(1);
       clink(0.6, 0.12);
-      return;
+      return Promise.resolve();
     }
 
     inFlight += amount;
+    var allLanded;
+    var landing = new Promise(function (resolve) {
+      allLanded = resolve;
+    });
 
-    floatLabel(amount, from);
-    var count = Math.min(MAX_FLYING_COINS, Math.floor(options && options.coins) || flyingCount(amount));
+    floatLabel(amount, from, layer);
+    var asked = Math.floor(options && options.coins);
+    var count = asked ? Math.min(MAX_SHOWER_COINS, asked) : Math.min(MAX_FLYING_COINS, flyingCount(amount));
+    var launchMs = Math.floor(options && options.launchMs);
     var landedCoins = 0;
-    var stagger = Math.min(FLY_STAGGER_MS, MAX_LAUNCH_MS / count);
-    var clinks = Math.min(count, MAX_CLINKS);
+    var stagger = launchMs ? launchMs / count : Math.min(FLY_STAGGER_MS, MAX_LAUNCH_MS / count);
+    // A longer shower clinks on for longer, as thickly.
+    var clinks = Math.min(count, Math.round(MAX_CLINKS * Math.max(1, (launchMs || 0) / MAX_LAUNCH_MS)));
     // A little jingle as they burst out.
     spill(count);
 
-    var goal = { x: to.left + to.width / 2, y: to.top + to.height / 2 };
+    var goal = centreOf(to);
+    var letGo = layer ? liftBalance(layer, to) : function () {};
+    // After the lifted balance, so the coins fly in over it.
+    var sky = skyIn(layer || document.body);
     // Each coin carries an equal share; the last one tops it up to the exact amount.
     var share = Math.floor(amount / count);
     for (var i = 0; i < count; i += 1) {
-      flyCoin(from, goal, i * stagger, count, function () {
+      flyCoin(sky, from, goal, i * stagger, count, function () {
         landedCoins += 1;
         inFlight -= landedCoins === count ? amount - share * (count - 1) : share;
-        setShown(Math.max(0, balance() - inFlight));
-        bump();
+        showLanding();
         // `clinks` of them, spread evenly over the landings.
         if (Math.floor(landedCoins * clinks / count) > Math.floor((landedCoins - 1) * clinks / count)) {
           clink(Math.max(0.35, 1 - clinks * 0.025));
         }
+        if (landedCoins === count) {
+          letGo();
+          allLanded();
+        }
       });
     }
+    return landing;
+  }
+
+  // A frame's landings shown at once: the count and the hop, once a frame
+  // however many coins came in, rather than a layout for every coin.
+  var landingFrame = 0;
+
+  function showLanding() {
+    if (landingFrame) {
+      return;
+    }
+    landingFrame = window.requestAnimationFrame(function () {
+      landingFrame = 0;
+      setShown(Math.max(0, balance() - inFlight));
+      bump();
+    });
   }
 
   /* -------------------------------------------------------------- init */
@@ -644,6 +883,9 @@ window.MusicHub = window.MusicHub || {};
     updateWheel: updateWheel,
     format: format,
     coinSvg: coinSvg,
+    flipWidth: flipWidth,
+    paint: paint,
+    drawCoin: drawCoin,
     // The Store's own sounds share this context and limiter.
     audioContext: audioContext,
     audioOutput: output,

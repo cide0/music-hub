@@ -330,7 +330,8 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * The Mystery Vinyl offer: its price - or "Free" while one won on the
-   * Daily Spin waits to be unboxed - and whether it can be unboxed now.
+   * Daily Spin waits to be unboxed, with how many on a badge - and whether
+   * it can be unboxed now.
    */
   function renderVinylOffer() {
     var unbox = MusicHub.unbox;
@@ -342,6 +343,10 @@ window.MusicHub = window.MusicHub || {};
     } else {
       els.vinylPrice.appendChild(price(unbox.PRICE));
     }
+
+    var waiting = wallet.wheel().freeVinyls;
+    els.vinylFree.hidden = waiting < 1;
+    els.vinylFree.textContent = waiting + ' free to unbox';
 
     var soldOut = !MusicHub.vinylCatalog.pick(wallet.vinyls(), { cover: true });
     els.vinylOffer.classList.toggle('store-item--short', !soldOut && !affordable);
@@ -369,6 +374,7 @@ window.MusicHub = window.MusicHub || {};
     els.vinylOffer = document.getElementById('vinyl-offer');
     els.vinylLock = document.getElementById('vinyl-lock');
     els.vinylPrice = document.getElementById('vinyl-price');
+    els.vinylFree = document.getElementById('vinyl-free');
     els.unboxButton = document.getElementById('unbox-button');
     els.unboxLabel = document.getElementById('unbox-label');
 

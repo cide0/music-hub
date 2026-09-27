@@ -12,6 +12,13 @@
         <span class="visually-hidden">Next free spin in </span><span id="wheel-timer"></span>
       </p>
       <div class="wheel__header-buttons">
+        <!-- The prizes won and waiting, with how many on a badge. -->
+        <button type="button" class="icon-button wheel__close wheel__prizes-open" id="wheel-prizes-open"
+          aria-haspopup="dialog" aria-label="Your prizes" title="Your prizes">
+          <!-- A gift, in polished gold (drawn by style.css). -->
+          <span class="wheel__prizes-icon" aria-hidden="true"></span>
+          <span class="wheel__prizes-count" id="wheel-prizes-count" aria-hidden="true" hidden><span class="wheel__prizes-number" id="wheel-prizes-number"></span></span>
+        </button>
         <!-- The Wheel Exclusives showcase. -->
         <button type="button" class="icon-button wheel__close" id="wheel-showcase-open"
           aria-haspopup="dialog" aria-label="Wheel Exclusives" title="Wheel Exclusives">
@@ -33,6 +40,8 @@
       <span class="wheel__rays" aria-hidden="true"></span>
       <!-- The turning part: the prizes and the pegs between them (built by daily-wheel.js). -->
       <svg class="wheel__disc" id="wheel-disc" viewBox="-100 -100 200 200" aria-hidden="true"></svg>
+      <!-- The won slice lighting up, turned with the disc (daily-wheel.js). -->
+      <svg class="wheel__glow" id="wheel-glow" viewBox="-100 -100 200 200" aria-hidden="true"><path /></svg>
       <!-- The still frame around it: a dark purple rim. -->
       <svg class="wheel__frame" id="wheel-frame" viewBox="-100 -100 200 200" aria-hidden="true"></svg>
       <!-- The spins left. -->
@@ -41,8 +50,30 @@
         <span class="wheel__hub-label" id="wheel-count-label">spins</span>
       </span>
       <!-- The flapper the slices' edges knock aside as they pass. -->
+      <!-- In the Gold Shine name's polished gold, a band of light sweeping
+           across it on the same 2.6s loop (name-gold-shine in style.css). -->
       <svg class="wheel__pointer" id="wheel-pointer" viewBox="0 -4 34 50" aria-hidden="true">
+        <defs>
+          <linearGradient id="wheel-pointer-gold" gradientUnits="userSpaceOnUse" x1="-6.5" y1="11.5" x2="40.5" y2="28.5">
+            <stop offset="0" style="stop-color: var(--rarity-gold-deep)" />
+            <stop offset="0.3" style="stop-color: var(--rarity-gold)" />
+            <stop offset="0.5" style="stop-color: var(--rarity-gold-bright)" />
+            <stop offset="0.7" style="stop-color: var(--rarity-gold)" />
+            <stop offset="1" style="stop-color: var(--rarity-gold-deep)" />
+          </linearGradient>
+          <linearGradient id="wheel-pointer-glare" gradientUnits="userSpaceOnUse" x1="-11.2" y1="9.8" x2="45.2" y2="30.2">
+            <stop offset="0.4" style="stop-color: var(--rarity-gold-bright); stop-opacity: 0" />
+            <stop offset="0.46" style="stop-color: var(--rarity-gold-bright)" />
+            <stop offset="0.5" style="stop-color: var(--rarity-gold-shine)" />
+            <stop offset="0.54" style="stop-color: var(--rarity-gold-bright)" />
+            <stop offset="0.6" style="stop-color: var(--rarity-gold-bright); stop-opacity: 0" />
+            <animateTransform attributeName="gradientTransform" type="translate"
+              values="-33.8 -12.2; 33.8 12.2; 33.8 12.2" keyTimes="0; 0.7; 1"
+              calcMode="spline" keySplines="0.42 0 0.58 1; 0 0 1 1" dur="2.6s" repeatCount="indefinite" />
+          </linearGradient>
+        </defs>
         <path class="wheel__pointer-body" d="M17 45 L4.5 13.5 A13 13 0 1 1 29.5 13.5 Z" />
+        <path class="wheel__pointer-glare" d="M17 45 L4.5 13.5 A13 13 0 1 1 29.5 13.5 Z" />
         <circle class="wheel__pointer-pin" cx="17" cy="12" r="4.2" />
       </svg>
       <!-- "Big win!", "Jackpot!" over the wheel. -->
@@ -50,22 +81,29 @@
     </div>
 
     <div class="wheel__result" id="wheel-result" role="status" aria-live="polite"></div>
-    <ul class="wheel__claims" id="wheel-claims"></ul>
   </div>
 
-  <!-- Winning a wheel exclusive: the record rises out of a burst of light. -->
+  <!-- Winning a wheel exclusive: the record rises out of a burst of light.
+       The record itself is the button that presses it on an album. -->
   <div class="wheel-reveal" id="wheel-reveal" hidden>
     <span class="wheel-reveal__rays" aria-hidden="true"></span>
+    <!-- A second fan of rays, finer, turning the other way. -->
+    <span class="wheel-reveal__rays wheel-reveal__rays--counter" aria-hidden="true"></span>
     <span class="wheel-reveal__halo" aria-hidden="true"></span>
+    <!-- Stars circling the record, twinkling in turn. -->
+    <span class="wheel-reveal__orbit" id="wheel-reveal-orbit" aria-hidden="true">
+      <% for (var star = 0; star < 8; star += 1) { %><span class="wheel-reveal__star" style="--star: <%= star %>"><span></span></span><% } %>
+    </span>
+    <button type="button" class="icon-button wheel__close wheel-reveal__back" id="wheel-reveal-back" aria-label="Back to the wheel" title="Back to the wheel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </button>
     <div class="wheel-reveal__record vinyl-stage" id="wheel-reveal-record"></div>
     <div class="wheel-reveal__text">
       <p class="wheel-reveal__eyebrow" id="wheel-reveal-eyebrow">Wheel Exclusive</p>
       <h2 class="wheel-reveal__name" id="wheel-reveal-name"></h2>
-      <p class="wheel-reveal__note" id="wheel-reveal-note"></p>
-      <div class="modal__actions wheel-reveal__actions" id="wheel-reveal-actions">
-        <button type="button" class="button button--ghost" id="wheel-reveal-later">Later</button>
-        <button type="button" class="button button--primary" id="wheel-reveal-press">Press it on an album</button>
-      </div>
+      <p class="wheel-reveal__note" id="wheel-reveal-note" hidden></p>
       <div class="modal__actions wheel-reveal__actions" id="wheel-reveal-done" hidden>
         <a class="button button--ghost" href="/collection">View collection</a>
         <button type="button" class="button button--primary" id="wheel-reveal-close">Done</button>
@@ -74,7 +112,27 @@
   </div>
 </dialog>
 
-<!-- The ten records only the wheel hands out. -->
+<!-- Prizes won on the wheel and not taken yet: Mystery Vinyls to unbox,
+     exclusives to press. Opened from the wheel's gift button. -->
+<dialog class="modal wheel-prizes" id="wheel-prizes" aria-labelledby="wheel-prizes-title">
+  <div class="wheel-prizes__header">
+    <div>
+      <h2 class="modal__title" id="wheel-prizes-title">Your prizes</h2>
+      <p class="modal__hint">Won on the Daily Spin, waiting for you.</p>
+    </div>
+    <button type="button" class="icon-button wheel__close" id="wheel-prizes-close" aria-label="Back to the wheel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </button>
+  </div>
+  <ul class="wheel__claims" id="wheel-claims"></ul>
+  <p class="wheel-prizes__empty" id="wheel-prizes-empty" hidden>
+    Nothing waiting. Mystery Vinyls and wheel exclusives you win show up here.
+  </p>
+</dialog>
+
+<!-- The forty records only the wheel hands out. -->
 <dialog class="modal wheel-showcase" id="wheel-showcase" aria-labelledby="wheel-showcase-title">
   <div class="wheel-showcase__header">
     <div>

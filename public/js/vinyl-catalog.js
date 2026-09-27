@@ -1,7 +1,7 @@
 /*
  * Every record the Store's Mystery Vinyl can hold, as Discogs-style format
  * text that vinyl.js draws ("Oxblood & Cream Marble"), and the random pick
- * of one the collection doesn't have yet - plus the Daily Spin's ten wheel
+ * of one the collection doesn't have yet - plus the Daily Spin's forty wheel
  * exclusives, which only the wheel ever hands out. Used by the Store (to
  * unbox), the Daily Spin and the Collection (for "12 of 2,823 collected").
  */
@@ -98,6 +98,36 @@ window.MusicHub = window.MusicHub || {};
     { format: 'Synthwave Sunset', text: 'A striped neon sun sinking behind the mountains, a glowing grid racing towards you.' },
     { format: 'Stained Glass', text: 'A cathedral rose window of jewel-coloured glass, sunlight wandering across it.' },
     { format: 'Inferno', text: 'A ring of fire roaring out from the label, embers flying off the rim.' },
+    { format: 'Koi Pond', text: 'Koi circling through deep green water under drifting lily pads, ripples spreading where they surface.' },
+    { format: 'Kaleidoscope', text: 'Coloured glass mirrored twelve ways round, folding into new patterns as every colour shifts.' },
+    { format: 'Digital Rain', text: 'Columns of glowing green code streaming in from every side to the middle, each led by a white-hot character.' },
+    { format: 'Solar Eclipse', text: 'The moon dead black over the sun, the corona streaming round it and a diamond ring flaring at its edge.' },
+    { format: 'Hyperspace', text: 'Stars stretched into streaks, racing out past you faster and faster down a tunnel of blue light.' },
+    { format: 'Cherry Blossom', text: 'Branches heavy with pink flowers swaying at dusk, petals drifting down under a pale moon.' },
+    { format: 'Circuit Board', text: 'Gold traces on green board, chips blinking and pulses of signal racing out to the rim.' },
+    { format: 'Radar Sweep', text: 'A green radar screen, its beam sweeping round and lighting up every blip it passes.' },
+    { format: 'Plasma Globe', text: 'Violet tendrils of electricity crackling out to the glass, a hot spot flickering wherever one touches.' },
+    { format: 'Equalizer', text: 'A ring of bars bouncing to the beat, soundwaves circling the rim and the label pulsing on every kick.' },
+    { format: 'Fireworks', text: 'Rockets streaking in from the rim and bursting into showers of colour, sparks drooping as they fade into the smoke.' },
+    { format: 'Glitch', text: 'A TV test card breaking up: colour channels tearing apart, slices jumping sideways, static flashing and a scan bar rolling through.' },
+    { format: 'Amethyst Geode', text: 'A geode cracked open: rings of agate flowing round a hollow of purple crystal points, glints popping and energy pulsing out.' },
+    { format: 'Laser Show', text: 'Fans of green, red and blue lasers sweeping through the haze from all round the rim, strobes firing.' },
+    { format: 'Jellyfish Bloom', text: 'Glowing jellyfish pulsing their way out through the deep, tentacles trailing, sunbeams wavering down through the water.' },
+    { format: 'Double Helix', text: 'A glowing strand of DNA wound all the way round, twisting as pulses of light race along it and a scanner sweeps in and out.' },
+    { format: 'Atomic', text: 'Electrons whirling round crossed orbits with comet tails, the nucleus jostling and photons flying off.' },
+    { format: 'Neon City', text: 'A tiny neon planet of skyscrapers: windows flickering, signs blinking, traffic streaming round and searchlights sweeping the sky.' },
+    { format: 'Dimension Portal', text: 'A vortex of fiery red and orange energy churning round and round, lightning crackling at its rim and the stars around it sucked in.' },
+    { format: 'Disco Ball', text: 'A ball of a thousand mirror tiles: flashes racing across it, coloured spotlights wandering over it, highlights sliding by.' },
+    { format: 'Peacock', text: 'A whole fanned-out train of eyespot feathers, rattling in waves round the tail as the eyes flicker iridescent.' },
+    { format: "Tiger's Eye", text: 'One great amber eye staring back: the pupil widening and narrowing, the iris glowing, the lids sweeping shut in a blink.' },
+    { format: 'Murmuration', text: 'A flock of starlings at dusk pouring from one shape into the next - a cloud, a spiral, a ring, a comet.' },
+    { format: 'Honeycomb', text: 'Wax cells of glowing honey, a warm glow washing through them, bees waggle-dancing on the comb and buzzing over it.' },
+    { format: 'Monarch Migration', text: 'Monarch butterflies fluttering out on the wind through a bright sky, wings beating, clouds drifting by.' },
+    { format: 'Raven', text: 'A great raven on a dead branch under a blood moon, cocking its head and cawing, crows flapping past and black feathers tumbling down.' },
+    { format: 'Wolf Moon', text: 'A huge full moon, clouds drifting over it, and a pack on the hills round it raising their heads to howl.' },
+    { format: 'Fireflies', text: 'A meadow at night, grass swaying, fireflies drifting over it and flashing together in waves.' },
+    { format: 'Serpent Scales', text: 'Snakeskin rippling as though muscles moved beneath it, rainbow iridescence washing out across the scales.' },
+    { format: 'Whale Song', text: 'Two humpbacks gliding round the deep, flukes beating and fins sweeping, rings of glowing song spreading from them.' },
   ];
 
   FAMILIES.push({

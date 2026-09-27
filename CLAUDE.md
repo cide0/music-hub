@@ -37,9 +37,10 @@ database**, and the service sleeps/restarts, so no server-side state survives).
   Mystery Vinyl can unbox it too. Check the new formats with
   `MusicHub.vinyl.describe()` to confirm they parse to the new pattern. One
   drawn from the cover art (like picture discs) gets `needsCover: true`, so
-  it's only picked for an album that has a cover. The exception: the ten
-  Daily Spin exclusives live in the `wheelOnly` family, which the Mystery
-  Vinyl never picks - only `pickExclusive()` (the wheel) hands them out.
+  it's only picked for an album that has a cover. The exception: the Daily
+  Spin exclusives (forty, each its own pattern in `vinyl.js`) live in the
+  `wheelOnly` family, which the Mystery Vinyl never picks - only
+  `pickExclusive()` (the wheel) hands them out.
 
 ## Layout
 
