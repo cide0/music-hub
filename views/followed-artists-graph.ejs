@@ -26,6 +26,7 @@
     <%- include('partials/navbar') %>
 
     <main class="page page--graph">
+      <!-- Never shown (style.css): the page is the graph, or just the button to make one. -->
       <div class="page__header">
         <h1 class="page__title"><%= pageTitle %></h1>
       </div>
@@ -33,7 +34,7 @@
       <!-- Shown once a valid Spotify login is present. -->
       <section class="page__content" data-auth-required>
         <div class="toolbar" id="generate-toolbar">
-          <button type="button" class="button button--primary" id="generate-graph">Generate graph from followed artists</button>
+          <button type="button" class="button button--primary" id="generate-graph">Generate graph</button>
         </div>
 
         <!-- Where the progress bar lives until a graph is on screen. -->

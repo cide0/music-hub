@@ -19,11 +19,9 @@ window.MusicHub = window.MusicHub || {};
 
   var els = {};
   var state = null;
-  // 'all' | 'attending' | 'new'. The "new" set only exists for the current
-  // session, matching the accent borders: it is what the most recent fetch
-  // turned up, and it isn't persisted.
+  // 'all' | 'attending' | 'new' - "new" being what the last fetch turned up
+  // (the stored `lastFound`).
   var activeFilter = 'all';
-  var lastNewIds = [];
   // What's typed into the card search - only for this visit, not stored.
   var searchQuery = '';
   // The fetch currently in flight, if any - so it can be cancelled.
@@ -57,12 +55,24 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------------ storage */
 
+  /**
+   * `lastFound` holds the ids of the concerts the last fetch added, marked
+   * "New" until the next fetch (like the Discogs page's finds).
+   */
   function loadState() {
     var stored = MusicHub.storage.read(STORAGE_KEY, null);
     if (!stored || !Array.isArray(stored.concerts)) {
-      return { lastFetchedAt: null, concerts: [] };
+      return { lastFetchedAt: null, concerts: [], lastFound: [] };
     }
-    return { lastFetchedAt: stored.lastFetchedAt || null, concerts: stored.concerts };
+    return {
+      lastFetchedAt: stored.lastFetchedAt || null,
+      concerts: stored.concerts,
+      lastFound: Array.isArray(stored.lastFound) ? stored.lastFound : [],
+    };
+  }
+
+  function isMarkedNew(concert) {
+    return state.lastFound.indexOf(concert.id) !== -1;
   }
 
   function saveState() {
@@ -571,16 +581,17 @@ window.MusicHub = window.MusicHub || {};
     return '';
   }
 
-  function updateFilterControls(upcomingCount) {
+  function updateFilterControls(upcoming) {
     if (!els.filters) {
       return;
     }
 
     // Filters and search are pointless with nothing to filter.
-    els.controls.hidden = !upcomingCount;
+    els.controls.hidden = !upcoming.length;
 
+    // Only what's still upcoming counts: a find can have happened since.
     var newButton = els.filters.querySelector('[data-filter="new"]');
-    newButton.disabled = !lastNewIds.length;
+    newButton.disabled = !upcoming.some(isMarkedNew);
     if (newButton.disabled && activeFilter === 'new') {
       activeFilter = 'all';
     }
@@ -615,12 +626,12 @@ window.MusicHub = window.MusicHub || {};
       }
 
       MusicHub.storage.remove(STORAGE_KEY);
-      state = { lastFetchedAt: null, concerts: [] };
+      state = { lastFetchedAt: null, concerts: [], lastFound: [] };
       activeFilter = 'all';
       setSearch('');
       els.failedNotice.hidden = true;
       hideToast();
-      render([]);
+      render();
     });
   }
 
@@ -827,7 +838,7 @@ window.MusicHub = window.MusicHub || {};
       // Un-marking a concert while filtering by "attending" should drop it
       // out of the list right away.
       if (activeFilter === 'attending') {
-        render(lastNewIds);
+        render();
       }
     });
 
@@ -865,19 +876,18 @@ window.MusicHub = window.MusicHub || {};
     return card;
   }
 
-  function render(newIds) {
-    lastNewIds = newIds || [];
+  function render() {
     els.list.textContent = '';
 
     // Shows that have already happened are never rendered, however long the
     // stored list has been sitting there.
     var upcoming = state.concerts.filter(isUpcoming);
-    updateFilterControls(upcoming.length);
+    updateFilterControls(upcoming);
 
     if (!upcoming.length) {
       setMessage(state.lastFetchedAt
         ? 'No upcoming concerts found in the selected cities.'
-        : 'No concerts fetched yet — hit the refresh button to fetch them.');
+        : 'No concerts fetched yet.');
       updateSummary([]);
       updateCountdown();
       renderLastFetched();
@@ -885,7 +895,7 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
 
-    var visible = searchConcerts(filterConcerts(upcoming, activeFilter, lastNewIds), searchQuery);
+    var visible = searchConcerts(filterConcerts(upcoming, activeFilter, state.lastFound), searchQuery);
     updateSummary(visible);
 
     if (!visible.length) {
@@ -893,7 +903,7 @@ window.MusicHub = window.MusicHub || {};
     } else {
       setMessage('');
       visible.forEach(function (concert) {
-        els.list.appendChild(renderCard(concert, lastNewIds.indexOf(concert.id) !== -1));
+        els.list.appendChild(renderCard(concert, isMarkedNew(concert)));
       });
     }
 
@@ -1049,19 +1059,36 @@ window.MusicHub = window.MusicHub || {};
    * that have disappeared from Ticketmaster drop out. A partial run - one that
    * was cancelled, or a retry of a few artists - is merged into the stored
    * list instead, and leaves "Last fetched" alone.
+   *
+   * The concerts a fetch added replace the ones marked "New" - except for a
+   * cancelled fetch that found nothing, which leaves them, and a retry,
+   * whose finds belong to the fetch it completes and join them.
    */
   function storeRunResult(previous, matches, failed, run, replace) {
     var concerts = buildConcerts(matches);
     var newIds = applyPreviousState(concerts, previous);
+
+    var lastFound = state.lastFound;
+    if (!replace) {
+      lastFound = lastFound.concat(newIds);
+    } else if (newIds.length || !run.cancelled) {
+      lastFound = newIds;
+    }
 
     if (replace && !run.cancelled) {
       state = { lastFetchedAt: new Date().toISOString(), concerts: concerts };
     } else {
       state = { lastFetchedAt: state.lastFetchedAt, concerts: mergeConcerts(concerts, previous) };
     }
+    // Only ids still in the list - a full fetch drops vanished concerts.
+    state.lastFound = lastFound.filter(function (id) {
+      return state.concerts.some(function (concert) {
+        return concert.id === id;
+      });
+    });
 
     saveState();
-    render(newIds);
+    render();
     showFailedArtists(failed);
     showToast(fetchSummaryMessage(concerts, newIds, run.cancelled));
   }
@@ -1209,22 +1236,22 @@ window.MusicHub = window.MusicHub || {};
         return;
       }
       activeFilter = button.getAttribute('data-filter');
-      render(lastNewIds);
+      render();
     });
     els.search.addEventListener('input', function () {
       setSearch(els.search.value);
-      render(lastNewIds);
+      render();
     });
     els.search.addEventListener('keydown', function (event) {
       if (event.key !== 'Escape' || !searchQuery) {
         return;
       }
       setSearch('');
-      render(lastNewIds);
+      render();
     });
     els.searchClear.addEventListener('click', function () {
       setSearch('');
-      render(lastNewIds);
+      render();
       els.search.focus();
     });
     document.getElementById('failed-dismiss').addEventListener('click', function () {
@@ -1234,9 +1261,7 @@ window.MusicHub = window.MusicHub || {};
     els.failedRetry.addEventListener('click', retryFailedArtists);
 
     state = loadState();
-    // Nothing is "new" on a plain page load - that flag only applies to the
-    // render right after a fetch.
-    render([]);
+    render();
   });
 
   // Exposed for tests.

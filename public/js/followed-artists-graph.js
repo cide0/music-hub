@@ -621,9 +621,13 @@ window.MusicHub = window.MusicHub || {};
     var failed = [];
     var chain = Promise.resolve();
 
+    // Named like the other pages' runs: "Fetching artist data for Björk (12/80)…".
+    function label(index) {
+      return 'Fetching artist data for ' + jobs[index].artist.name + ' (' + (index + 1) + '/' + jobs.length + ')…';
+    }
+
     function progress(index) {
-      setStatus('Fetching artist data… ' + (index + 1) + '/' + jobs.length,
-        ((index + 1) / jobs.length) * 100);
+      setStatus(label(index), ((index + 1) / jobs.length) * 100);
     }
 
     jobs.forEach(function (job, index) {
@@ -631,8 +635,7 @@ window.MusicHub = window.MusicHub || {};
         if (run.cancelled) {
           return null;
         }
-        setStatus('Fetching artist data… ' + (index + 1) + '/' + jobs.length,
-          (index / jobs.length) * 100);
+        setStatus(label(index), (index / jobs.length) * 100);
 
         var step = Promise.resolve();
 
@@ -854,7 +857,8 @@ window.MusicHub = window.MusicHub || {};
     setGraphVisible(false);
     drawGraph([], []);
     renderControls();
-    setMessage('No graph yet — generate one from the artists you follow.');
+    // Nothing left but the Generate graph button, in the middle of the page.
+    setMessage('');
   }
 
   /* ------------------------------------------------------ recommendations */
@@ -1005,11 +1009,9 @@ window.MusicHub = window.MusicHub || {};
     // The left group also carries the progress bar, so it stays visible while
     // a first graph is still being built.
     els.overlayLeft.hidden = !(graphVisible || busy);
-    // The corner controls take the header's place once a graph is up.
-    els.header.hidden = graphVisible;
-    if (graphVisible) {
-      fitCanvas();
-    }
+    // Measured either way: without a graph, the Generate graph button is
+    // centred in the space below the navbar.
+    fitCanvas();
   }
 
   function setGraphVisible(visible) {
@@ -2852,7 +2854,6 @@ window.MusicHub = window.MusicHub || {};
     els.statusSlot = document.getElementById('status-slot');
     els.failedNotice = document.getElementById('graph-failed-notice');
     els.failedText = document.getElementById('graph-failed-text');
-    els.header = document.querySelector('.page__header');
     els.overlayLeft = document.getElementById('overlay-left');
     els.overlayRight = document.getElementById('overlay-right');
     els.canvas = document.getElementById('graph-canvas');
@@ -2945,6 +2946,9 @@ window.MusicHub = window.MusicHub || {};
       // Not in the middle of a welcome: it would lose the nodes it's on.
       if (graph.artists.length && !celebrating) {
         render();
+      } else if (!graphVisible) {
+        // The navbar may wrap to a new height: keep the button centred below it.
+        fitCanvas();
       }
     });
 
@@ -3030,8 +3034,8 @@ window.MusicHub = window.MusicHub || {};
 
     renderControls();
     if (!graph.artists.length) {
+      // Just the Generate graph button, in the middle of the page.
       setGraphVisible(false);
-      setMessage('No graph yet — generate one from the artists you follow.');
     } else {
       render();
     }

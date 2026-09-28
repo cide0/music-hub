@@ -70,7 +70,7 @@
       </a>
 
       <!-- The Daily Spin: opens the wheel of fortune (daily-wheel.js) on any
-           page. Gold and nudging round while there's a spin or a prize
+           page. Glowing and nudging round while there's a spin or a prize
            waiting. -->
       <button type="button" class="icon-button navbar__wheel" id="wheel-open" data-auth-required
         aria-haspopup="dialog" aria-label="Daily Spin" title="Daily Spin">
@@ -162,12 +162,17 @@
   /*
    * The balance straight away, rather than a 0 until wallet.js runs - and
    * the Daily Spin's dot, when a spin or a prize is waiting. The day must
-   * be worked out like localDay() in public/js/daily-wheel.js.
+   * be worked out like localDay() in public/js/daily-wheel.js. The
+   * followed-artists refresh glows the same until the list is first
+   * fetched (as followed-artists.js renderButton() decides).
    */
   (function () {
     var coins = 0;
     var ready = false;
+    var neverFetched = false;
     try {
+      var followed = JSON.parse(localStorage.getItem('followedArtists') || 'null');
+      neverFetched = !(followed && Array.isArray(followed.artists));
       var store = JSON.parse(localStorage.getItem('store') || 'null');
       coins = Math.max(0, Math.floor(Number(store && store.credits) || 0));
       var wheel = (store && store.wheel) || {};
@@ -182,5 +187,6 @@
       node.textContent = coins.toLocaleString('en-US');
     });
     document.getElementById('wheel-open').classList.toggle('navbar__wheel--ready', ready);
+    document.getElementById('followed-refresh').classList.toggle('navbar__refresh--empty', neverFetched);
   })();
 </script>

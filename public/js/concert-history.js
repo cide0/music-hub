@@ -562,13 +562,7 @@ window.MusicHub = window.MusicHub || {};
     clearGrid(els.artistsGrid, els.addArtistCard);
     renderFavoritesFolder();
 
-    if (!data.artists.length) {
-      els.artistsEmpty.textContent = 'No artists yet — use Add artist to get started';
-      els.artistsEmpty.hidden = false;
-      return;
-    }
-    els.artistsEmpty.hidden = true;
-
+    // No artists yet: just the Add artist card.
     sortedArtists(data).forEach(function (artist) {
       var card = el('div', 'folder-card');
 
@@ -620,15 +614,8 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
 
-    var concerts = sortedConcerts(artist);
-    if (!concerts.length) {
-      els.concertsEmpty.textContent = 'No concerts yet — add one with Add concert';
-      els.concertsEmpty.hidden = false;
-      return;
-    }
-    els.concertsEmpty.hidden = true;
-
-    concerts.forEach(function (concert) {
+    // No concerts yet: just the Add concert tile.
+    sortedConcerts(artist).forEach(function (concert) {
       var tile = el('li', 'folder-card folder-card--concert');
 
       var open = button('folder-card__open', '', function () {
@@ -1219,10 +1206,8 @@ window.MusicHub = window.MusicHub || {};
     els.artistsGrid = document.getElementById('artists-grid');
     els.addArtistCard = document.getElementById('add-artist');
     els.addArtistToggle = document.getElementById('add-artist-toggle');
-    els.artistsEmpty = document.getElementById('artists-empty');
     els.concertsList = document.getElementById('concerts-list');
     els.addConcertTile = document.getElementById('add-concert-tile');
-    els.concertsEmpty = document.getElementById('concerts-empty');
     els.imagesGrid = document.getElementById('images-grid');
     els.videosList = document.getElementById('videos-list');
     els.imagesSection = document.getElementById('images-section');

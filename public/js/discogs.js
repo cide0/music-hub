@@ -791,7 +791,7 @@ window.MusicHub = window.MusicHub || {};
   function showUsernamePrompt() {
     els.pick.textContent = '';
     var message = el('p', 'pick-card__message', 'Add your Discogs username in ');
-    var link = el('a', null, 'Settings');
+    var link = el('a', 'page-link', 'Settings');
     link.href = '/settings';
     message.appendChild(link);
     message.appendChild(document.createTextNode(' to get a pick from your collection.'));

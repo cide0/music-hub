@@ -179,6 +179,25 @@ window.MusicHub = window.MusicHub || {};
     return paid;
   }
 
+  /**
+   * Pays `price` for one more Daily Spin, kept with the wheel's respins
+   * until it's spun. False when short.
+   */
+  function buySpin(price) {
+    var paid = update(function (state) {
+      if (state.credits < price) {
+        return false;
+      }
+      state.credits -= price;
+      state.wheel.respins += 1;
+      return true;
+    });
+    if (paid) {
+      animateCountDown();
+    }
+    return paid;
+  }
+
   /** The Daily Spin's state (see loadWheel). */
   function wheel() {
     return load().wheel;
@@ -1012,6 +1031,7 @@ window.MusicHub = window.MusicHub || {};
     removeVinyl: removeVinyl,
     wheel: wheel,
     updateWheel: updateWheel,
+    buySpin: buySpin,
     format: format,
     coinSvg: coinSvg,
     checkSvg: checkSvg,

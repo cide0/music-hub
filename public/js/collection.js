@@ -243,6 +243,13 @@ window.MusicHub = window.MusicHub || {};
       cover.appendChild(style);
     }
     node.appendChild(cover);
+    // A wheel exclusive sparkles like an attended concert's card, while
+    // its record is in the sleeve (.vinyl-card--exclusive in the stylesheet).
+    if (isExclusive(vinyl)) {
+      var glitter = el('span', 'concert-card__glitter');
+      glitter.setAttribute('aria-hidden', 'true');
+      node.appendChild(glitter);
+    }
 
     if (NO_HOVER) {
       drawRecordWhenVisible(node, cover, vinyl);

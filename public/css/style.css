@@ -26,6 +26,13 @@ a {
   color: var(--color-link);
 }
 
+/* A link in running text to another page of the app ("…in Settings"):
+   bold rather than underlined, in the link colour. */
+.page-link {
+  font-weight: 700;
+  text-decoration: none;
+}
+
 /* Firefox */
 html {
   scrollbar-color: var(--color-purple-800) var(--color-surface);
@@ -409,8 +416,9 @@ button[aria-disabled='true'] {
 }
 
 /* The followed-artists refresh (a .refresh-button), sized like the
-   settings circle beside it. Ringed until the list is first fetched, as
-   pages that need it point here. */
+   settings circle beside it. Until the list is first fetched - pages that
+   need it point here - it has the Daily Spin's waiting look: nudging
+   round now and then and glowing (see .navbar__wheel--ready). */
 .navbar__actions .navbar__refresh {
   width: 40px;
   height: 40px;
@@ -425,14 +433,10 @@ button[aria-disabled='true'] {
   height: 18px;
 }
 
-.navbar__refresh--empty {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
-}
-
 /* The Daily Spin's wheel (daily-wheel.js), sized like the refresh beside
-   it. Gold and nudging round now and then while a spin or a prize is
-   waiting. */
+   it. Nudging round now and then and glowing while a spin or a prize is
+   waiting. Its icon stays the navbar's own colour - gold only with the
+   Gold Navbar, like every icon there. */
 .navbar__actions .navbar__wheel {
   width: 40px;
   height: 40px;
@@ -457,14 +461,13 @@ button[aria-disabled='true'] {
   transform: rotate(60deg);
 }
 
-.navbar__wheel--ready {
-  color: var(--rarity-gold-bright);
-}
-
 /* A neon purple ring, softly pulsing, while a spin is waiting - hovered
-   too. (The Gold Navbar turns its gold frame instead, see below.) */
+   too. The same on the refresh beside it until the followed artists are
+   first fetched. (The Gold Navbar turns its gold frame instead, see below.) */
 .navbar__actions .navbar__wheel--ready,
-.navbar__actions .navbar__wheel--ready:hover:not(:disabled) {
+.navbar__actions .navbar__wheel--ready:hover:not(:disabled),
+.navbar__actions .navbar__refresh--empty,
+.navbar__actions .navbar__refresh--empty:hover:not(:disabled) {
   border-color: var(--color-purple-300);
   box-shadow:
     0 0 6px color-mix(in srgb, var(--color-purple-400) 80%, transparent),
@@ -490,7 +493,8 @@ button[aria-disabled='true'] {
   }
 }
 
-.navbar__wheel--ready .navbar__wheel-face {
+.navbar__wheel--ready .navbar__wheel-face,
+.navbar__refresh--empty:not([aria-busy='true']) svg {
   animation: navbar-wheel-nudge 4s ease-in-out infinite;
 }
 
@@ -506,7 +510,9 @@ button[aria-disabled='true'] {
   }
 
   .navbar__wheel--ready .navbar__wheel-face,
-  .navbar__actions .navbar__wheel--ready {
+  .navbar__actions .navbar__wheel--ready,
+  .navbar__actions .navbar__refresh--empty,
+  .navbar__refresh--empty:not([aria-busy='true']) svg {
     animation: none;
   }
 }
@@ -575,9 +581,44 @@ button[aria-disabled='true'] {
 
 /* Title left, countdown centred, totals right - all on one baseline. */
 /* With a stored graph, the "generate one" view never appears - not even for
-   the frame before the script runs. */
-.has-graph .page__header,
+   the frame before the script runs. The page's title never does: it's the
+   graph, or just the button to make one. */
+.page--graph .page__header,
 .has-graph #generate-toolbar {
+  display: none;
+}
+
+/* No graph yet: only the Generate graph button, in the middle of the space
+   below the navbar - with the progress bar and any note under it once it's
+   clicked. Scoped to a login, so the gating's display: none still wins
+   without one. */
+.is-logged-in.no-graph .page--graph > .page__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: calc(100dvh - var(--graph-top, 64px) - 2rem);
+}
+
+.no-graph #generate-toolbar {
+  margin-bottom: 0;
+}
+
+/* The page's only element: sized to match. */
+.no-graph #generate-graph {
+  min-height: 64px;
+  padding: 0.875rem 2.5rem;
+  font-size: 1.25rem;
+}
+
+.no-graph #status-slot {
+  width: min(100%, 720px);
+}
+
+/* Holding only the hidden progress bar, it mustn't take a gap and push
+   the button off centre. */
+.no-graph #status-slot:not(:has(> :not([hidden]))) {
   display: none;
 }
 
@@ -1380,11 +1421,12 @@ button[aria-disabled='true'] {
 
 /* Holographic foil sheen: a light source that follows the cursor, over a
    shifting colour wash. Purely decorative, so it never takes pointer events.
-   Shared with the Album Suggester's history entries and the Setlists page's
-   past concerts. */
+   Shared with the Album Suggester's history entries, the Setlists page's
+   past concerts and the Collection's wheel exclusives. */
 .concert-card::after,
 .history-item::after,
-.past-show::after {
+.past-show::after,
+.vinyl-card--exclusive::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -2398,12 +2440,25 @@ textarea.text-input {
   justify-content: center;
 }
 
+/* The 88px icon in a box as big as an artist's avatar, so the Favorites and
+   Add artist cards are as tall as an artist folder from the start - rather
+   than growing when the first one joins their row. */
 .folder-card__icon--heart,
 .folder-card__icon--add {
-  width: 88px;
-  height: 88px;
+  width: 200px;
+  height: 200px;
+  padding: 56px;
   color: var(--color-accent);
   stroke-width: 1.5;
+}
+
+@media (max-width: 600px) {
+  .folder-card__icon--heart,
+  .folder-card__icon--add {
+    width: 132px;
+    height: 132px;
+    padding: 22px;
+  }
 }
 
 .favorites-group {
@@ -3666,6 +3721,7 @@ textarea.text-input {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background-color: var(--color-surface);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .pick-card__link {
@@ -3678,6 +3734,29 @@ textarea.text-input {
 
 .pick-card__link:hover {
   background-color: var(--color-surface-raised);
+}
+
+/* A pick showing (not a message): the concert cards' lift, purple border
+   and glow on hover (.concert-card--linked). Hover only, so a tap on a
+   touch screen doesn't leave it latched. */
+@media (hover: hover) {
+  .pick-card:has(.pick-card__link):hover {
+    transform: translateY(-3px) scale(1.01);
+    border-color: var(--color-purple-300);
+    box-shadow:
+      0 10px 28px color-mix(in srgb, var(--color-black) 50%, transparent),
+      0 0 26px color-mix(in srgb, var(--color-accent) 40%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pick-card {
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  .pick-card:has(.pick-card__link):hover {
+    transform: none;
+  }
 }
 
 .pick-card__cover {
@@ -6095,17 +6174,12 @@ button.turntable__power:focus-visible {
   background-color: var(--navbar-gold-plate);
 }
 
-/* Still ringed until the followed artists are first fetched - in gold. */
-:root[data-navbar-style="gold"] .navbar .navbar__refresh--empty {
-  border-color: var(--rarity-gold-shine);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rarity-gold-bright) 45%, transparent);
-}
-
 /* Hovered, opened or where you are (the active tab, the settings circle on
    /settings): the name's turning gold frame around a dark gold plate -
    turning from the moment the pointer is on it. No glow behind it. */
-/* The Daily Spin's wheel, while a spin is waiting, too. */
-:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab:hover, .navbar__dropdown-toggle[aria-expanded='true'], .navbar__menu-item:is(:hover, :focus-visible), .icon-button:hover:not(:disabled):not([aria-disabled='true']), .navbar__tab--active, .navbar__settings--active, .navbar-preview__settings, .navbar__wheel--ready) {
+/* The Daily Spin's wheel, while a spin is waiting, too - and the refresh
+   until the followed artists are first fetched. */
+:is(:root[data-navbar-style="gold"] .navbar, .navbar-preview[data-navbar-style="gold"]) :is(.navbar__tab:hover, .navbar__dropdown-toggle[aria-expanded='true'], .navbar__menu-item:is(:hover, :focus-visible), .icon-button:hover:not(:disabled):not([aria-disabled='true']), .navbar__tab--active, .navbar__settings--active, .navbar-preview__settings, .navbar__wheel--ready, .navbar__refresh--empty) {
   border-color: transparent;
   background:
     linear-gradient(var(--navbar-gold-fill), var(--navbar-gold-fill)) padding-box,
@@ -6268,7 +6342,7 @@ button.turntable__power:focus-visible {
   :root[data-navbar-style] .navbar::before,
   .navbar-preview[data-navbar-style]::before,
   :is(:root[data-navbar-style] .navbar, .navbar-preview[data-navbar-style]) :is(.navbar__tab, .navbar__menu-item, .icon-button, .navbar__login, .navbar__coins, .navbar__brand):hover:not(:disabled)::before,
-  :is(:root[data-navbar-style] .navbar, .navbar-preview[data-navbar-style]) :is(.navbar__tab:hover, .navbar__dropdown-toggle[aria-expanded='true'], .navbar__menu-item:is(:hover, :focus-visible), .icon-button:hover:not(:disabled):not([aria-disabled='true']), .navbar__tab--active, .navbar__settings--active, .navbar-preview__settings, .navbar__wheel--ready),
+  :is(:root[data-navbar-style] .navbar, .navbar-preview[data-navbar-style]) :is(.navbar__tab:hover, .navbar__dropdown-toggle[aria-expanded='true'], .navbar__menu-item:is(:hover, :focus-visible), .icon-button:hover:not(:disabled):not([aria-disabled='true']), .navbar__tab--active, .navbar__settings--active, .navbar-preview__settings, .navbar__wheel--ready, .navbar__refresh--empty),
   :is(:root[data-navbar-style] .navbar, .navbar-preview[data-navbar-style]) :is(.navbar__tab--active, .navbar__tab:hover, .navbar__dropdown-toggle[aria-expanded='true'], .navbar__menu-item:is(:hover, :focus-visible), .navbar__brand:hover) .navbar__label {
     animation: none;
   }
@@ -6520,6 +6594,62 @@ button.turntable__power:focus-visible {
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .store-offer:has(.store-item__action:hover:not(:disabled)) .mailer {
     animation: mailer-jiggle 0.8s ease-in-out infinite;
+  }
+}
+
+/* The spin offer: the navbar's Daily Spin wheel, big and glowing, nudging
+   round now and then as it does there while a spin is waiting. Hovering
+   (or tabbing to) Buy spin sets it turning; a purchase gives it two quick
+   turns (store.js). */
+.store-spin__wheel {
+  width: 120px;
+  height: 120px;
+  color: var(--color-purple-200);
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--color-purple-400) 70%, transparent));
+}
+
+.store-spin__face {
+  transform-box: view-box;
+  transform-origin: 12px 13px;
+  animation: navbar-wheel-nudge 4s ease-in-out infinite;
+}
+
+@keyframes store-spin-turn {
+  to { transform: rotate(360deg); }
+}
+
+/* A bought spin flying up to the navbar's wheel (store.js flySpin): a copy
+   of the card's wheel, over everything, moved and sized by its animation. */
+.store-spin__flyer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  color: var(--color-purple-200);
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-purple-400) 80%, transparent));
+  pointer-events: none;
+}
+
+.store-spin__flyer-face {
+  transform-box: view-box;
+  transform-origin: 12px 13px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .store-spin:has(.store-item__action:focus-visible:not(:disabled)) .store-spin__face {
+    animation: store-spin-turn 1.6s linear infinite;
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .store-spin:has(.store-item__action:hover:not(:disabled)) .store-spin__face {
+    animation: store-spin-turn 1.6s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-spin__face {
+    animation: none;
   }
 }
 
@@ -6979,6 +7109,36 @@ button.turntable__power:focus-visible {
   border-color: transparent;
 }
 
+/* It shimmers and sparkles like a concert the user is attending
+   (.concert-card--attending) - until the record comes out, when both fade
+   away so the record and its pattern show clean. The glitter fades as a
+   whole through a filter, which reaches its ::before / ::after as well. */
+.vinyl-card--exclusive::after {
+  opacity: 0.55;
+  animation: foil-drift 9s ease-in-out infinite;
+}
+
+.vinyl-card--exclusive .concert-card__glitter {
+  animation: glitter 2.9s ease-in-out infinite;
+  transition: filter 0.25s ease;
+}
+
+.vinyl-card--exclusive .concert-card__glitter::before {
+  animation: glitter 3.7s ease-in-out 0.8s infinite;
+}
+
+.vinyl-card--exclusive .concert-card__glitter::after {
+  animation: glitter 4.3s ease-in-out 1.6s infinite;
+}
+
+.vinyl-card--exclusive.release-card--playing::after {
+  opacity: 0;
+}
+
+.vinyl-card--exclusive.release-card--playing .concert-card__glitter {
+  filter: opacity(0);
+}
+
 /* Its style in the gold username's pill (Gold Shine): a turning gold frame
    round a dark gold plate, polished-gold lettering (the lettering rule is
    the name's own) and a sparkle twinkling at the corner. */
@@ -7028,6 +7188,13 @@ button.turntable__power:focus-visible {
   .vinyl-card--exclusive .vinyl-card__style::after {
     animation: none;
     opacity: 1;
+  }
+
+  .vinyl-card--exclusive::after,
+  .vinyl-card--exclusive .concert-card__glitter,
+  .vinyl-card--exclusive .concert-card__glitter::before,
+  .vinyl-card--exclusive .concert-card__glitter::after {
+    animation: none;
   }
 }
 

@@ -41,15 +41,48 @@
             </div>
           </div>
         </article>
+
+        <div class="section-header">
+          <h2 class="section-title">Daily Spin</h2>
+        </div>
+
+        <!-- One more spin on the navbar's wheel, saved with its respins. -->
+        <article class="store-item store-offer store-spin" id="spin-offer">
+          <div class="store-item__preview store-offer__preview">
+            <svg class="store-spin__wheel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <g class="store-spin__face">
+                <circle cx="12" cy="13" r="8.5" /><circle cx="12" cy="13" r="1.6" />
+                <path d="M12 4.5v6.9M12 14.6v6.9M3.5 13h6.9M13.6 13h6.9M6 7l4.9 4.9M13.1 14.1 18 19M18 7l-4.9 4.9M10.9 14.1 6 19" />
+              </g>
+              <path d="M9.6 1.4h4.8L12 5z" fill="currentColor" />
+            </svg>
+            <!-- How many spins are left (store.js). -->
+            <span class="store-item__badge store-offer__free" id="spin-saved" hidden></span>
+            <span class="store-lock" id="spin-lock" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path class="store-lock__shackle" d="M7 9.5V7a5 5 0 0 1 10 0v2.5" /><rect class="store-lock__body" x="3" y="9.5" width="18" height="12.5" rx="2" ry="2" /><circle class="store-lock__keyhole" cx="12" cy="15.75" r="1.3" fill="currentColor" stroke="none" />
+              </svg>
+            </span>
+          </div>
+          <div class="store-item__body">
+            <p class="store-item__text">
+              One more spin on the Daily Spin wheel, on top of the free one each day.
+            </p>
+            <div class="store-item__footer">
+              <span class="store-offer__price"><span class="price"><svg class="coin" aria-hidden="true"><use href="#coin-icon" /></svg><span class="price__value">3,000</span><span class="visually-hidden"> coins</span></span></span>
+              <button type="button" class="button button--primary store-item__action" id="spin-buy">Buy spin</button>
+            </div>
+          </div>
+        </article>
         <script>
           /*
            * Greyed out and locked from the first paint when the coins don't
-           * reach (and no mystery vinyl from the Daily Spin is waiting),
-           * rather than fading out once store.js runs. The price must stay
-           * in sync with VINYL_PRICE in public/js/unbox.js.
+           * reach (for the vinyl: and no mystery vinyl from the Daily Spin
+           * is waiting), rather than fading out once store.js runs. The
+           * prices must stay in sync with VINYL_PRICE in public/js/unbox.js
+           * and SPIN_PRICE in public/js/store.js.
            */
           (function () {
-            var price = 1000;
             var coins = 0;
             var free = 0;
             try {
@@ -59,12 +92,17 @@
             } catch (err) {
               coins = 0;
             }
-            if (coins >= price || free > 0) {
-              return;
+            function short(offer, lock, button) {
+              document.getElementById(offer).classList.add('store-item--short');
+              document.getElementById(lock).hidden = false;
+              document.getElementById(button).disabled = true;
             }
-            document.getElementById('vinyl-offer').classList.add('store-item--short');
-            document.getElementById('vinyl-lock').hidden = false;
-            document.getElementById('unbox-button').disabled = true;
+            if (coins < 1000 && free < 1) {
+              short('vinyl-offer', 'vinyl-lock', 'unbox-button');
+            }
+            if (coins < 3000) {
+              short('spin-offer', 'spin-lock', 'spin-buy');
+            }
           })();
         </script>
 

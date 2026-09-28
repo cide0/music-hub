@@ -2110,5 +2110,9 @@ window.MusicHub = window.MusicHub || {};
   MusicHub.dailyWheel = {
     open: open,
     PRIZES: PRIZES,
+    // A peg knocking the flapper - for the Store's wheel turning too.
+    tick: function () {
+      sound('tick');
+    },
   };
 })(window.MusicHub);

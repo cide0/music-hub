@@ -194,7 +194,7 @@ window.MusicHub = window.MusicHub || {};
     els.pickerEmpty.hidden = shown.length > 0;
     if (!albums.length) {
       els.pickerEmpty.appendChild(document.createTextNode('Your album history is empty. Mark an album as listened on '));
-      var link = el('a', null, 'Albums');
+      var link = el('a', 'page-link', 'Albums');
       link.href = '/album-suggester';
       els.pickerEmpty.appendChild(link);
       els.pickerEmpty.appendChild(document.createTextNode(' first - then it can be pressed on a vinyl.'));
