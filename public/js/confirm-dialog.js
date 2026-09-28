@@ -44,9 +44,20 @@ window.MusicHub = window.MusicHub || {};
     actions.appendChild(cancel);
     actions.appendChild(submit);
 
+    // The round X in the top-right corner, like every modal's (navbar.js
+    // closes it, as with Escape).
+    var close = el('button', 'icon-button modal__close');
+    close.type = 'button';
+    close.setAttribute('data-modal-close', '');
+    close.setAttribute('aria-label', 'Close');
+    close.title = 'Close';
+    close.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">'
+      + '<line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>';
+
     form.appendChild(title);
     form.appendChild(text);
     form.appendChild(actions);
+    dialog.appendChild(close);
     dialog.appendChild(form);
     document.body.appendChild(dialog);
 
@@ -57,19 +68,8 @@ window.MusicHub = window.MusicHub || {};
     cancel.addEventListener('click', function () {
       dialog.close();
     });
-    // A click on the backdrop lands on the dialog itself, outside its box.
-    dialog.addEventListener('click', function (event) {
-      if (event.target !== dialog) {
-        return;
-      }
-      var rect = dialog.getBoundingClientRect();
-      var inside = event.clientX >= rect.left && event.clientX <= rect.right
-        && event.clientY >= rect.top && event.clientY <= rect.bottom;
-      if (!inside) {
-        dialog.close();
-      }
-    });
-    // However it closes - Cancel, Escape, the backdrop - it counts as a no.
+    // However it closes - Cancel, Escape, the X, a click outside it
+    // (navbar.js) - it counts as a no.
     dialog.addEventListener('close', function () {
       finish(false);
     });

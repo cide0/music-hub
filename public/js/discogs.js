@@ -884,7 +884,7 @@ window.MusicHub = window.MusicHub || {};
         if (run.cancelled) {
           return null;
         }
-        var label = 'Checking Discogs for ' + name + ' (' + (index + 1) + '/' + names.length + ')…';
+        var label = 'Checking Discogs for ' + name + ' (' + (index + 1) + '/' + names.length + ')';
         setStatus(label, (index / names.length) * 100);
 
         var entries = pruneKnown(known[name], since);

@@ -25,6 +25,9 @@ window.MusicHub = window.MusicHub || {};
   var view = null;
   // Position within the recommended artists while stepping through them.
   var recommendIndex = -1;
+  // Just followed one: recommendIndex is on whoever was next in line, but
+  // nothing is picked - no Followed button - until an arrow is pressed.
+  var awaitingStep = false;
   // While a just-followed recommendation's welcome plays (celebrateFollow).
   var celebrating = false;
   // Show only artists that have concert folders in Concert History.
@@ -532,6 +535,9 @@ window.MusicHub = window.MusicHub || {};
 
   function setBusy(state) {
     busy = state;
+    // Leaving mid-run - generating, updating, finding recommended artists -
+    // asks first (navbar.js, the leave guard).
+    document.documentElement.toggleAttribute('data-leave-guard', state);
     updateOverlays();
     els.generate.disabled = state;
     els.update.disabled = state;
@@ -621,9 +627,9 @@ window.MusicHub = window.MusicHub || {};
     var failed = [];
     var chain = Promise.resolve();
 
-    // Named like the other pages' runs: "Fetching artist data for Björk (12/80)…".
+    // Named like the other pages' runs: "Fetching artist data for Björk (12/80)".
     function label(index) {
-      return 'Fetching artist data for ' + jobs[index].artist.name + ' (' + (index + 1) + '/' + jobs.length + ')…';
+      return 'Fetching artist data for ' + jobs[index].artist.name + ' (' + (index + 1) + '/' + jobs.length + ')';
     }
 
     function progress(index) {
@@ -698,7 +704,7 @@ window.MusicHub = window.MusicHub || {};
     setBusy(true);
     setMessage('');
     els.failedNotice.hidden = true;
-    setStatus('Checking your followed artists…', 0);
+    setStatus('Checking your followed artists', 0);
 
     // The recommendation set is built from the graph, so it goes stale here.
     if (showRecommended) {
@@ -917,7 +923,7 @@ window.MusicHub = window.MusicHub || {};
         return entry !== candidate;
       });
 
-      setStatus('Finding recommended artists… ' + (resolved.length + 1) + '/' + target,
+      setStatus('Finding recommended artists ' + (resolved.length + 1) + '/' + target,
         (resolved.length / target) * 100);
 
       return resolveCandidate(candidate, run).then(function (artist) {
@@ -1067,6 +1073,7 @@ window.MusicHub = window.MusicHub || {};
     });
 
     recommendIndex = -1;
+    awaitingStep = false;
     syncGraph();
     updateStepper();
     return added;
@@ -1093,6 +1100,7 @@ window.MusicHub = window.MusicHub || {};
     });
 
     recommendIndex = -1;
+    awaitingStep = false;
     setFocus(null);
     syncGraph();
     updateStepper();
@@ -1491,6 +1499,7 @@ window.MusicHub = window.MusicHub || {};
 
     if (view.pending.length) {
       simulation.alpha(alpha).restart();
+      releaseHulls();
       return;
     }
 
@@ -1515,6 +1524,7 @@ window.MusicHub = window.MusicHub || {};
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduceMotion) {
       drawPositions();
+      releaseHulls();
       return;
     }
 
@@ -1532,6 +1542,7 @@ window.MusicHub = window.MusicHub || {};
       placeAt(window.d3.easeCubicInOut(t));
       if (t === 1) {
         stopLayoutTween();
+        releaseHulls();
       }
     });
   }
@@ -1542,9 +1553,39 @@ window.MusicHub = window.MusicHub || {};
     if (!enabled) {
       focusedGenre = null;
     }
+    // Switched on: the nodes move into their clusters first, and only then
+    // do the coloured areas fade in round them (see moveToLayout) - drawn
+    // straight away, they'd sprawl over the unsorted graph and then shrink
+    // along with the nodes.
+    holdHulls(enabled);
     applyVisibility();
     renderHulls();
     applyGenreForce();
+    // Nothing set moving after all: no reason to keep them back.
+    if (hullsHeld && !layoutTween) {
+      releaseHulls();
+    }
+  }
+
+  // The genre areas kept hidden until the nodes have moved into their clusters.
+  var hullsHeld = false;
+  var HULL_FADE_MS = 400;
+
+  function holdHulls(hold) {
+    if (!view) {
+      return;
+    }
+    hullsHeld = hold;
+    view.hullGroup.interrupt().style('opacity', hold ? 0 : null);
+  }
+
+  /** The nodes have arrived: any areas held back fade in. */
+  function releaseHulls() {
+    if (!view || !hullsHeld) {
+      return;
+    }
+    hullsHeld = false;
+    view.hullGroup.transition().duration(HULL_FADE_MS).style('opacity', 1);
   }
 
   function fetchTags(name, signal) {
@@ -1670,16 +1711,17 @@ window.MusicHub = window.MusicHub || {};
     var nodes = recommendedNodes();
     els.stepper.hidden = !(showRecommended && nodes.length);
     // Only with a recommended artist picked in the stepper to say it of.
-    els.followedButton.hidden = els.stepper.hidden || recommendIndex < 0 || !nodes[recommendIndex];
+    var picked = !awaitingStep && recommendIndex >= 0 && !!nodes[recommendIndex];
+    els.followedButton.hidden = els.stepper.hidden || !picked;
     if (!els.followedButton.hidden) {
       els.followedButton.textContent = 'Followed ' + nodes[recommendIndex].name;
     }
     if (els.stepper.hidden) {
       return;
     }
-    els.stepperLabel.textContent = recommendIndex < 0
-      ? nodes.length + ' found'
-      : (recommendIndex + 1) + ' / ' + nodes.length;
+    els.stepperLabel.textContent = picked
+      ? (recommendIndex + 1) + ' / ' + nodes.length
+      : nodes.length + ' found';
   }
 
   /** Pans and zooms the canvas onto one node. */
@@ -1703,7 +1745,16 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
 
-    recommendIndex = ((recommendIndex + delta) % nodes.length + nodes.length) % nodes.length;
+    if (awaitingStep) {
+      // Right after a follow, recommendIndex already sits on the one that
+      // was next in line: forward goes to it, back to the one before the
+      // artist just followed.
+      awaitingStep = false;
+      var next = recommendIndex < 0 ? 0 : recommendIndex;
+      recommendIndex = delta > 0 ? next : (next - 1 + nodes.length) % nodes.length;
+    } else {
+      recommendIndex = ((recommendIndex + delta) % nodes.length + nodes.length) % nodes.length;
+    }
     focusNode(nodes[recommendIndex]);
     updateStepper();
   }
@@ -2119,11 +2170,14 @@ window.MusicHub = window.MusicHub || {};
     if (view && settling) {
       view.simulation.restart();
     }
-    // The stepper stays where it was: on whoever is next in line.
+    // The stepper stays where it was - on whoever is next in line - but
+    // nothing is picked, and no Followed button shown, until an arrow is
+    // pressed.
     var remaining = recommendedNodes();
     if (recommendIndex >= remaining.length) {
       recommendIndex = -1;
     }
+    awaitingStep = true;
     updateStepper();
   }
 
@@ -2261,6 +2315,7 @@ window.MusicHub = window.MusicHub || {};
       focusedId = null;
     }
     recommendIndex = -1;
+    awaitingStep = false;
     syncGraph();
     updateStepper();
 

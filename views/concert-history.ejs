@@ -90,6 +90,11 @@
         </section>
 
         <dialog class="modal" id="concert-dialog">
+          <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
           <form class="modal__form" id="concert-form">
             <h2 class="modal__title" id="concert-dialog-title">Add concert</h2>
             <label class="visually-hidden" for="concert-name-input">Concert folder name</label>
@@ -105,6 +110,11 @@
         <!-- Asks before anything is removed; filled in by confirmRemoval(). -->
         <dialog class="modal modal--confirm" id="confirm-dialog" aria-labelledby="confirm-dialog-title"
           aria-describedby="confirm-dialog-text">
+          <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
           <form class="modal__form" id="confirm-form">
             <h2 class="modal__title" id="confirm-dialog-title">Delete?</h2>
             <p class="modal__hint" id="confirm-dialog-text"></p>
@@ -116,6 +126,11 @@
         </dialog>
 
         <dialog class="modal" id="media-dialog">
+          <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
           <form class="modal__form" id="media-form">
             <h2 class="modal__title" id="media-dialog-title">Add media</h2>
             <p class="modal__hint">

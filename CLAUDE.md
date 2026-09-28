@@ -37,8 +37,8 @@ database**, and the service sleeps/restarts, so no server-side state survives).
   Mystery Vinyl can unbox it too. Check the new formats with
   `MusicHub.vinyl.describe()` to confirm they parse to the new pattern. One
   drawn from the cover art (like picture discs) gets `needsCover: true`, so
-  it's only picked for an album that has a cover. The exception: the Daily
-  Spin exclusives (forty, each its own pattern in `vinyl.js`) live in the
+  it's only picked for an album that has a cover. The exception: the Wheel of
+  Fortune exclusives (forty, each its own pattern in `vinyl.js`) live in the
   `wheelOnly` family, which the Mystery Vinyl never picks - only
   `pickExclusive()` (the wheel) hands them out.
 
@@ -71,7 +71,7 @@ public/js/           storage.js, navbar.js, auth.js, followed-artists.js,
                      tear.js (a cover or card torn in two, with its
                      ripping sound: Albums + Collection),
                      unbox.js (album picker + Mystery Vinyl unboxing, every
-                     page), daily-wheel.js (the navbar's Daily Spin, every
+                     page), daily-wheel.js (the navbar's Wheel of Fortune, every
                      page; its state lives in the `store` key's `wheel`),
                      turntable.js (the record player: Suggester + Collection),
                      <page-name>.js per page

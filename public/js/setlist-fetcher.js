@@ -24,6 +24,14 @@ window.MusicHub = window.MusicHub || {};
   var MANUAL_RESULTS = 10;
   // Spotify accepts at most 100 URIs per add request.
   var ADD_CHUNK_SIZE = 100;
+  // Coins for each song a setlist puts on a playlist - every time.
+  var SONG_COINS = 50;
+  // Each song's turn once they're added (ms): brought into view, filled
+  // with gold from left to right, then the bump as it's full - its coins
+  // fly off while the next one starts.
+  var REWARD_FOCUS_MS = 300;
+  var REWARD_FILL_MS = 800;
+  var REWARD_BUMP_MS = 550;
 
   var els = {};
   var searching = false;
@@ -1228,12 +1236,26 @@ window.MusicHub = window.MusicHub || {};
     chain
       .then(function () {
         markShowHandled(snapshot.setlist, snapshot.source);
-        // Done with this setlist: clear it away and leave just the note.
-        clearResults();
-        flash(els.toast, uris.length === entries
-          ? uris.length + ' of ' + entries + ' songs added to ' + playlist.name
-          : uris.length + ' songs added to ' + playlist.name + ' (from ' + entries + ' setlist entries)');
-        els.toast.scrollIntoView({ block: 'nearest' });
+        els.addButton.textContent = 'Added';
+        // Every song that went on the playlist pays its coins, one by one.
+        var added = snapshot.songs.filter(function (song) {
+          return song.status === 'matched';
+        });
+        return rewardSongs(snapshot, added).then(function (coins) {
+          // Done with this setlist: clear it away - and the search that found
+          // it - and leave just the note.
+          if (current === snapshot) {
+            clearResults();
+            els.artistInput.value = '';
+            els.cityInput.value = '';
+            updateClearButtons();
+          }
+          flash(els.toast, (uris.length === entries
+            ? uris.length + ' of ' + entries + ' songs added to ' + playlist.name
+            : uris.length + ' songs added to ' + playlist.name + ' (from ' + entries + ' setlist entries)')
+            + (coins ? ' +' + MusicHub.wallet.format(coins) + ' coins' : ''));
+          els.toast.scrollIntoView({ block: 'nearest' });
+        });
       })
       .catch(function (err) {
         flash(els.playlistError, err.message || 'Could not add the songs to that playlist.');
@@ -1244,6 +1266,122 @@ window.MusicHub = window.MusicHub || {};
         updateHistoryButtons();
         updateAddState();
       });
+  }
+
+  /* --------------------------------------------------- the songs' coins */
+
+  var REWARD_SOUNDS = {
+    // The gold pouring along the row, as long as it takes: a whoosh and a
+    // glide rising with it, and a run of little bells climbing as it goes.
+    fill: function (ctx, at) {
+      var seconds = REWARD_FILL_MS / 1000;
+      MusicHub.sfx.noise(ctx, at, seconds, 'bandpass', 600, 1.4, 0.16, seconds * 0.45, 4200);
+      MusicHub.sfx.tone(ctx, at, 330, 990, 0.05, seconds, 'triangle');
+      [784, 880, 988, 1175, 1319, 1568, 1760, 2093].forEach(function (note, index) {
+        MusicHub.sfx.tone(ctx, at + index * (seconds / 8), note, note, 0.035, 0.28);
+      });
+    },
+    // Full: a knock against the end and a bright little bell.
+    bump: function (ctx, at) {
+      MusicHub.sfx.tone(ctx, at, 190, 90, 0.22, 0.18);
+      MusicHub.sfx.noise(ctx, at, 0.04, 'highpass', 2600, 0.8, 0.25, 0.002);
+      MusicHub.sfx.chime(ctx, at + 0.03, [1568, 2093], 0.05);
+    },
+  };
+
+  function playAnimation(node, frames, options) {
+    if (!node.animate) {
+      return Promise.resolve();
+    }
+    var animation = node.animate(frames, options);
+    return new Promise(function (resolve) {
+      animation.onfinish = resolve;
+      animation.oncancel = resolve;
+    });
+  }
+
+  /**
+   * The songs just added, one after another: each brought into view, gold
+   * running into it from the left - the Gold Navbar's plate, its glare
+   * sweeping along and a glow rising (.song__gold in style.css) - until
+   * it's full, when it shakes against the end and SONG_COINS fly out of
+   * its right side up to the wallet - every time a setlist is added, the
+   * same one again included. Resolves with the coins paid.
+   */
+  function rewardSongs(snapshot, songs) {
+    var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches || !document.body.animate;
+    var total = 0;
+    // Leaving now would lose the coins still to come: ask first (navbar.js).
+    document.documentElement.toggleAttribute('data-leave-guard', true);
+    els.songList.classList.add('song-list--rewarding');
+
+    var chain = Promise.resolve();
+    songs.forEach(function (song) {
+      chain = chain.then(function () {
+        return current === snapshot ? rewardSong(song, still) : 0;
+      }).then(function (paid) {
+        total += paid;
+      });
+    });
+
+    return chain.then(function () {
+      document.documentElement.toggleAttribute('data-leave-guard', false);
+      els.songList.classList.remove('song-list--rewarding');
+      return total;
+    });
+  }
+
+  function rewardSong(song, still) {
+    var row = song.node && song.node.querySelector('.song__row');
+    if (!row) {
+      return Promise.resolve(0);
+    }
+
+    function pay() {
+      var rect = row.getBoundingClientRect();
+      MusicHub.wallet.earn(SONG_COINS, {
+        from: { x: rect.right - 24, y: rect.top + rect.height / 2 },
+      });
+      return SONG_COINS;
+    }
+
+    row.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+    song.node.classList.add('song--rewarding');
+    var gold = el('span', 'song__gold');
+    gold.setAttribute('aria-hidden', 'true');
+    row.insertBefore(gold, row.firstChild);
+
+    if (still) {
+      song.node.classList.add('song--gilded');
+      gold.style.clipPath = 'none';
+      return Promise.resolve(pay());
+    }
+
+    return delay(REWARD_FOCUS_MS).then(function () {
+      song.node.classList.add('song--gilded');
+      MusicHub.sfx.play(REWARD_SOUNDS, 'fill');
+      return playAnimation(gold, [
+        { clipPath: 'inset(0 100% 0 0)' },
+        { clipPath: 'inset(0 0% 0 0)' },
+      ], { duration: REWARD_FILL_MS, easing: 'cubic-bezier(0.45, 0, 0.35, 1)', fill: 'forwards' });
+    }).then(function () {
+      MusicHub.sfx.play(REWARD_SOUNDS, 'bump');
+      // Knocked by the gold hitting the end: a shake, dying down.
+      var bump = playAnimation(row, [
+        { transform: 'none' },
+        { transform: 'translateX(12px) rotate(0.6deg) scale(1.03)', offset: 0.14 },
+        { transform: 'translateX(-10px) rotate(-0.5deg) scale(1.015)', offset: 0.3 },
+        { transform: 'translateX(8px) rotate(0.35deg)', offset: 0.45 },
+        { transform: 'translateX(-6px) rotate(-0.25deg)', offset: 0.6 },
+        { transform: 'translateX(4px)', offset: 0.74 },
+        { transform: 'translateX(-2px)', offset: 0.87 },
+        { transform: 'none' },
+      ], { duration: REWARD_BUMP_MS, easing: 'ease-out' });
+      var paid = pay();
+      return bump.then(function () {
+        return paid;
+      });
+    });
   }
 
   /* ------------------------------------------------------------------ init */
@@ -1290,19 +1428,8 @@ window.MusicHub = window.MusicHub || {};
     els.removeCancel.addEventListener('click', function () {
       els.removeDialog.close();
     });
-    // A click on the backdrop, outside the dialog box, closes it too.
-    els.removeDialog.addEventListener('click', function (event) {
-      if (event.target !== els.removeDialog) {
-        return;
-      }
-      var rect = els.removeDialog.getBoundingClientRect();
-      var inside = event.clientX >= rect.left && event.clientX <= rect.right
-        && event.clientY >= rect.top && event.clientY <= rect.bottom;
-      if (!inside) {
-        els.removeDialog.close();
-      }
-    });
-    // However it closes - Cancel, Escape, the backdrop - nothing is removed.
+    // However it closes - Cancel, Escape, the X, a click outside it
+    // (navbar.js) - nothing is removed.
     els.removeDialog.addEventListener('close', function () {
       pendingRemoval = null;
     });

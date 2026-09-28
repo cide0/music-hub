@@ -1,6 +1,7 @@
 /*
  * Navbar behavior: the mobile hamburger menu, the External Tools dropdown and
- * the warning before leaving a page while an update is running.
+ * the warning before leaving a page while an update is running - and, for
+ * every page, how any modal closes (initModals).
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -122,8 +123,13 @@ window.MusicHub = window.MusicHub || {};
    * Every update in progress shows as a turning refresh button - the page's
    * own or the navbar's - so that is what counts as "running" here.
    */
+  /**
+   * A round refresh button turning, or a page that marks itself busy
+   * another way - `data-leave-guard` on <html>, e.g. the Artist Graph
+   * finding recommended artists.
+   */
   function isUpdating() {
-    return !!document.querySelector('.refresh-button[aria-busy="true"]');
+    return !!document.querySelector('.refresh-button[aria-busy="true"], [data-leave-guard]');
   }
 
   /*
@@ -179,9 +185,58 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /**
+   * Every modal on every page (<dialog class="modal">): a click outside its
+   * box, or on its X ([data-modal-close]), closes it the way Escape does -
+   * a 'cancel' event first, so a modal that mustn't close just now (the
+   * wheel mid-spin, a box being opened) can say no, exactly as it does to
+   * Escape. Only a click pressed and let go outside counts, so a drag or a
+   * text selection ending out there doesn't close anything.
+   */
+  function initModals() {
+    function dismiss(dialog) {
+      if (dialog.open && dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) {
+        dialog.close();
+      }
+    }
+
+    /** The open modal whose backdrop `event` landed on, if any. */
+    function backdropOf(event) {
+      var dialog = event.target;
+      if (!(dialog instanceof HTMLDialogElement) || !dialog.open || !dialog.classList.contains('modal')) {
+        return null;
+      }
+      var rect = dialog.getBoundingClientRect();
+      var inside = event.clientX >= rect.left && event.clientX <= rect.right
+        && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      return inside ? null : dialog;
+    }
+
+    var pressedOn = null;
+    document.addEventListener('pointerdown', function (event) {
+      pressedOn = backdropOf(event);
+    }, true);
+    document.addEventListener('click', function (event) {
+      var closeButton = event.target.closest && event.target.closest('[data-modal-close]');
+      if (closeButton) {
+        var owner = closeButton.closest('dialog');
+        if (owner && !closeButton.disabled) {
+          dismiss(owner);
+        }
+        return;
+      }
+      var dialog = backdropOf(event);
+      if (dialog && dialog === pressedOn) {
+        dismiss(dialog);
+      }
+      pressedOn = null;
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     initMenu();
     initDropdown();
     initLeaveGuard();
   });
+  initModals();
 })(window.MusicHub);

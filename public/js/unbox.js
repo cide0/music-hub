@@ -310,7 +310,7 @@ window.MusicHub = window.MusicHub || {};
     els.stage.className = 'unbox__stage';
     els.record.textContent = '';
     els.result.hidden = true;
-    els.resultClose.hidden = true;
+    els.resultClose.disabled = false;
     els.hint.hidden = true;
     els.box.disabled = true;
     openRequest = null;
@@ -383,7 +383,7 @@ window.MusicHub = window.MusicHub || {};
           els.stage.classList.add('unbox__stage--revealed');
           MusicHub.vinyl.setPlaying(record, true);
           els.result.hidden = false;
-          els.resultClose.hidden = false;
+          els.resultClose.disabled = false;
           unboxing = false;
           changed();
           els.resultCollection.focus();
@@ -409,6 +409,8 @@ window.MusicHub = window.MusicHub || {};
       return null;
     }
     paid = true;
+    // No closing while the box opens and the record comes out.
+    els.resultClose.disabled = true;
     var spec = MusicHub.vinyl.describe(vinyl.format);
     var record = MusicHub.vinyl.render(spec, { seed: vinyl.seed, imageUrl: album.imageUrl });
     els.record.appendChild(record);
@@ -809,23 +811,11 @@ window.MusicHub = window.MusicHub || {};
     els.picker.addEventListener('close', function () {
       settlePicker(null);
     });
-    els.resultClose.addEventListener('click', closeUnbox);
     els.box.addEventListener('click', onBoxClick);
-    // A click on the backdrop - it lands on the dialog itself, outside its
-    // box - closes it too, but only once the record is fully out.
-    els.dialog.addEventListener('click', function (event) {
-      if (event.target !== els.dialog || unboxing || els.result.hidden) {
-        return;
-      }
-      var rect = els.dialog.getBoundingClientRect();
-      var inside = event.clientX >= rect.left && event.clientX <= rect.right
-        && event.clientY >= rect.top && event.clientY <= rect.bottom;
-      if (!inside) {
-        closeUnbox();
-      }
-    });
-    // Escape: before the box is opened it cancels, free of charge; while
-    // it's opening, nothing; afterwards, the same as Close.
+    // Escape - and the X and a click outside the dialog, which navbar.js
+    // turns into the same 'cancel': before the box is opened it cancels,
+    // free of charge; while it's opening, nothing (the X is disabled
+    // then); afterwards, it closes.
     els.dialog.addEventListener('cancel', function (event) {
       event.preventDefault();
       if (unboxing && !paid) {

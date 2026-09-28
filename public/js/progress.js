@@ -24,7 +24,7 @@ window.MusicHub = window.MusicHub || {};
     var seconds = Math.max(0, Math.round(ms / 1000));
 
     if (seconds < 3) {
-      return 'finishing\u2026';
+      return 'finishing';
     }
     if (seconds < 58) {
       // Rounded to 5s: the estimate isn't accurate enough to imply otherwise.
@@ -55,7 +55,7 @@ window.MusicHub = window.MusicHub || {};
         return;
       }
       if (remaining === null) {
-        element.textContent = startedAt === null ? '' : 'estimating…';
+        element.textContent = startedAt === null ? '' : 'estimating';
         return;
       }
       element.textContent = formatEta(remaining - (Date.now() - anchoredAt));

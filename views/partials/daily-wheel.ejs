@@ -3,7 +3,7 @@
 <dialog class="modal wheel" id="wheel-dialog" aria-labelledby="wheel-title">
   <div class="wheel__view" id="wheel-view">
     <div class="wheel__header">
-      <h2 class="modal__title wheel__title" id="wheel-title">Daily Spin</h2>
+      <h2 class="modal__title wheel__title" id="wheel-title">Wheel of Fortune</h2>
       <!-- Until the free spin comes back: how long. -->
       <p class="wheel__status" id="wheel-status" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -117,7 +117,7 @@
   <div class="wheel-prizes__header">
     <div>
       <h2 class="modal__title" id="wheel-prizes-title">Your prizes</h2>
-      <p class="modal__hint">Won on the Daily Spin, waiting for you.</p>
+      <p class="modal__hint">Won on the Wheel of Fortune, waiting for you.</p>
     </div>
     <button type="button" class="icon-button wheel__close" id="wheel-prizes-close" aria-label="Back to the wheel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -148,6 +148,15 @@
     <div class="wheel-showcase__stage">
       <span class="wheel-showcase__glow" aria-hidden="true"></span>
       <div class="wheel-showcase__record vinyl-stage" id="wheel-showcase-record"></div>
+      <!-- Stops and starts the record turning (daily-wheel.js); so does a click on it. -->
+      <button type="button" class="icon-button wheel-showcase__spin" id="wheel-showcase-spin" aria-label="Stop spinning" title="Stop spinning">
+        <svg class="wheel-showcase__spin-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" />
+        </svg>
+        <svg class="wheel-showcase__spin-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M8 5.5v13l11-6.5z" />
+        </svg>
+      </button>
     </div>
     <div class="wheel-showcase__about">
       <p class="wheel-showcase__state" id="wheel-showcase-state"></p>

@@ -66,10 +66,12 @@ window.MusicHub = window.MusicHub || {};
   var MIN_TURNS = 5;
   // The flapper, knocked by each peg: how hard (degrees per second), the
   // spring pulling it back and how much that's damped, and its furthest swing.
-  var FLAP_KICK = 1250;
-  var FLAP_STIFFNESS = 700;
-  var FLAP_DAMPING = 34;
-  var FLAP_MAX = 28;
+  // Gentle knocks on a soft spring, damped just short of settling at once,
+  // and a swing that eases into its furthest rather than stopping dead.
+  var FLAP_KICK = 700;
+  var FLAP_STIFFNESS = 520;
+  var FLAP_DAMPING = 38;
+  var FLAP_MAX = 24;
   // How long a win's celebration plays, at least, by tier - the wheel can't
   // be spun again until it's over and every coin has landed (fxSettled).
   var WIN_SHOW_MS = { none: 2600, common: 2300, good: 2400, rare: 3000, epic: 5300, jackpot: 7800 };
@@ -589,7 +591,7 @@ window.MusicHub = window.MusicHub || {};
         var current = sliceAt(-angle);
         if (current !== lastSlice) {
           lastSlice = current;
-          flapSpeed = Math.min(flapSpeed + FLAP_KICK, FLAP_KICK * 1.5);
+          flapSpeed = Math.min(flapSpeed + FLAP_KICK, FLAP_KICK * 1.2);
           if (now - lastTick > 28) {
             lastTick = now;
             sound('tick');
@@ -602,10 +604,14 @@ window.MusicHub = window.MusicHub || {};
         while (remaining > 0) {
           var step = Math.min(remaining, 0.004);
           flapSpeed += (-FLAP_STIFFNESS * flap - FLAP_DAMPING * flapSpeed) * step;
-          flap = Math.min(FLAP_MAX, flap + flapSpeed * step);
+          flap += flapSpeed * step;
           remaining -= step;
         }
-        els.pointer.style.transform = 'rotate(' + (-flap).toFixed(2) + 'deg)';
+        // Drawn through a soft limit: the swing eases into FLAP_MAX instead
+        // of hitting it, so pegs coming thick and fast don't pin it there
+        // juddering.
+        var shown = FLAP_MAX * Math.tanh(flap / FLAP_MAX);
+        els.pointer.style.transform = 'rotate(' + (-shown).toFixed(2) + 'deg)';
 
         if (elapsed < WIND_UP_MS + SPIN_MS || Math.abs(flap) > 0.2 || Math.abs(flapSpeed) > 4) {
           window.requestAnimationFrame(frame);
@@ -1584,12 +1590,12 @@ window.MusicHub = window.MusicHub || {};
     var wheel = wallet.wheel();
     var left = spinsLeft(wheel);
     els.open.classList.toggle('navbar__wheel--ready', somethingWaiting(wheel));
-    if (!els.dialog.open) {
-      return;
-    }
 
     // The spins left - today's free one and the saved respins - in the
-    // middle of the wheel, which is itself the button that spins it.
+    // middle of the wheel, which is itself the button that spins it. Kept
+    // up to date while the wheel is closed too: set only on opening, a
+    // wheel with no spins would fade to grey (its filter's transition)
+    // in front of the user, rather than open already greyed out.
     var count = (left.free ? 1 : 0) + left.respins;
     var canSpin = !spinning && !celebration && count > 0;
     els.count.textContent = String(count);
@@ -1601,6 +1607,9 @@ window.MusicHub = window.MusicHub || {};
     els.machine.classList.toggle('wheel__machine--empty', empty);
     els.machine.tabIndex = empty ? -1 : 0;
     els.close.disabled = spinning;
+    if (!els.dialog.open) {
+      return;
+    }
 
     // Until the free spin comes back, a countdown in the header.
     els.status.hidden = left.free;
@@ -1744,6 +1753,9 @@ window.MusicHub = window.MusicHub || {};
   var showcaseItems = [];
   var showcaseFill = 0;
   var showcasePressed = null;
+  // Whether the big record turns: the user can stop it (its pattern keeps
+  // moving), and it stays that way from record to record until the page is left.
+  var showcaseSpinning = true;
 
   function buildShowcase() {
     MusicHub.vinylCatalog.exclusives.forEach(function (exclusive, index) {
@@ -1838,7 +1850,27 @@ window.MusicHub = window.MusicHub || {};
     els.showcaseCount.textContent = count + ' of ' + showcaseItems.length + ' won';
   }
 
-  /** The big record at the top: the chosen exclusive, spinning and moving. */
+  /**
+   * The big record turning, or held still (.wheel-showcase--still in
+   * style.css) - its pattern moving either way - and the button saying which.
+   */
+  function applyShowcaseSpin() {
+    els.showcase.classList.toggle('wheel-showcase--still', !showcaseSpinning);
+    var record = els.showcaseRecord.firstChild;
+    if (record) {
+      MusicHub.vinyl.setPlaying(record, true);
+    }
+    var label = showcaseSpinning ? 'Stop spinning' : 'Spin';
+    els.showcaseSpin.setAttribute('aria-label', label);
+    els.showcaseSpin.title = label;
+  }
+
+  function toggleShowcaseSpin() {
+    showcaseSpinning = !showcaseSpinning;
+    applyShowcaseSpin();
+  }
+
+  /** The big record at the top: the chosen exclusive, spinning and moving (unless stopped). */
   function selectShowcase(index) {
     var entry = showcaseItems[index];
     var exclusive = entry.exclusive;
@@ -1861,7 +1893,7 @@ window.MusicHub = window.MusicHub || {};
     var record = MusicHub.vinyl.render(spec, { seed: exclusive.format });
     record.classList.add('vinyl--house');
     els.showcaseRecord.appendChild(record);
-    MusicHub.vinyl.setPlaying(record, true);
+    applyShowcaseSpin();
     if (record.animate && !reducedMotion()) {
       record.animate([
         { transform: 'scale(0.85) rotate(-40deg)', opacity: 0.3 },
@@ -2004,6 +2036,7 @@ window.MusicHub = window.MusicHub || {};
     els.showcaseClose = document.getElementById('wheel-showcase-close');
     els.showcaseCount = document.getElementById('wheel-showcase-count');
     els.showcaseRecord = document.getElementById('wheel-showcase-record');
+    els.showcaseSpin = document.getElementById('wheel-showcase-spin');
     els.showcaseState = document.getElementById('wheel-showcase-state');
     els.showcaseName = document.getElementById('wheel-showcase-name');
     els.showcaseText = document.getElementById('wheel-showcase-text');
@@ -2033,32 +2066,15 @@ window.MusicHub = window.MusicHub || {};
         els.prizesOpen.focus();
       }
     });
-    els.prizes.addEventListener('click', function (event) {
-      if (event.target !== els.prizes) {
-        return;
-      }
-      var rect = els.prizes.getBoundingClientRect();
-      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
-        els.prizes.close();
-      }
-    });
     els.showcaseOpen.addEventListener('click', openShowcase);
+    els.showcaseSpin.addEventListener('click', toggleShowcaseSpin);
+    els.showcaseRecord.addEventListener('click', toggleShowcaseSpin);
     els.showcaseClose.addEventListener('click', function () {
       els.showcase.close();
     });
     els.showcase.addEventListener('close', function () {
       closeShowcase();
       els.showcaseOpen.focus();
-    });
-    // A click on the backdrop (the dialog itself, outside its box) closes it.
-    els.showcase.addEventListener('click', function (event) {
-      if (event.target !== els.showcase) {
-        return;
-      }
-      var rect = els.showcase.getBoundingClientRect();
-      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
-        els.showcase.close();
-      }
     });
     els.revealRecord.addEventListener('click', onRevealPress);
     els.revealRecord.addEventListener('keydown', function (event) {
@@ -2069,22 +2085,14 @@ window.MusicHub = window.MusicHub || {};
     });
     els.revealBack.addEventListener('click', backToWheel);
 
-    // No closing mid-spin; otherwise Escape closes like the X.
+    // No closing mid-spin; otherwise Escape - and a click outside the
+    // wheel (navbar.js, by way of this) - closes it like the X. The
+    // prizes and the showcase close on a click outside as they do on Escape.
     els.dialog.addEventListener('cancel', function (event) {
       event.preventDefault();
       close();
     });
     els.dialog.addEventListener('close', onClosed);
-    // A click on the backdrop (the dialog itself, outside its box) closes it too.
-    els.dialog.addEventListener('click', function (event) {
-      if (event.target !== els.dialog || spinning) {
-        return;
-      }
-      var rect = els.dialog.getBoundingClientRect();
-      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
-        close();
-      }
-    });
 
     claimLeftover();
     render();

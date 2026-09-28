@@ -73,7 +73,7 @@
            page. Glowing and nudging round while there's a spin or a prize
            waiting. -->
       <button type="button" class="icon-button navbar__wheel" id="wheel-open" data-auth-required
-        aria-haspopup="dialog" aria-label="Daily Spin" title="Daily Spin">
+        aria-haspopup="dialog" aria-label="Wheel of Fortune" title="Wheel of Fortune">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <g class="navbar__wheel-face">
             <circle cx="12" cy="13" r="8.5" /><circle cx="12" cy="13" r="1.6" />
@@ -90,11 +90,6 @@
         <span class="navbar__login-label">Login with Spotify</span>
       </a>
 
-      <a class="navbar__user" id="spotify-user" data-auth-required href="#" title="Open your profile in Spotify">
-        <img class="navbar__avatar" id="spotify-avatar" src="" alt="" />
-        <span id="spotify-user-name"></span>
-      </a>
-
       <!-- Fetches the followed Spotify artists that every page reads from
            localStorage - see followed-artists.js. -->
       <button type="button" class="icon-button refresh-button navbar__refresh" id="followed-refresh" data-auth-required
@@ -104,6 +99,11 @@
           <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
         </svg>
       </button>
+
+      <a class="navbar__user" id="spotify-user" data-auth-required href="#" title="Open your profile in Spotify">
+        <img class="navbar__avatar" id="spotify-avatar" src="" alt="" />
+        <span id="spotify-user-name"></span>
+      </a>
 
       <a
         class="icon-button navbar__settings<%= activePath === '/settings' ? ' navbar__settings--active' : '' %>"

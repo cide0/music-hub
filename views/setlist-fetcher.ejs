@@ -110,6 +110,11 @@
         <!-- Asks before a past concert is forgotten (see confirmRemoveShow). -->
         <dialog class="modal modal--confirm" id="remove-show-dialog" aria-labelledby="remove-show-dialog-title"
           aria-describedby="remove-show-dialog-text">
+          <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
           <form class="modal__form" id="remove-show-form">
             <h2 class="modal__title" id="remove-show-dialog-title">Remove this concert?</h2>
             <p class="modal__hint" id="remove-show-dialog-text"></p>

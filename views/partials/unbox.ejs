@@ -4,6 +4,11 @@
 <!-- Before the unboxing: which album from the album history the new vinyl
      is for. Its cover becomes the vinyl's sleeve and label. -->
 <dialog class="modal album-picker" id="album-picker" aria-labelledby="album-picker-title">
+  <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  </button>
   <div class="modal__form">
     <h2 class="modal__title" id="album-picker-title">Choose an album</h2>
     <p class="modal__hint" id="album-picker-hint">Your new vinyl is pressed for one of the albums in your album history - its cover goes on the sleeve and the record's label.</p>
@@ -29,8 +34,9 @@
 <dialog class="modal unbox" id="unbox-dialog" aria-labelledby="unbox-name">
   <!-- Across the whole dialog, so the light reaches behind the text too. -->
   <span class="unbox__rays" id="unbox-rays" aria-hidden="true"></span>
-  <!-- Once the record's out: the Daily Spin's X, in the top-right corner. -->
-  <button type="button" class="icon-button wheel__close unbox__close" id="unbox-close" aria-label="Close" title="Close" hidden>
+  <!-- The Daily Spin's X, in the top-right corner: cancels before the box is
+       opened, closes once the record's out (unbox.js, navbar.js). -->
+  <button type="button" class="icon-button wheel__close unbox__close" id="unbox-close" data-modal-close aria-label="Close" title="Close">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
     </svg>

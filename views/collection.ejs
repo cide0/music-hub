@@ -82,6 +82,11 @@
         <!-- Asks before a vinyl leaves the collection (see confirmRemove). -->
         <dialog class="modal modal--confirm" id="remove-vinyl-dialog" aria-labelledby="remove-vinyl-dialog-title"
           aria-describedby="remove-vinyl-dialog-text">
+          <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
           <form class="modal__form" id="remove-vinyl-form">
             <h2 class="modal__title" id="remove-vinyl-dialog-title">Remove this vinyl?</h2>
             <p class="modal__hint" id="remove-vinyl-dialog-text"></p>

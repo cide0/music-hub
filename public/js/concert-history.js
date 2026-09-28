@@ -1050,24 +1050,6 @@ window.MusicHub = window.MusicHub || {};
     renderArtistPicker();
   }
 
-  /**
-   * A native <dialog> ignores backdrop clicks, so close it when the click
-   * lands outside its box. (Clicks on the backdrop report the dialog itself as
-   * the target, hence the bounds check.)
-   */
-  function closeOnBackdropClick(dialog) {
-    dialog.addEventListener('click', function (event) {
-      if (event.target !== dialog) {
-        return;
-      }
-      var rect = dialog.getBoundingClientRect();
-      var inside = event.clientX >= rect.left && event.clientX <= rect.right
-        && event.clientY >= rect.top && event.clientY <= rect.bottom;
-      if (!inside) {
-        dialog.close();
-      }
-    });
-  }
 
   /* ------------------------------------------------------ confirm modal */
 
@@ -1269,14 +1251,12 @@ window.MusicHub = window.MusicHub || {};
     document.getElementById('add-concert').addEventListener('click', function () {
       openConcertDialog('add', currentView.artistId, null);
     });
-    closeOnBackdropClick(els.concertDialog);
-    closeOnBackdropClick(els.mediaDialog);
-    closeOnBackdropClick(els.confirmDialog);
+    // The X and a click outside close these modals too (navbar.js).
     document.getElementById('confirm-form').addEventListener('submit', submitConfirmDialog);
     els.confirmCancel.addEventListener('click', function () {
       els.confirmDialog.close();
     });
-    // However it closes - Cancel, Escape, the backdrop - nothing is removed.
+    // However it closes - Cancel, Escape, the X, a click outside it - nothing is removed.
     els.confirmDialog.addEventListener('close', function () {
       pendingRemoval = null;
     });

@@ -1027,7 +1027,7 @@ window.MusicHub = window.MusicHub || {};
         if (run.cancelled) {
           return null;
         }
-        var label = 'Checking concerts for ' + name + ' (' + (index + 1) + '/' + names.length + ')…';
+        var label = 'Checking concerts for ' + name + ' (' + (index + 1) + '/' + names.length + ')';
         setStatus(label, (index / names.length) * 100);
 
         return fetchConcertsFor(name, run.controller.signal).then(function (data) {

@@ -118,11 +118,10 @@
         <div id="history-body" hidden>
           <!-- Clearing on the left; search and sort on the right, once there's more than one album. -->
           <div class="toolbar" id="history-toolbar" hidden>
-            <button type="button" class="button button--ghost" id="history-clear" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18">
+            <button type="button" class="icon-button clear-button" id="history-clear" aria-label="Clear saved data" title="Clear saved data" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
               </svg>
-              Clear saved data
             </button>
             <div class="toolbar__end history-controls" id="history-controls" hidden>
               <div class="history-search">
@@ -157,6 +156,11 @@
     </main>
 
     <dialog class="modal modal--confirm" id="listened-dialog" aria-labelledby="listened-dialog-title" aria-describedby="listened-dialog-text">
+      <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
       <form class="modal__form" id="listened-form" novalidate>
         <h2 class="modal__title" id="listened-dialog-title">Mark as listened?</h2>
         <p class="modal__hint" id="listened-dialog-text"></p>

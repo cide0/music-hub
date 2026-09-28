@@ -385,7 +385,7 @@ window.MusicHub = window.MusicHub || {};
       // back on the wheel (pickExclusive skips only the ones held).
       els.removeTitle.textContent = 'Remove this Wheel Exclusive?';
       els.removeText.textContent = what + ' will be removed from your collection. '
-        + vinyl.format + ' goes back on the Daily Spin, where it can be won again - '
+        + vinyl.format + ' goes back on the Wheel of Fortune, where it can be won again - '
         + "but only there, and this can't be undone.";
     } else {
       els.removeTitle.textContent = 'Remove this vinyl?';
@@ -949,19 +949,8 @@ window.MusicHub = window.MusicHub || {};
     els.removeCancel.addEventListener('click', function () {
       els.removeDialog.close();
     });
-    // A click on the backdrop, outside the dialog box, closes it too.
-    els.removeDialog.addEventListener('click', function (event) {
-      if (event.target !== els.removeDialog) {
-        return;
-      }
-      var rect = els.removeDialog.getBoundingClientRect();
-      var inside = event.clientX >= rect.left && event.clientX <= rect.right
-        && event.clientY >= rect.top && event.clientY <= rect.bottom;
-      if (!inside) {
-        els.removeDialog.close();
-      }
-    });
-    // However it closes - Cancel, Escape, the backdrop - nothing is removed.
+    // However it closes - Cancel, Escape, the X, a click outside it
+    // (navbar.js) - nothing is removed.
     els.removeDialog.addEventListener('close', function () {
       pendingRemoval = null;
     });

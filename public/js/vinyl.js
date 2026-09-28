@@ -4072,7 +4072,8 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * Raven: a great raven perched on a gnarled dead branch, black against a
-   * huge blood moon, blue and violet sheen on its feathers. It cocks its head
+   * huge blood moon - another dead branch reaching in above it - blue and
+   * violet sheen on its feathers. It cocks its head
    * this way and that in quick bird-like jerks, now and then throws it
    * back to caw - beak gaping wide, rings of the call spreading out -
    * ruffles its wing and blinks its glowing purple eye, while crows flap
@@ -4139,6 +4140,16 @@ window.MusicHub = window.MusicHub || {};
         alpha: '1.8 0 0 0 -0.8', color: exclusiveToken('raven-mist'),
       }, animate),
     }));
+
+    // A second dead branch reaching in from the rim up above the moon, in
+    // front of the mist and the crows flying past.
+    var bough = svgNode('g', {}, { fill: 'none', stroke: black, strokeLinecap: 'round' });
+    bough.appendChild(svgNode('path', { d: 'M-5 62 C18 60 36 66 52 58 C62 53 70 46 82 44', 'stroke-width': 4 }));
+    bough.appendChild(svgNode('path', { d: 'M-5 62 C18 60 36 66 52 58', 'stroke-width': 6, opacity: 0.8 }));
+    [['M22 62 Q18 72 10 78', 1.6], ['M40 62 Q46 72 44 82', 1.4], ['M52 58 Q56 46 66 40', 1.8], ['M62 44 Q60 36 64 30', 1], ['M82 44 Q88 42 92 46', 1], ['M72 48 Q78 54 80 62', 1.1]].forEach(function (twig) {
+      bough.appendChild(svgNode('path', { d: twig[0], 'stroke-width': twig[1] }));
+    });
+    svg.appendChild(bough);
 
     // The branch: gnarled, from rim to rim across the bottom, twigs off it.
     var branch = svgNode('g', {}, { fill: 'none', stroke: black, strokeLinecap: 'round' });
@@ -4213,12 +4224,14 @@ window.MusicHub = window.MusicHub || {};
     loop(eye, animate, Object.assign({ attributeName: 'r', values: '1.3;1.3;0.2;1.3;1.3' }, blink));
     head.appendChild(eye);
     head.appendChild(svgNode('circle', { cx: 17.9, cy: -37.9, r: 0.35 }, { fill: lighter(glowing, 60), stroke: 'none' }));
-    // The call, ringing out from the open beak.
+    // The call, ringing out from the open beak: the rings only start once
+    // it has gaped open (at 0.5 of HEAD, CAW's open value), one after the
+    // other while it's open, and spread and fade after it shuts.
     var call = svgNode('g', { transform: 'translate(36 -33)' }, { fill: 'none', stroke: bone });
     for (var r = 0; r < 3; r++) {
-      var at = 0.44 + r * 0.03;
+      var at = 0.5 + r * 0.015;
       var ring = svgNode('path', { d: 'M0 -6 A6 6 0 0 1 0 6', 'stroke-width': 1, opacity: 0 });
-      var ringing = Object.assign({}, HEAD, { keyTimes: '0;' + at.toFixed(2) + ';' + (at + 0.01).toFixed(2) + ';' + (at + 0.16).toFixed(2) + ';1' });
+      var ringing = Object.assign({}, HEAD, { keyTimes: '0;' + at.toFixed(3) + ';' + (at + 0.01).toFixed(3) + ';' + (at + 0.16).toFixed(3) + ';1' });
       loop(ring, animate, Object.assign({ attributeName: 'opacity', values: '0;0;0.9;0;0' }, ringing));
       loop(ring, animate, Object.assign({ attributeName: 'transform', type: 'scale', values: '0.3;0.3;0.5;3;3' }, ringing), 'animateTransform');
       call.appendChild(ring);

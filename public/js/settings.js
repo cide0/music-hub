@@ -48,7 +48,7 @@ window.MusicHub = window.MusicHub || {};
         title: 'Clear all saved data?',
         text: 'All of Music Hub\u2019s saved data is removed from this browser: the concert list, '
           + 'the artist graph, your concert history, the Discogs releases, your album history, '
-          + 'these settings - and your coins, bought Store items, vinyl collection and Daily Spin '
+          + 'these settings - and your coins, bought Store items, vinyl collection and Wheel of Fortune '
           + 'too. Only your Spotify and Google logins stay. Export your data first if you want '
           + 'to keep a copy. This cannot be undone.',
         action: 'Clear all data',
