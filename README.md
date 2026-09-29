@@ -6,7 +6,9 @@ tool, a concert history archive and Discogs release checks.
 
 Node.js/Express with a plain HTML/CSS/JS frontend (EJS-templated, no framework),
 running in Docker and deployed on Render.com. There is no database — everything
-user-specific is stored in the browser's `localStorage`.
+user-specific is stored in the browser's `localStorage`, and on the live app
+synced between browsers through the user's Google Drive (never in local
+development).
 
 ## Setup
 

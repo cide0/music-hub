@@ -17,8 +17,12 @@ const GOOGLE_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const STORAGE_KEY = 'googleAuth';
 
-// Only what "Add to calendar" needs - creating events, nothing else.
-const SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+// Creating calendar events ("Add to calendar"), and the app's own hidden
+// Drive folder for syncing the saved data - nothing else of the user's Drive.
+const SCOPE = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/drive.appdata',
+].join(' ');
 
 router.get('/auth/google', (req, res) => {
   try {
@@ -31,6 +35,7 @@ router.get('/auth/google', (req, res) => {
       // re-issues it when consent is asked for explicitly.
       access_type: 'offline',
       prompt: 'consent',
+      include_granted_scopes: 'true',
       state: signState({ r: safeReturnTo(req.query.from), n: base64url(crypto.randomBytes(8)) }),
     });
 
@@ -90,6 +95,9 @@ router.get('/auth/google/callback', async (req, res) => {
           accessToken: data.access_token,
           refreshToken: data.refresh_token || null,
           expiresAt: Date.now() + data.expires_in * 1000,
+          // What the user actually allowed - they can untick Drive on the
+          // consent screen and keep Calendar.
+          scope: data.scope || null,
         },
         returnTo,
       }),
@@ -132,6 +140,7 @@ router.post('/api/google/refresh', express.json(), async (req, res) => {
       // Google doesn't return the refresh token again on a refresh.
       refreshToken: data.refresh_token || refreshToken,
       expiresAt: Date.now() + data.expires_in * 1000,
+      scope: data.scope || null,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -3,7 +3,8 @@
 ## Project summary
 
 Node.js/Express web app with Spotify integration at its core, plus Ticketmaster
-(concert search), Google Calendar and Google Drive (event/media embeds), Last.fm
+(concert search), Google Calendar and Google Drive (event/media embeds, and
+the sync of the app data between browsers), Last.fm
 (artist similarity data), setlist.fm (setlist search) and Discogs (collection /
 new releases). The frontend is plain HTML/CSS/JS — multi-page, EJS-templated,
 no frontend framework. Dockerized, deployed on Render.com (Free Plan — **no
@@ -20,8 +21,16 @@ database**, and the service sleeps/restarts, so no server-side state survives).
   backend proxy endpoint that needs it.
 - All persisted state (login tokens, page content/caches) lives in the browser
   (`localStorage`) — there is no database and no server-side session store.
-  Go through `public/js/storage.js`, and add any new app-data key to its
-  `APP_DATA_KEYS` list so Export/Import keeps working.
+  With Google Drive sync on, `public/js/sync.js` mirrors the app data into the
+  app's hidden Drive folder (one file per key); localStorage stays the working
+  copy. Go through `public/js/storage.js` (`write` / `remove`, never
+  `localStorage` directly — that's how sync.js sees a change), and add any new
+  app-data key to its `APP_DATA_KEYS` list so Export/Import and the sync keep
+  working. Device-only state (logins, `syncState`) stays out of that list.
+- The Drive sync never runs in local development: `npm run dev` (what
+  `make up` runs) sets `NODE_ENV=development`, and the pages then report sync
+  as unavailable. Don't work around that to test against the real Drive —
+  test sync logic with a fake Drive instead.
 - User settings (the Settings page, `/settings`, behind the navbar's gear icon)
   all live under the one `settings` key — read and write them with
   `MusicHub.storage.getSetting` / `setSetting`, never a key of their own, so
@@ -51,19 +60,25 @@ lib/oauth.js         Signed-state helpers + the token callback page (both flows)
 lib/cities.js        Allowed cities for Concert Date Fetcher + name matching
 routes/auth.js       Spotify: /login, /callback, POST /api/spotify/refresh
 routes/google.js     Google: /auth/google(/callback), POST /api/google/refresh
+                     (scopes: calendar.events + drive.appdata)
 routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
                      GET /api/similar-artists (Last.fm),
                      GET /api/discogs/releases + /random-collection-item
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
 views/               EJS pages + partials/ (head, navbar, daily-wheel, unbox)
 public/css/          variables.css (palette) + style.css
-public/js/           storage.js, navbar.js, auth.js, followed-artists.js,
-                     wallet.js (every page; followed-artists.js = the navbar
+public/js/           storage.js, google.js, sync.js, navbar.js, auth.js,
+                     followed-artists.js, wallet.js (every page; storage.js =
+                     all localStorage access + the "couldn't save" notice;
+                     google.js = Google login, Calendar and the Drive app
+                     folder; sync.js = the Google Drive sync, loaded right
+                     after storage.js and google.js, before anything that
+                     writes; followed-artists.js = the navbar
                      refresh button, the only place the followed Spotify
                      artists are fetched - pages read the stored list via
                      MusicHub.followedArtists.list(); wallet.js = coins,
                      Store items, coin animation),
-                     spotify.js + google.js (shared API helpers),
+                     spotify.js (shared Spotify API helpers),
                      playlist-picker.js (shared playlist dropdown),
                      vinyl.js (Discogs format -> CSS-drawn record),
                      vinyl-catalog.js (the Store's mystery vinyls + the
@@ -96,6 +111,24 @@ is pure CSS, driven by `.is-logged-in` / `.is-logged-out` on `<html>` — set by
 an inline script in `views/partials/head.ejs` before the first paint, so
 neither state ever flashes. Mark new elements with those attributes rather
 than toggling them from page scripts.
+
+Google login (Settings, or "Add to calendar") uses the same stateless flow and
+stores its tokens under `googleAuth`, including the granted `scope` — the
+consent screen lets the user untick Drive, so check
+`MusicHub.google.hasDriveAccess()` rather than assuming it.
+
+## Google Drive sync
+
+`public/js/sync.js`. On by default: it turns on by itself once the browser is
+logged in to Google with Drive access, and only Settings' "Turn off" keeps it
+off. Where Drive and the browser both hold data on the first turn-on, the user
+picks whose wins. After that, per key, the newer change wins (`changedAt` in
+each Drive file's `appProperties`). Every page load downloads what's newer and
+reloads once; every change uploads ~1.5 s later (a page change cuts that off,
+so it stays marked and the next page load finishes it). Deleting one page's
+data leaves a `deleted` file on Drive; "Clear all data" deletes every Drive file
+and leaves only `cleared.json` (the time of the clear), so the other browsers
+clear theirs too.
 
 ## Full spec
 

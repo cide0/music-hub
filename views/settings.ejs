@@ -14,10 +14,10 @@
         <section class="settings-section" aria-labelledby="settings-data-title">
           <h2 class="settings-section__title" id="settings-data-title">Data</h2>
           <p class="settings-section__text">
-            Everything Music Hub saves lives in this browser only. Export it to a file
-            to back it up or move it to another device, then import that file there.
-            Importing replaces the data currently stored here. Spotify and Google logins
-            aren't included.
+            Everything Music Hub saves lives in this browser, and with Google Drive sync
+            turned on also in your Google Drive. Export it to a file to back it up or move
+            it to another device, then import that file there. Importing replaces the data
+            currently stored here. Spotify and Google logins aren't included.
           </p>
           <div class="settings-section__actions">
             <button type="button" class="button button--ghost" id="export-data">
@@ -53,7 +53,8 @@
             Google
           </h2>
           <p class="settings-section__text">
-            Used to add concerts to your Google Calendar from the Concerts page.
+            Used to add concerts to your Google Calendar from the Concerts page, and for
+            the Google Drive sync.
           </p>
           <div class="settings-section__actions settings-account">
             <p class="settings-account__status" id="google-status">
@@ -62,6 +63,26 @@
             </p>
             <button type="button" class="button button--ghost" id="google-login" hidden>Login with Google</button>
             <button type="button" class="button button--ghost" id="google-logout" hidden>Log out</button>
+          </div>
+
+          <div class="settings-subsection" role="group" aria-labelledby="settings-sync-title">
+            <h3 class="settings-subsection__title" id="settings-sync-title">Google Drive sync</h3>
+            <p class="settings-section__text">
+              Keeps your Music Hub data the same in every browser where sync is on. Each
+              change is saved to a hidden Music Hub folder in your Google Drive, and every
+              page picks up the changes from your other devices when it opens. Where two
+              devices changed the same data, the newer change wins.
+            </p>
+            <div class="settings-section__actions settings-account">
+              <p class="settings-account__status" id="sync-status">
+                <span class="settings-account__dot" aria-hidden="true"></span>
+                <span id="sync-status-text">Off</span>
+              </p>
+              <button type="button" class="button button--ghost" id="sync-enable" hidden>Turn on sync</button>
+              <button type="button" class="button button--ghost" id="sync-now" hidden>Sync now</button>
+              <button type="button" class="button button--ghost" id="sync-disable" hidden>Turn off</button>
+            </div>
+            <p class="form-error settings-sync__error" id="sync-error" role="alert" hidden></p>
           </div>
         </section>
 
@@ -113,6 +134,8 @@
     </main>
 
     <script src="/js/storage.js"></script>
+    <script src="/js/google.js"></script>
+    <script src="/js/sync.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/followed-artists.js"></script>
@@ -122,7 +145,6 @@
     <script src="/js/sfx.js"></script>
     <script src="/js/unbox.js"></script>
     <script src="/js/daily-wheel.js"></script>
-    <script src="/js/google.js"></script>
     <script src="/js/spotify.js"></script>
     <script src="/js/playlist-picker.js"></script>
     <script src="/js/confirm-dialog.js"></script>

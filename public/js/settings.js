@@ -1,5 +1,5 @@
 /*
- * Settings: the Google login state, the Setlists page's default playlist,
+ * Settings: the Google login state, the Google Drive sync, the Setlists page's default playlist,
  * the Discogs username, and the Export / Import / Clear data controls. Every choice made here is saved
  * through MusicHub.storage.setSetting, so it travels with Export / Import.
  */
@@ -49,15 +49,24 @@ window.MusicHub = window.MusicHub || {};
         text: 'All of Music Hub\u2019s saved data is removed from this browser: the concert list, '
           + 'the artist graph, your concert history, the Discogs releases, your album history, '
           + 'these settings - and your coins, bought Store items, vinyl collection and Wheel of Fortune '
-          + 'too. Only your Spotify and Google logins stay. Export your data first if you want '
-          + 'to keep a copy. This cannot be undone.',
+          + 'too. Only your Spotify and Google logins stay. '
+          + (MusicHub.sync.status().enabled
+            ? 'Google Drive sync is on, so it\u2019s also deleted from your Google Drive and '
+              + 'removed from your other synced devices. '
+            : '')
+          + 'Export your data first if you want to keep a copy. This cannot be undone.',
         action: 'Clear all data',
       }).then(function (confirmed) {
-        if (confirmed) {
-          MusicHub.storage.clearAppData();
+        if (!confirmed) {
+          return;
+        }
+        clearButton.disabled = true;
+        // Deleting the Drive copy has to finish before the reload cuts it
+        // off (if it fails, the next sync retries it).
+        MusicHub.sync.clearAll().then(function () {
           // Same as after an import: every control re-reads the now empty store.
           window.location.reload();
-        }
+        });
       });
     });
   }
@@ -65,9 +74,16 @@ window.MusicHub = window.MusicHub || {};
   function renderGoogleState() {
     var connected = MusicHub.google.isConnected();
     document.getElementById('google-status').classList.toggle('settings-account__status--on', connected);
-    document.getElementById('google-status-text').textContent = connected ? 'Logged in' : 'Not logged in';
+    var text = 'Not logged in';
+    if (connected) {
+      text = MusicHub.google.hasDriveAccess()
+        ? 'Logged in'
+        : 'Logged in without Google Drive access - log out and in again to allow it';
+    }
+    document.getElementById('google-status-text').textContent = text;
     document.getElementById('google-login').hidden = connected;
     document.getElementById('google-logout').hidden = !connected;
+    renderSyncState();
   }
 
   function initGoogleControls() {
@@ -88,6 +104,92 @@ window.MusicHub = window.MusicHub || {};
     });
 
     renderGoogleState();
+  }
+
+  /* ------------------------------------------------------ drive sync */
+
+  function formatSyncTime(ms) {
+    return new Intl.DateTimeFormat('de-DE', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(new Date(ms));
+  }
+
+  function syncStatusText(sync) {
+    if (!sync.available) {
+      return 'Off - not available in local development';
+    }
+    if (sync.running) {
+      return 'Syncing\u2026';
+    }
+    if (!sync.enabled) {
+      if (!sync.hasDriveAccess) {
+        return sync.turnedOff ? 'Off - log in to Google first' : 'Off - turns on when you log in to Google';
+      }
+      return 'Off';
+    }
+    if (!sync.hasDriveAccess) {
+      return 'Paused - log in to Google to go on';
+    }
+    if (sync.pending) {
+      return 'On - ' + sync.pending + (sync.pending === 1 ? ' change' : ' changes') + ' waiting to upload';
+    }
+    return sync.lastSyncAt ? 'On - last synced ' + formatSyncTime(sync.lastSyncAt) : 'On';
+  }
+
+  function renderSyncState() {
+    var statusEl = document.getElementById('sync-status');
+    if (!statusEl) {
+      return;
+    }
+    var sync = MusicHub.sync.status();
+    var active = sync.available && sync.enabled && sync.hasDriveAccess;
+
+    statusEl.classList.toggle('settings-account__status--on', active);
+    document.getElementById('sync-status-text').textContent = syncStatusText(sync);
+
+    var enableButton = document.getElementById('sync-enable');
+    enableButton.hidden = !sync.available || sync.enabled;
+    enableButton.disabled = !sync.hasDriveAccess || sync.running;
+    document.getElementById('sync-now').hidden = !active;
+    document.getElementById('sync-now').disabled = sync.running;
+    document.getElementById('sync-disable').hidden = !sync.available || !sync.enabled;
+
+    var error = document.getElementById('sync-error');
+    error.textContent = sync.available && sync.enabled && sync.lastError
+      ? 'The last sync failed: ' + sync.lastError
+      : '';
+    error.hidden = !error.textContent;
+  }
+
+  function initSyncControls() {
+    document.getElementById('sync-enable').addEventListener('click', function () {
+      MusicHub.sync.turnOn().catch(function (err) {
+        window.alert('Couldn\u2019t turn on sync: ' + err.message);
+      });
+    });
+
+    document.getElementById('sync-now').addEventListener('click', function () {
+      MusicHub.sync.syncNow().then(function (result) {
+        if (result && result.downloaded.length) {
+          // Every control re-reads what was just downloaded.
+          window.location.reload();
+        }
+      });
+    });
+
+    document.getElementById('sync-disable').addEventListener('click', function () {
+      MusicHub.sync.disable();
+    });
+
+    document.addEventListener(MusicHub.sync.CHANGE_EVENT, renderSyncState);
+    // Turned on or off in another tab.
+    window.addEventListener('storage', function (event) {
+      if (event.key === null || event.key === 'syncState') {
+        renderSyncState();
+      }
+    });
+
+    renderSyncState();
   }
 
   var DEFAULT_PLAYLIST_SETTING = 'setlistDefaultPlaylist';
@@ -230,6 +332,7 @@ window.MusicHub = window.MusicHub || {};
 
   document.addEventListener('DOMContentLoaded', function () {
     initGoogleControls();
+    initSyncControls();
     initDefaultPlaylist();
     initDiscogsUsername();
     initDataControls();

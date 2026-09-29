@@ -99,7 +99,28 @@ Since all of Music Hub's app data lives in `localStorage`, it's tied to one brow
 - **Export data** — downloads a single JSON file (e.g. `music-hub-backup.json`) containing everything Music Hub has stored locally: Concert Date Fetcher's saved concert list (including `addedToCalendar` flags) and Concert History's full artist/concert/media folder structure. Auth tokens (Spotify, Google) are **not** included — they're device-specific and re-obtained via login, not something to carry across devices.
 - **Import data** — lets the user pick a previously exported JSON file. After a confirmation prompt (since this **overwrites** whatever's currently stored on this device), it replaces the relevant `localStorage` keys with the imported content and reloads the current page so everything re-renders from the new data.
 
-This is a manual, on-demand sync — moving data between devices means exporting on one and importing on the other (e.g. via AirDrop, email, or the file itself dropped into Google Drive); there's no automatic background sync.
+Export / Import is the manual way; the Google Drive sync below does the same automatically.
+
+### Cross-Device Data: Google Drive Sync
+
+On the live app, the app data (every `APP_DATA_KEYS` key) is mirrored into the user's Google Drive, so every browser logged in to the same Google account shows the same data. `localStorage` stays the working copy every page reads and writes; Drive only holds a copy of it. Lives in `public/js/sync.js`, loaded on every page right after `storage.js` and `google.js`.
+
+- **Where:** the app's hidden Drive folder (`appDataFolder`, the `drive.appdata` scope — the app can't see the user's other files, and the user doesn't see these in My Drive). One file per key (`store.json`, `settings.json`, ...), each carrying the time of the change it holds (`changedAt`) in its `appProperties`. The user can remove it all under Drive → Settings → Manage apps → Options → "Delete hidden app data".
+- **On by default:** logging in to Google with Drive access turns sync on, on the next page load. Only Settings' **Turn off** turns it off, for good - until **Turn on sync**. Before a Google login Settings says "Off - turns on when you log in to Google".
+- **First turn-on:** if Drive and this browser both hold data, a dialog ("Google Drive already has Music Hub data") asks whose version wins where both have the same key - **Keep Google Drive's** or **Keep this browser's**, side by side, no Cancel. Keys only one side has are kept either way. Closing the dialog means "not now"; it's asked again on the next visit. With only one side holding data, no question: that side's data is taken.
+- **Every page load** compares the Drive files with this browser's copy. A newer file is downloaded and the page reloads once to show it, with a short note ("Updated with changes from another device."). This browser's changes not on Drive yet are uploaded. The comparison uses the change times as they were when the page loaded, so whatever a page script wrote meanwhile (based on the old data) doesn't beat a newer Drive file.
+- **Every change** (`storage.write` / `storage.remove` of an app-data key, only when the value really changed) is uploaded about 1.5 s later. A page change cuts the upload off, so a change stays marked as pending until an upload succeeds - the next page load finishes it.
+- **Conflicts:** per key, the newer change wins; the older one is lost.
+- **A tab left open:** coming back to it (after at least 30 s) uploads what's pending and, if another device changed something meanwhile, shows "There are newer changes from another device." with a **Reload** button - it doesn't reload by itself, so a running fetch isn't cut off.
+- **Deleting one page's data** leaves a "deleted" file for that key on Drive, so the other browsers remove it too instead of uploading it again.
+- **"Clear all data"** (Settings) with sync on deletes every file in the Drive folder and leaves only `cleared.json` - no data, just the time of the clear - so the other browsers clear what they hold from before it on their next page load. Changes made after the clear, anywhere, are kept. Logged out of Google, the Drive side waits until the next login. With sync off, only this browser is cleared.
+- **Settings** (in the Google section, under the login): the sync status ("On - last synced ...", "Syncing...", "N changes waiting to upload", "Paused - log in to Google to go on"), **Sync now**, **Turn off** / **Turn on sync**, and the last error.
+- **Its own state** (on / off / not decided yet, per key the last change time and whether it's uploaded) lives under `syncState` - device-only, like the logins, so not in `APP_DATA_KEYS` and not exported.
+- **Never in local development:** `npm run dev` (what `make up` runs) sets `NODE_ENV=development`; the server then renders `<meta name="musichub-drive-sync" content="off">` and the sync never runs - no Drive requests, no change tracking, and Settings says "Off - not available in local development". So local debugging can't touch the real Drive copy.
+
+### Failed saves
+
+`storage.write` catches a failed `localStorage` write (storage full, or site data blocked) and shows a notice pinned to the bottom of the page saying the latest changes will be gone after a reload - rather than only a console warning. Later failures update the same notice. An import that can't save everything fails with an error instead of reloading as if it had worked.
 
 ## Design & Branding
 
@@ -329,13 +350,14 @@ Stored under a `concertDateFetcher` key:
 - Event time: uses the concert's exact start date/time if Ticketmaster provided one, defaulting to a 3-hour duration; falls back to an all-day event if only a date (no time) is available. All events use the `Europe/Berlin` timezone, since every allowed city is in Germany.
 - On success, the concert's stored record gets both `addedToCalendar: true` and `attending: true` (persisted in `localStorage` — adding it to the calendar obviously means the user is going, so the "I'm attending" toggle flips on too), and the button switches to a disabled/muted "Added" state — this persists across reloads and re-fetches. On failure, an inline error message; the button stays clickable so the user can retry.
 
-Google's tokens follow the same shape as Spotify's, stored separately under a `googleAuth` key:
+Google's tokens follow the same shape as Spotify's, stored separately under a `googleAuth` key, plus the scopes the user actually granted (the login asks for `calendar.events` and `drive.appdata`, for the Google Drive sync; the consent screen lets the user untick one):
 
 ```
 {
   accessToken: "...",
   refreshToken: "...",
-  expiresAt: 1735689600000
+  expiresAt: 1735689600000,
+  scope: "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata"
 }
 ```
 
@@ -596,7 +618,7 @@ Routes: `/store` and `/collection`, both tabs after Albums (the Album Suggester'
 
 **Play:** the collection makes way for the turntable from the Album Suggester (`turntable.js`, shared by both), as big as the page allows, with "Back to collection" above it and the album's name and artist in the top-left corner of its container, beside the turntable (on narrower screens, a row of their own at the top of the container, the turntable below). The record drops onto it with the landing sound, the platter spins up and the tonearm lowers the needle - no crackle - and it keeps turning. At the same moment the album starts on the user's Spotify via the Web API (`PUT /me/player/play` with the album as context, `MusicHub.spotify.playAlbum`): when Spotify is already playing somewhere, it takes over there; otherwise the Spotify app is opened on the album first (`spotify:album:<id>` - started if it isn't running; a device Spotify still lists can be an app closed a while ago), and the album starts once the app is up - tried every second, this computer's Spotify first, for up to 30 seconds, since a starting app may not be listed yet or not be ready. The status line says what happened. This needs the `user-read-playback-state` and `user-modify-playback-state` scopes - a login from before they were added gets a "Log in again" button - and Spotify only allows it for Premium accounts; either way there's "Open in Spotify" as a fallback (a primary button, like "Log in again"). The turntable's power button is a real button here: switched off, its light goes out, the platter coasts to a stop and the tonearm lifts and swings back to its rest, and Spotify pauses (`PUT /me/player/pause`); switched on, the light comes back, the platter spins up and the arm swings over and lowers the needle, and Spotify resumes (`PUT /me/player/play` without a body) - or, if the album never started, it tries to start it again, and if Spotify let go of the device meanwhile, starts it afresh. Every switch picks up from wherever each part is at that moment (`MusicHub.turntable.setPower`), so it can be flipped mid-way through anything, the opening drop included. Going back leaves the album playing.
 
-**Persistence:** one `store` key (in `APP_DATA_KEYS`, so it travels with Export/Import). Settings' "Clear all data" removes it along with everything else - coins, bought and equipped items, the vinyl collection and the Wheel of Fortune state - and its confirm dialog says so; only the Spotify and Google logins stay.
+**Persistence:** one `store` key (in `APP_DATA_KEYS`, so it travels with Export/Import). Settings' "Clear all data" removes it along with everything else - coins, bought and equipped items, the vinyl collection and the Wheel of Fortune state - and its confirm dialog says so; only the Spotify and Google logins stay. With Google Drive sync on, it's deleted from Drive and the other synced devices too.
 
 ```
 {
@@ -620,5 +642,6 @@ This is a manual, one-time setup on Render's side — not something Claude Code 
 3. Set the **branch** to deploy from (typically `main`) — Render auto-deploys on every push to it by default.
 4. Under the service's **Environment** settings, add every variable from `.env.example` with its real value: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI` (the live one, `https://music-hub-r9w6.onrender.com/callback`), `SESSION_SECRET` (from `make generate-secret`), `TICKETMASTER_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` (the live one, `https://music-hub-r9w6.onrender.com/auth/google/callback`), `SETLISTFM_API_KEY`, `LASTFM_API_KEY`, `DISCOGS_TOKEN`. Do **not** set `PORT` — Render assigns and injects its own, which the app already reads via `process.env.PORT`.
 5. Make sure `https://music-hub-r9w6.onrender.com/callback` and `https://music-hub-r9w6.onrender.com/auth/google/callback` are registered as redirect URIs in the Spotify Developer Dashboard and the Google Cloud OAuth client respectively (already done per earlier notes in this plan).
+6. For the Google Drive sync: in the Google Cloud project, the **Google Drive API** is enabled and the `.../auth/drive.appdata` scope is on the OAuth consent screen (Google Auth Platform → Data Access), next to `calendar.events`. The app is published ("In production"), so Google logins don't expire after 7 days. Don't set `NODE_ENV=development` on Render - that switches the sync off.
 
-**Known limitations of the free plan** (already factored into this plan's design): the service spins down after a period of inactivity and cold-starts on the next request — which is why the app avoids any server-side session state — and there's no persistent disk or database, which is why everything user-specific lives in `localStorage`.
+**Known limitations of the free plan** (already factored into this plan's design): the service spins down after a period of inactivity and cold-starts on the next request — which is why the app avoids any server-side session state — and there's no persistent disk or database, which is why everything user-specific lives in `localStorage` (mirrored to the user's own Google Drive by the sync).

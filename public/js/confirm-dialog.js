@@ -39,9 +39,14 @@ window.MusicHub = window.MusicHub || {};
     var actions = el('div', 'modal__actions');
     var cancel = el('button', 'button button--ghost', 'Cancel');
     cancel.type = 'button';
+    // A second way to go ahead, for the dialogs that offer one.
+    var secondary = el('button', 'button button--ghost');
+    secondary.type = 'button';
+    secondary.hidden = true;
     var submit = el('button', 'button button--danger');
     submit.type = 'submit';
     actions.appendChild(cancel);
+    actions.appendChild(secondary);
     actions.appendChild(submit);
 
     // The round X in the top-right corner, like every modal's (navbar.js
@@ -68,13 +73,25 @@ window.MusicHub = window.MusicHub || {};
     cancel.addEventListener('click', function () {
       dialog.close();
     });
+    secondary.addEventListener('click', function () {
+      finish('secondary');
+    });
     // However it closes - Cancel, Escape, the X, a click outside it
     // (navbar.js) - it counts as a no.
     dialog.addEventListener('close', function () {
       finish(false);
     });
 
-    return { dialog: dialog, title: title, text: text, submit: submit, cancel: cancel };
+    return {
+      dialog: dialog,
+      title: title,
+      text: text,
+      actions: actions,
+      submit: submit,
+      secondary: secondary,
+      cancel: cancel,
+      close: close,
+    };
   }
 
   function finish(confirmed) {
@@ -92,7 +109,11 @@ window.MusicHub = window.MusicHub || {};
    * Opens the modal with `options.title`, `options.text` and the confirm
    * button's label `options.action` (default "Delete") and the cancel
    * button's `options.cancel` (default "Cancel"). Resolves to true only when
-   * the user confirms.
+   * the user confirms. With `options.secondary` (a label), a second button
+   * beside the confirm one resolves to 'secondary' instead. `options.cancel:
+   * false` leaves out the Cancel button (the X and Escape still say no), and
+   * `options.danger: false` styles the confirm button like the others, for
+   * a choice that isn't destructive.
    */
   function open(options) {
     els = els || build();
@@ -103,12 +124,19 @@ window.MusicHub = window.MusicHub || {};
     els.text.textContent = options.text || '';
     els.submit.textContent = options.action || 'Delete';
     els.cancel.textContent = options.cancel || 'Cancel';
+    els.cancel.hidden = options.cancel === false;
+    els.submit.classList.toggle('button--danger', options.danger !== false);
+    els.submit.classList.toggle('button--ghost', options.danger === false);
+    els.secondary.textContent = options.secondary || '';
+    els.secondary.hidden = !options.secondary;
+    // Just the two choices: side by side, sharing the row.
+    els.actions.classList.toggle('modal__actions--choice', !!options.secondary && options.cancel === false);
 
     return new Promise(function (resolve) {
       settle = resolve;
       els.dialog.showModal();
-      // Cancel is the safe default for Enter.
-      els.cancel.focus();
+      // Saying no is the safe default for Enter: Cancel, or the X without it.
+      (els.cancel.hidden ? els.close : els.cancel).focus();
     });
   }
 

@@ -1,6 +1,8 @@
 /*
  * localStorage access for Music Hub, plus the Settings page's Export / Import data
- * feature. There is no database - this file is the whole persistence layer.
+ * feature and the "couldn't save" notice. There is no database: localStorage is
+ * the working copy, which sync.js mirrors to Google Drive - it hears of every real
+ * change to an app-data key through onChange.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -39,19 +41,108 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
+  // Called with the key whenever an app-data key really changes (sync.js).
+  var changeListeners = [];
+
+  function onChange(listener) {
+    changeListeners.push(listener);
+  }
+
+  function notifyChange(key) {
+    if (APP_DATA_KEYS.indexOf(key) === -1) {
+      return;
+    }
+    changeListeners.forEach(function (listener) {
+      listener(key);
+    });
+  }
+
   function write(key, value) {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      var raw = JSON.stringify(value);
+      // Pages re-save unchanged state now and then; that isn't a change.
+      var before = localStorage.getItem(key);
+      localStorage.setItem(key, raw);
+      if (before !== raw) {
+        notifyChange(key);
+      }
       return true;
     } catch (err) {
       console.warn('Could not write "' + key + '" to localStorage', err);
+      showWriteFailure(err);
       return false;
     }
   }
 
+  /* ------------------------------------------------- failed-save notice */
+
+  function isQuotaError(err) {
+    return !!err && (err.name === 'QuotaExceededError'
+      || err.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+      || err.code === 22
+      || err.code === 1014);
+  }
+
+  function writeFailureMessage(err) {
+    if (isQuotaError(err)) {
+      return 'Couldn’t save: this browser’s storage for Music Hub is full, so the latest '
+        + 'changes will be gone after a reload. Clear the saved data of a page you no longer need '
+        + '(export a backup in Settings first if you want to keep it), then try again.';
+    }
+    return 'Couldn’t save: this browser isn’t letting Music Hub store data (a private '
+      + 'window or blocked site data?), so the latest changes will be gone after a reload.';
+  }
+
+  /**
+   * A write that failed would otherwise only show up in the console, and the
+   * change would silently be gone after a reload. One notice at the bottom of
+   * the page says so; later failures update it rather than stacking up.
+   */
+  function showWriteFailure(err) {
+    if (!document.body) {
+      document.addEventListener('DOMContentLoaded', function () {
+        showWriteFailure(err);
+      });
+      return;
+    }
+
+    var notice = document.getElementById('storage-failure');
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.className = 'notice notice--floating notice--error';
+      notice.id = 'storage-failure';
+      notice.setAttribute('role', 'alert');
+
+      var text = document.createElement('span');
+      text.className = 'notice__text';
+      notice.appendChild(text);
+
+      var dismiss = document.createElement('button');
+      dismiss.type = 'button';
+      dismiss.className = 'notice__dismiss';
+      dismiss.setAttribute('aria-label', 'Dismiss');
+      dismiss.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+        + 'stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" />'
+        + '<line x1="6" y1="6" x2="18" y2="18" /></svg>';
+      dismiss.addEventListener('click', function () {
+        notice.hidden = true;
+      });
+      notice.appendChild(dismiss);
+
+      document.body.appendChild(notice);
+    }
+
+    notice.querySelector('.notice__text').textContent = writeFailureMessage(err);
+    notice.hidden = false;
+  }
+
   function remove(key) {
     try {
+      var existed = localStorage.getItem(key) !== null;
       localStorage.removeItem(key);
+      if (existed) {
+        notifyChange(key);
+      }
     } catch (err) {
       console.warn('Could not remove "' + key + '" from localStorage', err);
     }
@@ -164,9 +255,14 @@ window.MusicHub = window.MusicHub || {};
           return;
         }
 
-        extracted.keys.forEach(function (key) {
-          write(key, extracted.data[key]);
+        var failed = extracted.keys.filter(function (key) {
+          return !write(key, extracted.data[key]);
         });
+        if (failed.length) {
+          // No reload then, or the notice about it would be gone at once.
+          reject(new Error('This browser couldn’t save ' + failed.join(', ') + '.'));
+          return;
+        }
         resolve(true);
       };
       reader.readAsText(file);
@@ -178,6 +274,7 @@ window.MusicHub = window.MusicHub || {};
     read: read,
     write: write,
     remove: remove,
+    onChange: onChange,
     getSetting: getSetting,
     setSetting: setSetting,
     collectAppData: collectAppData,

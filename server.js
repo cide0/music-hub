@@ -16,6 +16,10 @@ const app = express();
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// The Google Drive sync only runs on the live app: local development
+// (`npm run dev`) must never touch the Drive copy of the real data.
+app.locals.driveSync = process.env.NODE_ENV !== 'development';
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(authRouter);
