@@ -350,14 +350,14 @@ Stored under a `concertDateFetcher` key:
 - Event time: uses the concert's exact start date/time if Ticketmaster provided one, defaulting to a 3-hour duration; falls back to an all-day event if only a date (no time) is available. All events use the `Europe/Berlin` timezone, since every allowed city is in Germany.
 - On success, the concert's stored record gets both `addedToCalendar: true` and `attending: true` (persisted in `localStorage` — adding it to the calendar obviously means the user is going, so the "I'm attending" toggle flips on too), and the button switches to a disabled/muted "Added" state — this persists across reloads and re-fetches. On failure, an inline error message; the button stays clickable so the user can retry.
 
-Google's tokens follow the same shape as Spotify's, stored separately under a `googleAuth` key, plus the scopes the user actually granted (the login asks for `calendar.events` and `drive.appdata`, for the Google Drive sync; the consent screen lets the user untick one):
+Google's tokens follow the same shape as Spotify's, stored separately under a `googleAuth` key, plus the scopes the user actually granted (the login asks for `calendar.events`, `drive.appdata` for the Google Drive sync and `drive.metadata.readonly` for the Gallery's Drive folder; the consent screen lets the user untick one):
 
 ```
 {
   accessToken: "...",
   refreshToken: "...",
   expiresAt: 1735689600000,
-  scope: "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata"
+  scope: "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.metadata.readonly"
 }
 ```
 
@@ -506,7 +506,18 @@ Route: `/concert-history`.
 
 **Folder/media management:** every artist folder, concert subfolder, and individual media item can be deleted — all of them ask for confirmation first (for a folder, because deleting one removes everything nested inside it); concert subfolder names can be renamed. Deleting an artist folder makes that artist available again in the "+ Add artist" dropdown. Deleting a media item only removes its reference from this list — it never touches or deletes anything in the user's actual Google Drive.
 
-**Backend:** none needed — this page is entirely client-side, reusing the same Spotify followed-artists endpoint as Concert Date Fetcher and storing everything in `localStorage`. No new environment variables.
+**Filled from a Google Drive folder:** besides pasting links, the Gallery fills itself from a folder in the user's Google Drive - Settings' **Gallery folder** (a pasted folder link), or by default the folder called "Concerts" at the top of My Drive (the oldest, if there are two). Inside it one folder per artist, one per concert inside those, and the images and videos in those; files lying directly in an artist folder aren't read.
+
+- **When:** on every visit to the page, and on the round refresh button (the circular arrows, "Sync with Google Drive"), the Drive level by level - the artist folders, then all concert folders, then all their files, several folders per request (`MusicHub.google.findFolder` / `listChildren`). A box above the breadcrumb, styled like the other pages' notices, says how it went ("Synced with "Concerts" in your Google Drive.", or what's missing: the Google login, its folder access, the followed artists, the folder itself, or the error), with that refresh button at its right end, its arrows turning while a sync runs.
+- **Artists:** a folder is matched by name - ignoring case, accents and extra spaces - to a Gallery artist, else to a followed Spotify artist, who is added then (Spotify's name and picture). Folders without a match are listed in the Drive box ("No followed artist found for these folders: ..."); a second folder for the same artist is too.
+- **Concerts** are named after their folders and follow a rename in Drive (so they have no rename button here); a hand-made concert of the same name becomes that folder's. **Images and videos** go by file type (anything else is skipped), dated by when the file was added to Drive. A file already in the concert as a pasted link isn't added twice; hearts stay on a file across syncs.
+- **Removed in Drive:** what came from Drive goes with it - files, and concerts or artists that were added for a folder once they're empty. Hand-made artists, concerts and pasted links are never removed by the sync.
+- **Deleted here:** a Drive artist, concert or file is only hidden (`hiddenDriveFolders` on the data / an artist, `hiddenDriveFiles` on a concert), and its confirm dialog says so - otherwise the next sync would bring it back. "Show N hidden Drive folders/files" in the Drive box, beside the refresh button, brings back what the level on screen has hidden. Hidden ids of things gone from Drive are dropped.
+- **Sharing tip:** when the folder isn't shared, the Drive box suggests sharing it as "Anyone with the link can view" - Drive's preview only shows a private file where the browser is logged in to that Google account and lets Google's cookies into the embed (not Safari).
+- **Data:** the Drive items carry their Drive id (`driveFolderId` on artists and concerts, `driveFileId` on media, `fromDrive` on what was added for a folder); hand-made data stores exactly as before.
+- Needs the Google login's `drive.metadata.readonly` scope (names and types of the user's Drive files, read-only - a restricted scope, so the Google login shows "Google hasn't verified this app" until the app is verified). It only reads, so it also runs in local development.
+
+**Backend:** none needed — this page is entirely client-side, reusing the same Spotify followed-artists endpoint as Concert Date Fetcher and storing everything in `localStorage`; the Drive folder is read straight from the browser with the Google login. No new environment variables.
 
 ### Discogs
 
@@ -642,6 +653,6 @@ This is a manual, one-time setup on Render's side — not something Claude Code 
 3. Set the **branch** to deploy from (typically `main`) — Render auto-deploys on every push to it by default.
 4. Under the service's **Environment** settings, add every variable from `.env.example` with its real value: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI` (the live one, `https://music-hub-r9w6.onrender.com/callback`), `SESSION_SECRET` (from `make generate-secret`), `TICKETMASTER_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` (the live one, `https://music-hub-r9w6.onrender.com/auth/google/callback`), `SETLISTFM_API_KEY`, `LASTFM_API_KEY`, `DISCOGS_TOKEN`. Do **not** set `PORT` — Render assigns and injects its own, which the app already reads via `process.env.PORT`.
 5. Make sure `https://music-hub-r9w6.onrender.com/callback` and `https://music-hub-r9w6.onrender.com/auth/google/callback` are registered as redirect URIs in the Spotify Developer Dashboard and the Google Cloud OAuth client respectively (already done per earlier notes in this plan).
-6. For the Google Drive sync: in the Google Cloud project, the **Google Drive API** is enabled and the `.../auth/drive.appdata` scope is on the OAuth consent screen (Google Auth Platform → Data Access), next to `calendar.events`. The app is published ("In production"), so Google logins don't expire after 7 days. Don't set `NODE_ENV=development` on Render - that switches the sync off.
+6. For the Google Drive sync: in the Google Cloud project, the **Google Drive API** is enabled and the `.../auth/drive.appdata` and `.../auth/drive.metadata.readonly` scopes are on the OAuth consent screen (Google Auth Platform → Data Access), next to `calendar.events`. The second is a restricted scope: until the app passes Google's verification, the login shows "Google hasn't verified this app" (Advanced → Go to ...). The app is published ("In production"), so Google logins don't expire after 7 days. Don't set `NODE_ENV=development` on Render - that switches the sync off.
 
 **Known limitations of the free plan** (already factored into this plan's design): the service spins down after a period of inactivity and cold-starts on the next request — which is why the app avoids any server-side session state — and there's no persistent disk or database, which is why everything user-specific lives in `localStorage` (mirrored to the user's own Google Drive by the sync).

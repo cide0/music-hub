@@ -3,8 +3,8 @@
 ## Project summary
 
 Node.js/Express web app with Spotify integration at its core, plus Ticketmaster
-(concert search), Google Calendar and Google Drive (event/media embeds, and
-the sync of the app data between browsers), Last.fm
+(concert search), Google Calendar and Google Drive (event/media embeds, the
+Gallery's Concerts folder, and the sync of the app data between browsers), Last.fm
 (artist similarity data), setlist.fm (setlist search) and Discogs (collection /
 new releases). The frontend is plain HTML/CSS/JS — multi-page, EJS-templated,
 no frontend framework. Dockerized, deployed on Render.com (Free Plan — **no
@@ -60,7 +60,8 @@ lib/oauth.js         Signed-state helpers + the token callback page (both flows)
 lib/cities.js        Allowed cities for Concert Date Fetcher + name matching
 routes/auth.js       Spotify: /login, /callback, POST /api/spotify/refresh
 routes/google.js     Google: /auth/google(/callback), POST /api/google/refresh
-                     (scopes: calendar.events + drive.appdata)
+                     (scopes: calendar.events, drive.appdata,
+                     drive.metadata.readonly)
 routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
                      GET /api/similar-artists (Last.fm),
                      GET /api/discogs/releases + /random-collection-item
@@ -70,8 +71,8 @@ public/css/          variables.css (palette) + style.css
 public/js/           storage.js, google.js, sync.js, navbar.js, auth.js,
                      followed-artists.js, wallet.js (every page; storage.js =
                      all localStorage access + the "couldn't save" notice;
-                     google.js = Google login, Calendar and the Drive app
-                     folder; sync.js = the Google Drive sync, loaded right
+                     google.js = Google login, Calendar, the Drive app
+                     folder and reading the Gallery's Drive folder; sync.js = the Google Drive sync, loaded right
                      after storage.js and google.js, before anything that
                      writes; followed-artists.js = the navbar
                      refresh button, the only place the followed Spotify
@@ -114,8 +115,16 @@ than toggling them from page scripts.
 
 Google login (Settings, or "Add to calendar") uses the same stateless flow and
 stores its tokens under `googleAuth`, including the granted `scope` — the
-consent screen lets the user untick Drive, so check
-`MusicHub.google.hasDriveAccess()` rather than assuming it.
+consent screen lets the user untick a permission, so check
+`MusicHub.google.hasDriveAccess()` / `hasFolderAccess()` rather than assuming
+it. Only the app's own hidden folder is ever written to; the rest of the
+user's Drive is only read (`drive.metadata.readonly`: names and types).
+
+The Gallery (`concert-history.js`) also fills itself from a Drive folder
+(Settings' Gallery folder, else "Concerts" at the top of My Drive): artist
+folders, concert folders, media. What came from there carries its Drive id and
+follows Drive; deleting it in the Gallery only hides it (`hiddenDrive...`), and
+nothing hand-made is ever removed by it. Its merge is `mergeDriveTree`.
 
 ## Google Drive sync
 

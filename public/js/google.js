@@ -2,7 +2,8 @@
  * Google connection state for the Calendar integration and the Drive sync:
  * tokens in localStorage under `googleAuth`, silent refresh through the
  * server (the client secret never reaches the browser). The Drive helpers
- * only ever touch the app's own hidden folder (`appDataFolder`).
+ * write only to the app's own hidden folder (`appDataFolder`); the rest of
+ * the user's Drive is only ever read, for the Gallery's Concerts folder.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -13,6 +14,9 @@ window.MusicHub = window.MusicHub || {};
   var EXPIRY_MARGIN_MS = 60 * 1000;
   var CALENDAR_EVENTS_URL = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
   var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+  // Reading the Gallery's Concerts folder: names and types only, read-only.
+  var FOLDERS_SCOPE = 'https://www.googleapis.com/auth/drive.metadata.readonly';
+  var FOLDER_MIME = 'application/vnd.google-apps.folder';
   var DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files';
   var DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
   var DRIVE_FILE_FIELDS = 'id,name,modifiedTime,appProperties';
@@ -33,10 +37,19 @@ window.MusicHub = window.MusicHub || {};
    * Whether the login allows the Drive sync. Logins from before it was added
    * (no `scope` stored) don't, and the consent screen lets the user untick it.
    */
-  function hasDriveAccess() {
+  function hasScope(scope) {
     var tokens = getTokens();
     return !!(tokens && typeof tokens.scope === 'string'
-      && tokens.scope.split(' ').indexOf(DRIVE_SCOPE) !== -1);
+      && tokens.scope.split(' ').indexOf(scope) !== -1);
+  }
+
+  function hasDriveAccess() {
+    return hasScope(DRIVE_SCOPE);
+  }
+
+  /** Whether the login allows reading the Gallery's Concerts folder. */
+  function hasFolderAccess() {
+    return hasScope(FOLDERS_SCOPE);
   }
 
   function disconnect() {
@@ -169,20 +182,17 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  /** Every file in the app's Drive folder: { id, name, modifiedTime, appProperties }. */
-  function listDriveFiles() {
+  /** A files.list query, following its pages until they run out. */
+  function listAll(params, fields) {
     var files = [];
 
     function fetchPage(pageToken) {
-      var params = new URLSearchParams({
-        spaces: 'appDataFolder',
-        fields: 'nextPageToken,files(' + DRIVE_FILE_FIELDS + ')',
-        pageSize: '100',
-      });
+      var query = new URLSearchParams(params);
+      query.set('fields', 'nextPageToken,files(' + fields + ')');
       if (pageToken) {
-        params.set('pageToken', pageToken);
+        query.set('pageToken', pageToken);
       }
-      return driveFetch(DRIVE_FILES_URL + '?' + params.toString())
+      return driveFetch(DRIVE_FILES_URL + '?' + query.toString())
         .then(function (response) {
           return response.json();
         })
@@ -193,6 +203,83 @@ window.MusicHub = window.MusicHub || {};
     }
 
     return fetchPage(null);
+  }
+
+  /** Every file in the app's Drive folder: { id, name, modifiedTime, appProperties }. */
+  function listDriveFiles() {
+    return listAll({ spaces: 'appDataFolder', pageSize: '100' }, DRIVE_FILE_FIELDS);
+  }
+
+  /** A Drive search string literal: backslashes and quotes escaped. */
+  function quote(text) {
+    return "'" + String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+  }
+
+  var FOLDER_FIELDS = 'id,name,parents,createdTime';
+  var MEDIA_FIELDS = 'id,name,mimeType,parents,createdTime';
+
+  /**
+   * A folder of the user's My Drive, by id - or, with no id, the folder
+   * called `name` at its top level. Resolves with { id, name, shared }, or
+   * null when there's no such folder (or it's in the bin).
+   */
+  function findFolder(folderId, name) {
+    if (folderId) {
+      return driveFetch(DRIVE_FILES_URL + '/' + encodeURIComponent(folderId)
+        + '?fields=id,name,mimeType,trashed,shared')
+        .then(function (response) {
+          return response.json();
+        })
+        .then(function (file) {
+          return file.mimeType === FOLDER_MIME && !file.trashed ? file : null;
+        }, function (err) {
+          if (err.status === 404) {
+            return null;
+          }
+          throw err;
+        });
+    }
+    return listAll({
+      q: 'name = ' + quote(name) + " and mimeType = '" + FOLDER_MIME + "' and 'root' in parents and trashed = false",
+      spaces: 'drive',
+      pageSize: '10',
+    }, 'id,name,shared,createdTime').then(function (found) {
+      // Two of the same name: the oldest, which is the one set up first.
+      found.sort(function (a, b) {
+        return String(a.createdTime).localeCompare(String(b.createdTime));
+      });
+      return found[0] || null;
+    });
+  }
+
+  /**
+   * What's directly inside the folders `parentIds`: `kind` 'folders' for
+   * subfolders, 'media' for images and videos. Several parents go into one
+   * query, so a whole level takes a request or two.
+   */
+  function listChildren(parentIds, kind) {
+    var chunks = [];
+    for (var i = 0; i < parentIds.length; i += 20) {
+      chunks.push(parentIds.slice(i, i + 20));
+    }
+    var type = kind === 'folders'
+      ? "mimeType = '" + FOLDER_MIME + "'"
+      : "(mimeType contains 'image/' or mimeType contains 'video/')";
+
+    return chunks.reduce(function (previous, chunk) {
+      return previous.then(function (all) {
+        var parents = chunk.map(function (id) {
+          return quote(id) + ' in parents';
+        }).join(' or ');
+        return listAll({
+          q: '(' + parents + ') and ' + type + ' and trashed = false',
+          spaces: 'drive',
+          pageSize: '1000',
+        }, kind === 'folders' ? FOLDER_FIELDS : MEDIA_FIELDS).then(function (files) {
+          return all.concat(files);
+        });
+      });
+    }, Promise.resolve([]));
   }
 
   /** A Drive file's content, as text. */
@@ -252,6 +339,7 @@ window.MusicHub = window.MusicHub || {};
   MusicHub.google = {
     isConnected: isConnected,
     hasDriveAccess: hasDriveAccess,
+    hasFolderAccess: hasFolderAccess,
     connect: connect,
     disconnect: disconnect,
     getAccessToken: getAccessToken,
@@ -260,5 +348,7 @@ window.MusicHub = window.MusicHub || {};
     readDriveFile: readDriveFile,
     writeDriveFile: writeDriveFile,
     deleteDriveFile: deleteDriveFile,
+    findFolder: findFolder,
+    listChildren: listChildren,
   };
 })(window.MusicHub);

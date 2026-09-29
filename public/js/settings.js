@@ -1,5 +1,6 @@
 /*
- * Settings: the Google login state, the Google Drive sync, the Setlists page's default playlist,
+ * Settings: the Google login state, the Google Drive sync, the Gallery's Drive folder, the
+ * Setlists page's default playlist,
  * the Discogs username, and the Export / Import / Clear data controls. Every choice made here is saved
  * through MusicHub.storage.setSetting, so it travels with Export / Import.
  */
@@ -76,9 +77,17 @@ window.MusicHub = window.MusicHub || {};
     document.getElementById('google-status').classList.toggle('settings-account__status--on', connected);
     var text = 'Not logged in';
     if (connected) {
-      text = MusicHub.google.hasDriveAccess()
-        ? 'Logged in'
-        : 'Logged in without Google Drive access - log out and in again to allow it';
+      // A login from before a permission was added, or one with it unticked.
+      var missing = [];
+      if (!MusicHub.google.hasDriveAccess()) {
+        missing.push('Google Drive sync');
+      }
+      if (!MusicHub.google.hasFolderAccess()) {
+        missing.push('your Gallery folder');
+      }
+      text = missing.length
+        ? 'Logged in without access to ' + missing.join(' and ') + ' - log out and in again to allow it'
+        : 'Logged in';
     }
     document.getElementById('google-status-text').textContent = text;
     document.getElementById('google-login').hidden = connected;
@@ -194,6 +203,72 @@ window.MusicHub = window.MusicHub || {};
 
   var DEFAULT_PLAYLIST_SETTING = 'setlistDefaultPlaylist';
   var SAVED_MESSAGE_MS = 3000;
+
+  /* --------------------------------------------------- gallery folder */
+
+  // The Drive folder the Gallery fills itself from (concert-history.js).
+  var GALLERY_FOLDER_SETTING = 'galleryDriveFolderId';
+
+  /**
+   * A Drive folder id from what was pasted: a folder link
+   * (drive.google.com/drive/folders/<id>, also with /u/0/), an "?id=" link,
+   * or the bare id. Null when it's none of these.
+   */
+  function parseDriveFolderId(value) {
+    var text = String(value || '').trim();
+    var match = text.match(/\/folders\/([A-Za-z0-9_-]{10,})/) || text.match(/[?&]id=([A-Za-z0-9_-]{10,})/);
+    if (match) {
+      return match[1];
+    }
+    return /^[A-Za-z0-9_-]{10,}$/.test(text) ? text : null;
+  }
+
+  function initGalleryFolder() {
+    var form = document.getElementById('gallery-folder-form');
+    var input = document.getElementById('gallery-folder');
+    var clearButton = document.getElementById('gallery-folder-clear');
+    var error = document.getElementById('gallery-folder-error');
+    var saved = document.getElementById('gallery-folder-saved');
+    var savedTimer = null;
+
+    function confirmSaved(text) {
+      error.hidden = true;
+      saved.textContent = text;
+      saved.hidden = false;
+      window.clearTimeout(savedTimer);
+      savedTimer = window.setTimeout(function () {
+        saved.hidden = true;
+      }, SAVED_MESSAGE_MS);
+    }
+
+    var current = MusicHub.storage.getSetting(GALLERY_FOLDER_SETTING, null);
+    input.value = current ? 'https://drive.google.com/drive/folders/' + current : '';
+    clearButton.hidden = !current;
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var folderId = parseDriveFolderId(input.value);
+      if (!folderId) {
+        saved.hidden = true;
+        error.textContent = input.value.trim()
+          ? 'That doesn\u2019t look like a Google Drive folder link.'
+          : 'Paste the link of a Google Drive folder first.';
+        error.hidden = false;
+        return;
+      }
+      MusicHub.storage.setSetting(GALLERY_FOLDER_SETTING, folderId);
+      input.value = 'https://drive.google.com/drive/folders/' + folderId;
+      clearButton.hidden = false;
+      confirmSaved('Saved \u2014 the Gallery uses this folder.');
+    });
+
+    clearButton.addEventListener('click', function () {
+      MusicHub.storage.setSetting(GALLERY_FOLDER_SETTING, null);
+      input.value = '';
+      clearButton.hidden = true;
+      confirmSaved('Saved \u2014 the Gallery uses the \u201cConcerts\u201d folder at the top of your My Drive.');
+    });
+  }
 
   function initDefaultPlaylist() {
     var root = document.getElementById('default-playlist-picker');
@@ -333,6 +408,7 @@ window.MusicHub = window.MusicHub || {};
   document.addEventListener('DOMContentLoaded', function () {
     initGoogleControls();
     initSyncControls();
+    initGalleryFolder();
     initDefaultPlaylist();
     initDiscogsUsername();
     initDataControls();

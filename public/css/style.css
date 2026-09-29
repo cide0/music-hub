@@ -147,7 +147,7 @@ button[aria-disabled='true'] {
 }
 
 /* The round "fetch again" button on every page (Albums, Concerts, Artist
-   Graph, Discogs): just the circular-arrows icon, its name in the tooltip
+   Graph, Discogs, the Gallery's Drive box): just the circular-arrows icon, its name in the tooltip
    and aria-label, the icon turning while aria-busy. */
 .refresh-button {
   flex: none;
@@ -1902,6 +1902,45 @@ textarea.text-input {
   font-weight: 700;
 }
 
+/* ------------------------------------------------------ gallery drive */
+
+/* The Gallery's box about its Google Drive folder, above the breadcrumb: a
+   notice, its text on the left and "Show N hidden" / "Sync now" on the
+   right - below the text when there isn't room beside it. */
+.gallery-drive {
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  /* The same space below as the page's top padding leaves above it. */
+  margin-bottom: 1.5rem;
+}
+
+.gallery-drive__body {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.gallery-drive__status {
+  margin: 0;
+}
+
+.gallery-drive__note {
+  margin-top: 0.375rem;
+}
+
+/* Kept at the right edge, also when they wrap below the text. */
+.gallery-drive__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.gallery-drive__actions:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
 /* ------------------------------------------------------------- breadcrumb */
 
 .breadcrumb {
@@ -2017,6 +2056,11 @@ textarea.text-input {
   border-radius: var(--radius-card);
   background-color: var(--color-surface);
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  /* Always on its own layer: otherwise the browser re-draws the card when the
+     hover lift starts and ends, and its icon snaps to a slightly different
+     sub-pixel position each time - a visible nudge. */
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 /* The same lift as a concert card on Concert Date Fetcher - hover only, so a

@@ -17,11 +17,13 @@ const GOOGLE_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const STORAGE_KEY = 'googleAuth';
 
-// Creating calendar events ("Add to calendar"), and the app's own hidden
-// Drive folder for syncing the saved data - nothing else of the user's Drive.
+// Creating calendar events ("Add to calendar"), the app's own hidden Drive
+// folder for syncing the saved data, and reading (never changing) the names
+// and types of the user's Drive files, for the Gallery's Concerts folder.
 const SCOPE = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/drive.appdata',
+  'https://www.googleapis.com/auth/drive.metadata.readonly',
 ].join(' ');
 
 router.get('/auth/google', (req, res) => {

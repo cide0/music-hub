@@ -3,6 +3,14 @@
  * over Google Drive embeds. Everything lives in localStorage and is the source
  * of truth - unlike Concert Date Fetcher's cache, nothing here can be
  * re-fetched, so deletes always confirm first.
+ *
+ * Besides pasted links, it fills itself from a folder in the user's Drive
+ * (Settings' Gallery folder, else "Concerts" at the top of My Drive): one
+ * folder per artist, named like a followed artist, one per concert inside,
+ * the images and videos in those. Whatever came from there carries its Drive
+ * id (`driveFolderId` / `driveFileId`) and follows Drive: renamed, added and
+ * removed with it. Deleting such an item here only hides it (the
+ * `hiddenDrive...` lists) - otherwise the next sync would bring it back.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -12,6 +20,8 @@ window.MusicHub = window.MusicHub || {};
   var STORAGE_KEY = 'concertHistory';
   var DRIVE_PREVIEW_PREFIX = 'https://drive.google.com/file/d/';
   var DRIVE_PREVIEW_SUFFIX = '/preview';
+  var GALLERY_FOLDER_SETTING = 'galleryDriveFolderId';
+  var DEFAULT_GALLERY_FOLDER = 'Concerts';
 
   var els = {};
   var data = null;
@@ -38,14 +48,37 @@ window.MusicHub = window.MusicHub || {};
     return { artists: [] };
   }
 
+  /** A list of Drive ids, or nothing when it's empty (keeps the stored data small). */
+  function idList(value) {
+    return Array.isArray(value) ? value.filter(function (id) {
+      return typeof id === 'string';
+    }) : [];
+  }
+
+  /** Copies the Drive link fields that are set - none on hand-made entries. */
+  function withDriveFields(target, source, fields) {
+    fields.forEach(function (field) {
+      var value = source[field];
+      if (Array.isArray(value)) {
+        value = idList(value);
+        if (value.length) {
+          target[field] = value;
+        }
+      } else if (value) {
+        target[field] = value;
+      }
+    });
+    return target;
+  }
+
   function normalizeMedia(list) {
     return (Array.isArray(list) ? list : []).filter(Boolean).map(function (item) {
-      return {
+      return withDriveFields({
         id: item.id,
         embedSrc: item.embedSrc,
         addedAt: item.addedAt || 0,
         favorite: !!item.favorite,
-      };
+      }, item, ['driveFileId']);
     });
   }
 
@@ -54,24 +87,24 @@ window.MusicHub = window.MusicHub || {};
     if (!raw || !Array.isArray(raw.artists)) {
       return emptyData();
     }
-    return {
+    return withDriveFields({
       artists: raw.artists.filter(Boolean).map(function (artist) {
-        return {
+        return withDriveFields({
           spotifyArtistId: artist.spotifyArtistId,
           artistName: artist.artistName || '',
           imageUrl: artist.imageUrl || null,
           concerts: (Array.isArray(artist.concerts) ? artist.concerts : []).map(function (concert) {
-            return {
+            return withDriveFields({
               id: concert.id,
               name: concert.name || '',
               createdAt: concert.createdAt || 0,
               images: normalizeMedia(concert.images),
               videos: normalizeMedia(concert.videos),
-            };
+            }, concert, ['driveFolderId', 'fromDrive', 'hiddenDriveFiles']);
           }),
-        };
+        }, artist, ['driveFolderId', 'fromDrive', 'hiddenDriveFolders']);
       }),
-    };
+    }, raw, ['hiddenDriveFolders']);
   }
 
   function findArtist(current, artistId) {
@@ -337,6 +370,289 @@ window.MusicHub = window.MusicHub || {};
     return { added: added, failed: parsed.failed, duplicates: duplicates };
   }
 
+  /* ------------------------------------------------- google drive folder */
+
+  /** Lowercased, without accents and extra spaces: "Björk " matches "bjork". */
+  function foldName(text) {
+    return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function driveTime(iso) {
+    var time = Date.parse(iso);
+    return isNaN(time) ? Date.now() : time;
+  }
+
+  function driveMediaKind(mimeType) {
+    if (/^image\//.test(mimeType || '')) {
+      return 'images';
+    }
+    return /^video\//.test(mimeType || '') ? 'videos' : null;
+  }
+
+  function addHidden(owner, field, id) {
+    owner[field] = idList(owner[field]);
+    if (owner[field].indexOf(id) === -1) {
+      owner[field].push(id);
+    }
+  }
+
+  function isHidden(owner, field, id) {
+    return idList(owner[field]).indexOf(id) !== -1;
+  }
+
+  /** Keeps only the hidden ids Drive still has - the rest can't come back anyway. */
+  function pruneHidden(owner, field, seen) {
+    var kept = idList(owner[field]).filter(function (id) {
+      return seen[id];
+    });
+    if (kept.length) {
+      owner[field] = kept;
+    } else {
+      delete owner[field];
+    }
+  }
+
+  /** A concert no longer tied to a Drive folder: only what was added by hand stays. */
+  function unlinkConcert(concert) {
+    ['images', 'videos'].forEach(function (kind) {
+      concert[kind] = concert[kind].filter(function (item) {
+        return !item.driveFileId;
+      });
+    });
+    delete concert.driveFolderId;
+    delete concert.hiddenDriveFiles;
+  }
+
+  function isEmptyConcert(concert) {
+    return !concert.images.length && !concert.videos.length;
+  }
+
+  function mergeDriveFiles(concert, files) {
+    var seen = {};
+    var inConcert = {};
+    concert.images.concat(concert.videos).forEach(function (item) {
+      inConcert[item.embedSrc] = true;
+    });
+
+    files.forEach(function (file) {
+      var kind = driveMediaKind(file.mimeType);
+      if (!kind) {
+        return;
+      }
+      seen[file.id] = true;
+      var embedSrc = embedSrcFor(file.id);
+      // Hidden here, or already in this concert (e.g. pasted by hand).
+      if (isHidden(concert, 'hiddenDriveFiles', file.id) || inConcert[embedSrc]) {
+        return;
+      }
+      concert[kind].push({
+        id: uniqueId(),
+        embedSrc: embedSrc,
+        addedAt: driveTime(file.createdTime),
+        favorite: false,
+        driveFileId: file.id,
+      });
+      inConcert[embedSrc] = true;
+    });
+
+    // Gone from the folder: gone from here too. Hand-added items stay.
+    ['images', 'videos'].forEach(function (kind) {
+      concert[kind] = concert[kind].filter(function (item) {
+        return !item.driveFileId || seen[item.driveFileId];
+      });
+    });
+    pruneHidden(concert, 'hiddenDriveFiles', seen);
+  }
+
+  function mergeConcertFolders(artist, folders) {
+    var seen = {};
+    // A concert tied to a folder that's gone can take a new one of its name.
+    var inDrive = {};
+    folders.forEach(function (folder) {
+      inDrive[folder.id] = true;
+    });
+
+    folders.forEach(function (folder) {
+      seen[folder.id] = true;
+      if (isHidden(artist, 'hiddenDriveFolders', folder.id)) {
+        return;
+      }
+
+      var concert = artist.concerts.filter(function (existing) {
+        return existing.driveFolderId === folder.id;
+      })[0] || artist.concerts.filter(function (existing) {
+        // A concert of the same name (made by hand, say) becomes this folder's.
+        return !(existing.driveFolderId && inDrive[existing.driveFolderId])
+          && foldName(existing.name) === foldName(folder.name);
+      })[0];
+
+      if (!concert) {
+        concert = {
+          id: uniqueId(),
+          name: folder.name,
+          createdAt: driveTime(folder.createdTime),
+          images: [],
+          videos: [],
+          fromDrive: true,
+        };
+        artist.concerts.push(concert);
+      }
+      concert.driveFolderId = folder.id;
+      concert.name = folder.name;
+      mergeDriveFiles(concert, folder.files);
+    });
+
+    // Folder gone from Drive: its files go; a concert made from it goes once empty.
+    artist.concerts = artist.concerts.filter(function (concert) {
+      if (!concert.driveFolderId || seen[concert.driveFolderId]) {
+        return true;
+      }
+      unlinkConcert(concert);
+      return !(concert.fromDrive && isEmptyConcert(concert));
+    });
+    pruneHidden(artist, 'hiddenDriveFolders', seen);
+  }
+
+  /**
+   * The Gallery artist an artist folder belongs to: the one already tied to
+   * it, else one of the same name, else a followed artist of that name (added
+   * then). Null when nothing matches - or when that artist already has
+   * another folder.
+   */
+  function artistForFolder(current, folder, followed, inDrive) {
+    var name = foldName(folder.name);
+    var linked = current.artists.filter(function (artist) {
+      return artist.driveFolderId === folder.id;
+    })[0];
+    if (linked) {
+      return linked;
+    }
+
+    var byName = current.artists.filter(function (artist) {
+      return foldName(artist.artistName) === name;
+    })[0];
+    if (byName) {
+      return byName.driveFolderId && inDrive[byName.driveFolderId] ? null : byName;
+    }
+
+    var match = (followed || []).filter(function (artist) {
+      return foldName(artist.name) === name;
+    })[0];
+    if (!match) {
+      return null;
+    }
+    addArtist(current, match);
+    var added = findArtist(current, match.id);
+    added.fromDrive = true;
+    return added;
+  }
+
+  /**
+   * Brings `current` in line with the Drive folder `tree` ({ artists: [{ id,
+   * name, concerts: [{ id, name, createdTime, files: [{ id, mimeType,
+   * createdTime }] }] }] }). `followed` is the followed artists list. Returns
+   * the names of the artist folders no artist was found for.
+   */
+  function mergeDriveTree(current, tree, followed) {
+    var unmatched = [];
+    var seen = {};
+    var inDrive = {};
+    tree.artists.forEach(function (folder) {
+      inDrive[folder.id] = true;
+    });
+
+    tree.artists.forEach(function (folder) {
+      seen[folder.id] = true;
+      if (isHidden(current, 'hiddenDriveFolders', folder.id)) {
+        return;
+      }
+      var artist = artistForFolder(current, folder, followed, inDrive);
+      if (!artist) {
+        unmatched.push(folder.name);
+        return;
+      }
+      artist.driveFolderId = folder.id;
+      mergeConcertFolders(artist, folder.concerts);
+    });
+
+    // Artist folder gone from Drive: what came from it goes; an artist added
+    // for it goes once it has no concerts left.
+    current.artists = current.artists.filter(function (artist) {
+      if (!artist.driveFolderId || seen[artist.driveFolderId]) {
+        return true;
+      }
+      artist.concerts = artist.concerts.filter(function (concert) {
+        if (!concert.driveFolderId) {
+          return true;
+        }
+        unlinkConcert(concert);
+        return !(concert.fromDrive && isEmptyConcert(concert));
+      });
+      delete artist.driveFolderId;
+      delete artist.hiddenDriveFolders;
+      return !(artist.fromDrive && !artist.concerts.length);
+    });
+    pruneHidden(current, 'hiddenDriveFolders', seen);
+
+    return unmatched;
+  }
+
+  /** Reads the Drive folder `root` ({ id }) into the tree mergeDriveTree takes. */
+  function fetchDriveTree(root) {
+    var google = MusicHub.google;
+    var tree = { artists: [] };
+
+    return google.listChildren([root.id], 'folders').then(function (artistFolders) {
+      tree.artists = artistFolders.map(function (folder) {
+        return { id: folder.id, name: folder.name, concerts: [] };
+      });
+      if (!tree.artists.length) {
+        return [];
+      }
+      return google.listChildren(tree.artists.map(function (artist) {
+        return artist.id;
+      }), 'folders');
+    }).then(function (concertFolders) {
+      var concertsById = {};
+      concertFolders.forEach(function (folder) {
+        var concert = { id: folder.id, name: folder.name, createdTime: folder.createdTime, files: [] };
+        concertsById[folder.id] = concert;
+        tree.artists.forEach(function (artist) {
+          if ((folder.parents || []).indexOf(artist.id) !== -1) {
+            artist.concerts.push(concert);
+          }
+        });
+      });
+      var ids = Object.keys(concertsById);
+      if (!ids.length) {
+        return tree;
+      }
+      return google.listChildren(ids, 'media').then(function (files) {
+        files.forEach(function (file) {
+          (file.parents || []).forEach(function (parent) {
+            if (concertsById[parent]) {
+              concertsById[parent].files.push(file);
+            }
+          });
+        });
+        return tree;
+      });
+    });
+  }
+
+  /**
+   * Removes a media item. One from the Drive folder is also remembered as
+   * hidden, so the next sync doesn't bring it back.
+   */
+  function forgetMedia(current, artistId, concertId, kind, item) {
+    var concert = findConcert(findArtist(current, artistId), concertId);
+    if (concert && item.driveFileId) {
+      addHidden(concert, 'hiddenDriveFiles', item.driveFileId);
+    }
+    return deleteMedia(current, artistId, concertId, kind, item.id);
+  }
+
   function deleteMedia(current, artistId, concertId, kind, mediaId) {
     var concert = findConcert(findArtist(current, artistId), concertId);
     if (!concert) {
@@ -592,10 +908,17 @@ window.MusicHub = window.MusicHub || {};
       card.appendChild(button('icon-button folder-card__delete', '✕', function () {
         confirmRemoval({
           title: 'Delete “' + artist.artistName + '”?',
-          text: 'This deletes the artist and every concert inside it. It only removes them from '
-            + 'Music Hub - nothing in Google Drive is touched.',
+          text: artist.driveFolderId
+            ? 'This removes the artist and every concert inside it from Music Hub. Its folder '
+              + 'stays in Google Drive and isn\u2019t synced back - until you choose \u201cShow '
+              + 'hidden\u201d under the artists.'
+            : 'This deletes the artist and every concert inside it. It only removes them from '
+              + 'Music Hub - nothing in Google Drive is touched.',
           action: 'Delete',
         }, function () {
+          if (artist.driveFolderId) {
+            addHidden(data, 'hiddenDriveFolders', artist.driveFolderId);
+          }
           deleteArtist(data, artist.spotifyArtistId);
           save();
           render();
@@ -630,20 +953,30 @@ window.MusicHub = window.MusicHub || {};
         mediaCount + (mediaCount === 1 ? ' item' : ' items')));
       tile.appendChild(open);
 
-      var rename = button('icon-button folder-card__rename', '✎', function () {
-        openConcertDialog('rename', artist.spotifyArtistId, concert);
-      });
-      rename.title = 'Rename';
-      rename.setAttribute('aria-label', 'Rename ' + concert.name);
-      tile.appendChild(rename);
+      // One from a Drive folder is named after it - renamed in Drive.
+      if (!concert.driveFolderId) {
+        var rename = button('icon-button folder-card__rename', '✎', function () {
+          openConcertDialog('rename', artist.spotifyArtistId, concert);
+        });
+        rename.title = 'Rename';
+        rename.setAttribute('aria-label', 'Rename ' + concert.name);
+        tile.appendChild(rename);
+      }
 
       var remove = button('icon-button folder-card__delete', '✕', function () {
         confirmRemoval({
           title: 'Delete “' + concert.name + '”?',
-          text: 'This deletes the concert and all of its images and videos. It only removes them '
-            + 'from Music Hub - nothing in Google Drive is touched.',
+          text: concert.driveFolderId
+            ? 'This removes the concert and all of its images and videos from Music Hub. Its '
+              + 'folder stays in Google Drive and isn\u2019t synced back - until you choose '
+              + '\u201cShow hidden\u201d under the concerts.'
+            : 'This deletes the concert and all of its images and videos. It only removes them '
+              + 'from Music Hub - nothing in Google Drive is touched.',
           action: 'Delete',
         }, function () {
+          if (concert.driveFolderId) {
+            addHidden(artist, 'hiddenDriveFolders', concert.driveFolderId);
+          }
           deleteConcert(data, artist.spotifyArtistId, concert.id);
           save();
           render();
@@ -685,10 +1018,13 @@ window.MusicHub = window.MusicHub || {};
       var what = kind === 'images' ? 'image' : 'video';
       confirmRemoval({
         title: 'Remove this ' + what + '?',
-        text: 'It only disappears from this concert in Music Hub - the file itself stays in Google Drive.',
+        text: item.driveFileId
+          ? 'It only disappears from this concert in Music Hub - the file stays in its Google '
+            + 'Drive folder and isn\u2019t synced back, until you choose \u201cShow hidden\u201d below.'
+          : 'It only disappears from this concert in Music Hub - the file itself stays in Google Drive.',
         action: 'Remove',
       }, function () {
-        deleteMedia(data, currentView.artistId, currentView.concertId, kind, item.id);
+        forgetMedia(data, currentView.artistId, currentView.concertId, kind, item);
         save();
         // Drop just this element; the rest keep their loaded embeds.
         wrapper.parentNode.removeChild(wrapper);
@@ -696,6 +1032,8 @@ window.MusicHub = window.MusicHub || {};
           return node.item.id !== item.id;
         });
         applyMediaView();
+        // A hidden Drive file can be shown again from here.
+        renderUnhideButton();
       });
     }));
 
@@ -852,7 +1190,7 @@ window.MusicHub = window.MusicHub || {};
           + 'in Google Drive.',
         action: 'Remove',
       }, function () {
-        deleteMedia(data, group.artistId, group.concertId, entry.kind, entry.item.id);
+        forgetMedia(data, group.artistId, group.concertId, entry.kind, entry.item);
         save();
         wrapper.hidden = true;
         refreshFavoritesChrome();
@@ -882,8 +1220,54 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
+  /**
+   * "Show 2 hidden Drive folders" for a level that has hidden ones.
+   * `ownerOf` finds the data holding the list - at click time too, since the
+   * Drive sync may have swapped `data` for a fresh copy since.
+   */
+  function renderUnhide(buttonEl, ownerOf, field, what) {
+    var owner = ownerOf();
+    var count = owner ? idList(owner[field]).length : 0;
+    buttonEl.hidden = !count;
+    if (count) {
+      buttonEl.textContent = 'Show ' + count + ' hidden Drive ' + what + (count === 1 ? '' : 's');
+      buttonEl.onclick = function () {
+        var current = ownerOf();
+        if (current) {
+          delete current[field];
+          save();
+        }
+        render();
+        syncDrive();
+      };
+    }
+  }
+
+  /** The one "Show hidden" button, in the Drive box, for the level on screen. */
+  function renderUnhideButton() {
+    function currentArtist() {
+      return findArtist(data, currentView.artistId);
+    }
+    if (currentView.view === 'media') {
+      renderUnhide(els.unhide, function () {
+        return findConcert(currentArtist(), currentView.concertId);
+      }, 'hiddenDriveFiles', 'file');
+    } else if (currentView.view === 'concerts') {
+      renderUnhide(els.unhide, currentArtist, 'hiddenDriveFolders', 'folder');
+    } else if (currentView.view === 'artists') {
+      renderUnhide(els.unhide, function () {
+        return data;
+      }, 'hiddenDriveFolders', 'folder');
+    } else {
+      renderUnhide(els.unhide, function () {
+        return null;
+      });
+    }
+  }
+
   function render() {
     renderBreadcrumb();
+    renderUnhideButton();
 
     els.viewArtists.hidden = currentView.view !== 'artists';
     els.viewFavorites.hidden = currentView.view !== 'favorites';
@@ -899,6 +1283,131 @@ window.MusicHub = window.MusicHub || {};
     } else {
       renderMedia();
     }
+  }
+
+  /* ----------------------------------------------------- drive folder sync */
+
+  var driveRunning = false;
+
+  function settingsLink() {
+    var link = el('a', 'page-link', 'Settings');
+    link.href = '/settings';
+    return link;
+  }
+
+  /** The status line: text parts (strings, or a node like a Settings link). */
+  function showDriveStatus(parts, options) {
+    options = options || {};
+    els.drive.hidden = false;
+    els.driveStatus.textContent = '';
+    parts.forEach(function (part) {
+      els.driveStatus.appendChild(typeof part === 'string' ? document.createTextNode(part) : part);
+    });
+    els.driveSync.hidden = !options.canSync;
+    els.driveSync.disabled = driveRunning;
+    // Its arrows turn while a sync runs, like every page's refresh button.
+    els.driveSync.setAttribute('aria-busy', String(driveRunning));
+
+    var unmatched = options.unmatched || [];
+    els.driveUnmatched.textContent = unmatched.length
+      ? 'No followed artist found for ' + (unmatched.length === 1 ? 'this folder: ' : 'these folders: ')
+        + unmatched.join(', ') + '. Name a folder like the artist on Spotify.'
+      : '';
+    els.driveUnmatched.hidden = !unmatched.length;
+
+    els.driveShare.textContent = options.shareTip || '';
+    els.driveShare.hidden = !options.shareTip;
+  }
+
+  function hasDriveMedia(current) {
+    return current.artists.some(function (artist) {
+      return artist.concerts.some(function (concert) {
+        return concert.images.concat(concert.videos).some(function (item) {
+          return !!item.driveFileId;
+        });
+      });
+    });
+  }
+
+  /**
+   * Reads the Gallery folder from Drive and merges it in - on every visit and
+   * on its refresh button. Needs the Google login with folder access and the followed
+   * artists (for the names); says so on the status line when one is missing.
+   */
+  function syncDrive() {
+    var google = MusicHub.google;
+    if (!google || !google.isConnected()) {
+      showDriveStatus(['Log in to Google in ', settingsLink(),
+        ' to fill the Gallery from a folder in your Google Drive.']);
+      return;
+    }
+    if (!google.hasFolderAccess()) {
+      showDriveStatus(['Log out of Google and in again in ', settingsLink(),
+        ' to let the Gallery read its folder in your Google Drive.']);
+      return;
+    }
+    var followed = MusicHub.followedArtists.list();
+    if (!followed) {
+      showDriveStatus([MusicHub.followedArtists.MISSING_MESSAGE]);
+      return;
+    }
+    if (driveRunning) {
+      return;
+    }
+
+    driveRunning = true;
+    showDriveStatus(['Syncing with your Google Drive\u2026'], { canSync: true });
+    var folderId = MusicHub.storage.getSetting(GALLERY_FOLDER_SETTING, null);
+
+    google.findFolder(folderId, DEFAULT_GALLERY_FOLDER).then(function (root) {
+      if (!root) {
+        return { root: null };
+      }
+      return fetchDriveTree(root).then(function (tree) {
+        return { root: root, tree: tree };
+      });
+    }).then(function (result) {
+      driveRunning = false;
+      if (!result.root) {
+        showDriveStatus(folderId
+          ? ['The Gallery folder set in ', settingsLink(), ' wasn\u2019t found in your Google Drive.']
+          : ['No folder called \u201c' + DEFAULT_GALLERY_FOLDER + '\u201d at the top of your My Drive '
+            + 'yet - create one, with a folder per artist inside and a folder per concert in those, '
+            + 'or pick another folder in ', settingsLink(), '.'], { canSync: true });
+        return;
+      }
+
+      // Merged into what's stored now - another tab may have changed it -
+      // and back in stored form, so an unchanged folder compares equal.
+      var stored = JSON.stringify(load());
+      var fresh = load();
+      var unmatched = mergeDriveTree(fresh, result.tree, followed);
+      fresh = normalizeData(fresh);
+      if (JSON.stringify(fresh) !== stored) {
+        MusicHub.storage.write(STORAGE_KEY, fresh);
+      }
+      // Only swapped in (and re-rendered) when it differs from what's shown:
+      // the buttons on screen hold on to the objects they were drawn from.
+      if (JSON.stringify(fresh) !== JSON.stringify(data)) {
+        data = fresh;
+        go(resolveView(currentView, data), 'replace');
+      }
+
+      showDriveStatus(['Synced with \u201c' + result.root.name + '\u201d in your Google Drive.'], {
+        canSync: true,
+        unmatched: unmatched,
+        shareTip: !result.root.shared && hasDriveMedia(data)
+          ? 'Tip: share \u201c' + result.root.name + '\u201d in Google Drive as \u201cAnyone with the '
+            + 'link can view\u201d, so its images and videos also show where you aren\u2019t logged in '
+            + 'to Google (Safari on an iPhone, say).'
+          : '',
+      });
+    }, function (err) {
+      driveRunning = false;
+      console.warn('Could not read the Gallery folder', err);
+      showDriveStatus(['Couldn\u2019t read your Google Drive: ' + (err && err.message ? err.message : 'unknown error')],
+        { canSync: true });
+    });
   }
 
   /* ------------------------------------------------------- history & URLs */
@@ -1216,6 +1725,12 @@ window.MusicHub = window.MusicHub || {};
     els.artistSearch = document.getElementById('artist-search');
     els.artistList = document.getElementById('artist-picker');
     els.pickerMessage = document.getElementById('artist-picker-message');
+    els.drive = document.getElementById('gallery-drive');
+    els.driveStatus = document.getElementById('gallery-drive-status');
+    els.driveSync = document.getElementById('gallery-drive-sync');
+    els.driveUnmatched = document.getElementById('gallery-drive-unmatched');
+    els.driveShare = document.getElementById('gallery-drive-share');
+    els.unhide = document.getElementById('gallery-unhide');
 
     data = load();
 
@@ -1227,13 +1742,16 @@ window.MusicHub = window.MusicHub || {};
       }
     });
     els.artistSearch.addEventListener('input', renderArtistPicker);
-    // The navbar fetched a new list while the picker is open.
+    // The navbar fetched a new list while the picker is open - and the
+    // Drive folder's names can be matched now, if they couldn't before.
     document.addEventListener(MusicHub.followedArtists.CHANGE_EVENT, function () {
       if (!els.artistPanel.hidden) {
         followedArtists = MusicHub.followedArtists.list();
         renderArtistPicker();
       }
+      syncDrive();
     });
+    els.driveSync.addEventListener('click', syncDrive);
 
     document.addEventListener('click', function (event) {
       var container = document.getElementById('add-artist');
@@ -1298,6 +1816,7 @@ window.MusicHub = window.MusicHub || {};
     // The URL decides the starting level - including the graph page's
     // ?artist=<spotifyArtistId> deep link.
     go(resolveView(viewFromUrl()), 'replace');
+    syncDrive();
   });
 
   // Exposed for tests.
@@ -1312,6 +1831,9 @@ window.MusicHub = window.MusicHub || {};
     deleteConcert: deleteConcert,
     addMedia: addMedia,
     deleteMedia: deleteMedia,
+    forgetMedia: forgetMedia,
+    mergeDriveTree: mergeDriveTree,
+    foldName: foldName,
     extractDriveId: extractDriveId,
     parseDriveLines: parseDriveLines,
     sortedArtists: sortedArtists,

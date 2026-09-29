@@ -9,6 +9,25 @@
     <main class="page">
       <!-- Shown once a valid Spotify login is present. -->
       <section class="page__content" data-auth-required>
+        <!-- The Drive folder the gallery fills itself from (concert-history.js). -->
+        <div class="notice gallery-drive" id="gallery-drive" hidden>
+          <div class="notice__text gallery-drive__body">
+            <p class="gallery-drive__status" id="gallery-drive-status" role="status"></p>
+            <p class="form-message gallery-drive__note" id="gallery-drive-unmatched" hidden></p>
+            <p class="form-message gallery-drive__note" id="gallery-drive-share" hidden></p>
+          </div>
+          <div class="gallery-drive__actions">
+            <!-- What this level has hidden of the Drive folder (renderUnhideButton). -->
+            <button type="button" class="button button--ghost notice__action" id="gallery-unhide" hidden></button>
+            <button type="button" class="icon-button refresh-button" id="gallery-drive-sync" aria-label="Sync with Google Drive" title="Sync with Google Drive" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
         <nav class="breadcrumb" id="breadcrumb" aria-label="Breadcrumb"></nav>
 
         <!-- Level 1: artist folders -->

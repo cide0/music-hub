@@ -53,8 +53,8 @@
             Google
           </h2>
           <p class="settings-section__text">
-            Used to add concerts to your Google Calendar from the Concerts page, and for
-            the Google Drive sync.
+            Used to add concerts to your Google Calendar from the Concerts page, for the
+            Google Drive sync and for filling the Gallery from a Drive folder.
           </p>
           <div class="settings-section__actions settings-account">
             <p class="settings-account__status" id="google-status">
@@ -83,6 +83,25 @@
               <button type="button" class="button button--ghost" id="sync-disable" hidden>Turn off</button>
             </div>
             <p class="form-error settings-sync__error" id="sync-error" role="alert" hidden></p>
+          </div>
+
+          <div class="settings-subsection" role="group" aria-labelledby="settings-gallery-folder-title">
+            <h3 class="settings-subsection__title" id="settings-gallery-folder-title">Gallery folder</h3>
+            <p class="settings-section__text">
+              The Gallery fills itself from this Google Drive folder: inside it one folder per
+              artist, named like the artist, in those one folder per concert, and in those the
+              images and videos. Leave it empty to use the folder called &ldquo;Concerts&rdquo; at
+              the top of your My Drive.
+            </p>
+            <form class="inline-form" id="gallery-folder-form" novalidate>
+              <label class="visually-hidden" for="gallery-folder">Google Drive folder link</label>
+              <input type="text" class="text-input" id="gallery-folder" name="gallery-folder"
+                placeholder="Folder link (default: Concerts)" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="500" />
+              <button type="submit" class="button button--ghost">Save</button>
+              <button type="button" class="button button--ghost" id="gallery-folder-clear" hidden>Remove</button>
+            </form>
+            <p class="form-error" id="gallery-folder-error" role="alert" hidden></p>
+            <p class="form-message" id="gallery-folder-saved" role="status" hidden></p>
           </div>
         </section>
 
