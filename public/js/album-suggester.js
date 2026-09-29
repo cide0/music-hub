@@ -6,7 +6,8 @@
  * the rarity is rolled first and an album from that tier second, so gold is
  * always the rarest pull. The reveal links to the album in the Spotify app
  * and to its vinyl releases on Discogs; marking it listened unsaves it on
- * Spotify and adds it to a listened history kept here.
+ * Spotify and adds it to a listened history kept here. The history's "+"
+ * adds an album to it by hand, from its Spotify link - without a rarity.
  *
  * The pool is the Saved Albums as last fetched, remembered between
  * visits: Spotify is only asked again when the user presses "Update from
@@ -61,9 +62,26 @@ window.MusicHub = window.MusicHub || {};
   // Coins fly once the reveal has settled in, not while it's still popping up.
   var COINS_DELAY_MS = 450;
 
-  // From this many albums on, the newest three are at least gold, red and
-  // pink, so a small library still has one of each rarest tier.
+  // From this many albums on, the tiers go by TIERS' shares, with the
+  // newest three at least gold, red and pink, so a small library still has
+  // one of each rarest tier.
   var FULL_TIERS_FROM = 10;
+  // Below that, each size is laid out by hand: per tier, how many albums it
+  // takes (newest saves first, rarest tier first) and its odds.
+  var SMALL_LIBRARIES = {
+    1: { blue: [1, 1] },
+    2: { purple: [1, 0.25], blue: [1, 0.75] },
+    3: { pink: [1, 0.05], purple: [1, 0.2], blue: [1, 0.75] },
+    4: { red: [1, 0.03], pink: [1, 0.07], purple: [1, 0.2], blue: [1, 0.7] },
+    5: { gold: [1, 0.02], red: [1, 0.05], pink: [1, 0.1], purple: [1, 0.23], blue: [1, 0.6] },
+    6: { gold: [1, 0.02], red: [1, 0.05], pink: [1, 0.1], purple: [1, 0.23], blue: [2, 0.6] },
+    7: { gold: [1, 0.02], red: [1, 0.05], pink: [1, 0.1], purple: [1, 0.23], blue: [3, 0.6] },
+    8: { gold: [1, 0.02], red: [1, 0.05], pink: [1, 0.1], purple: [2, 0.23], blue: [3, 0.6] },
+    9: { gold: [1, 0.02], red: [1, 0.05], pink: [1, 0.1], purple: [2, 0.23], blue: [4, 0.6] },
+  };
+  // Each tier's odds for the library as last ranked: TIERS' own, or its
+  // size's from SMALL_LIBRARIES.
+  var tierOdds = {};
 
   var els = {};
   // Saved albums still available to be cased.
@@ -214,16 +232,37 @@ window.MusicHub = window.MusicHub || {};
   /* ------------------------------------------------------------- rarity */
 
   /**
-   * Sets each album's `tier` from where its save date ranks in `albums`.
-   * An album counts by the middle of its rank, so a library of a handful
-   * of albums isn't all gold.
+   * Sets each album's `tier` from where its save date ranks in `albums`,
+   * and `tierOdds` to match. A library under FULL_TIERS_FROM albums takes
+   * its size's layout from SMALL_LIBRARIES; a bigger one TIERS' shares, an
+   * album counting by the middle of its rank.
    */
   function assignTiers(albums) {
     // Compared rather than subtracted: two unknown dates (Infinity) tie.
     var newestFirst = albums.slice().sort(function (a, b) {
       return (b.addedAt > a.addedAt) - (b.addedAt < a.addedAt);
     });
-    var fullTiers = newestFirst.length >= FULL_TIERS_FROM;
+    tierOdds = {};
+    var layout = newestFirst.length < FULL_TIERS_FROM && SMALL_LIBRARIES[newestFirst.length];
+    if (layout) {
+      var next = 0;
+      TIERS.forEach(function (tier) {
+        var slot = layout[tier.name];
+        if (!slot) {
+          return;
+        }
+        tierOdds[tier.name] = slot[1];
+        for (var n = 0; n < slot[0]; n += 1) {
+          newestFirst[next].tier = tier.name;
+          next += 1;
+        }
+      });
+      return albums;
+    }
+
+    TIERS.forEach(function (tier) {
+      tierOdds[tier.name] = tier.odds;
+    });
     newestFirst.forEach(function (album, index) {
       var position = (index + 0.5) / newestFirst.length;
       var reached = 0;
@@ -236,7 +275,7 @@ window.MusicHub = window.MusicHub || {};
         }
       }
       // The newest is gold, the next at least red, the next at least pink.
-      if (fullTiers && index < 3) {
+      if (index < 3) {
         tierIndex = Math.min(tierIndex, index);
       }
       album.tier = TIERS[tierIndex].name;
@@ -254,12 +293,12 @@ window.MusicHub = window.MusicHub || {};
       return byTier[tier.name];
     });
     var total = present.reduce(function (sum, tier) {
-      return sum + tier.odds;
+      return sum + tierOdds[tier.name];
     }, 0);
     var roll = Math.random() * total;
     var tierAlbums = byTier[present[present.length - 1].name];
     for (var i = 0; i < present.length; i += 1) {
-      roll -= present[i].odds;
+      roll -= tierOdds[present[i].name];
       if (roll < 0) {
         tierAlbums = byTier[present[i].name];
         break;
@@ -392,9 +431,11 @@ window.MusicHub = window.MusicHub || {};
         refreshing = false;
         console.warn('Could not load the saved albums', err);
         if (hadAlbums) {
-          els.libraryErrorText.textContent = fetchErrorMessage(err);
-          els.libraryRelogin.hidden = !permissionHint(err.status);
-          els.libraryError.hidden = false;
+          // Fades out on its own (notice.js) - unless it offers to log in
+          // again, which stays until it's used or dismissed.
+          var relogin = permissionHint(err.status);
+          els.libraryRelogin.hidden = !relogin;
+          MusicHub.notice[relogin ? 'hold' : 'flash'](els.libraryError, fetchErrorMessage(err));
           renderLibraryBar();
           return;
         }
@@ -417,7 +458,8 @@ window.MusicHub = window.MusicHub || {};
 
   function audioContext() {
     var AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) {
+    // Settings' "Sound effects" covers this context too.
+    if (!AudioCtx || !MusicHub.wallet.soundOn()) {
       return null;
     }
     if (!audio) {
@@ -1277,8 +1319,7 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function showDialogError(message) {
-    els.dialogError.textContent = message;
-    els.dialogError.hidden = false;
+    MusicHub.notice.flash(els.dialogError, message);
   }
 
   function confirmListened() {
@@ -1417,8 +1458,7 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function showHistoryNotice(message) {
-    els.historyNoticeText.textContent = message;
-    els.historyNotice.hidden = false;
+    MusicHub.notice.flash(els.historyNotice, message);
   }
 
   function removeFromHistory(entry) {
@@ -1455,6 +1495,133 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /* ------------------------------------------------ adding an album by hand */
+
+  /**
+   * A Spotify album id from what was pasted: an album link
+   * (open.spotify.com/album/<id>, also with /intl-de/ or ?si=), a
+   * spotify:album:<id> URI, or the bare id. Null when it's none of these.
+   */
+  function parseAlbumId(raw) {
+    var text = String(raw || '').trim();
+    var match = text.match(/album[/:]([A-Za-z0-9]{22})(?![A-Za-z0-9])/);
+    if (match) {
+      return match[1];
+    }
+    return /^[A-Za-z0-9]{22}$/.test(text) ? text : null;
+  }
+
+  var addingAlbum = false;
+
+  function openAddDialog() {
+    els.addLink.value = '';
+    els.addRating.value = '';
+    els.addError.hidden = true;
+    els.addDialog.showModal();
+    els.addLink.focus();
+  }
+
+  function setAddingAlbum(on) {
+    addingAlbum = on;
+    els.addSubmit.disabled = on;
+    els.addSubmit.textContent = on ? 'Adding\u2026' : 'Add album';
+    els.addCancel.disabled = on;
+  }
+
+  function showAddError(message) {
+    MusicHub.notice.flash(els.addError, message);
+  }
+
+  /**
+   * Looks the album up on Spotify and adds it to the history as listened
+   * today - without a rarity, as it wasn't picked here, so it's app purple
+   * (and pays no coins).
+   */
+  function addAlbumByLink() {
+    var id = parseAlbumId(els.addLink.value);
+    if (!id) {
+      showAddError(els.addLink.value.trim()
+        ? 'That doesn\u2019t look like a Spotify album link.'
+        : 'Paste the Spotify link of an album first.');
+      return;
+    }
+    var rating = parseRating(els.addRating.value);
+    if (rating === undefined) {
+      showAddError('The rating has to be a whole number from 1 to 100.');
+      return;
+    }
+    var known = history.filter(function (entry) {
+      return entry.spotifyAlbumId === id;
+    })[0];
+    if (known) {
+      showAddError(known.albumName + ' is already in your album history.');
+      return;
+    }
+
+    setAddingAlbum(true);
+    MusicHub.auth.spotifyFetch('/albums/' + encodeURIComponent(id))
+      .then(function (response) {
+        if (!response.ok) {
+          var err = new Error(response.status === 400 || response.status === 404
+            ? 'Spotify has no album for that link.'
+            : 'Couldn\u2019t load the album from Spotify (' + response.status + ').'
+              + permissionHint(response.status));
+          throw err;
+        }
+        return response.json();
+      })
+      .then(function (data) {
+        var album = toAlbum(data, null);
+        history.push({
+          spotifyAlbumId: album.id,
+          albumName: album.name,
+          artistName: album.artistName,
+          imageUrl: album.imageUrl,
+          spotifyUrl: album.spotifyUrl,
+          listenedAt: new Date().toISOString(),
+          rating: rating,
+        });
+        saveHistory();
+        historyOpen = true;
+        renderHistory();
+        setAddingAlbum(false);
+        els.addDialog.close();
+        showHistoryNotice(album.name + ' by ' + album.artistName + ' was added to your album history.');
+      })
+      .catch(function (err) {
+        setAddingAlbum(false);
+        showAddError(err.message || 'Couldn\u2019t load the album from Spotify.');
+      });
+  }
+
+  /* ------------------------------------------------------ editing a rating */
+
+  var ratingTarget = null;
+
+  function openRatingDialog(entry) {
+    ratingTarget = entry;
+    els.ratingText.textContent = entry.albumName + ' by ' + entry.artistName
+      + '. Leave it empty to take the rating away.';
+    els.ratingInput.value = typeof entry.rating === 'number' ? String(entry.rating) : '';
+    MusicHub.notice.hide(els.ratingError);
+    els.ratingDialog.showModal();
+    els.ratingInput.focus();
+    els.ratingInput.select();
+  }
+
+  function saveRating() {
+    var rating = parseRating(els.ratingInput.value);
+    if (rating === undefined) {
+      MusicHub.notice.flash(els.ratingError, 'The rating has to be a whole number from 1 to 100.');
+      return;
+    }
+    // The stored entry itself, so the change lands in the history.
+    ratingTarget.rating = rating;
+    saveHistory();
+    renderHistory();
+    els.ratingDialog.close();
+  }
+
   function historyItem(entry) {
     var item = el('li', 'history-item');
     // Entries from before rarities were kept have none, and stay app purple.
@@ -1481,6 +1648,16 @@ window.MusicHub = window.MusicHub || {};
       rating.setAttribute('aria-label', 'Rated ' + entry.rating + ' out of 100');
       item.appendChild(rating);
     }
+
+    // The Gallery's pen, to change (or take away) the rating.
+    var editButton = el('button', 'icon-button history-item__edit', '\u270E');
+    editButton.type = 'button';
+    editButton.setAttribute('aria-label', 'Edit the rating of ' + entry.albumName);
+    editButton.title = 'Edit rating';
+    editButton.addEventListener('click', function () {
+      openRatingDialog(entry);
+    });
+    item.appendChild(editButton);
 
     var remove = el('button', 'icon-button history-item__remove');
     remove.type = 'button';
@@ -1520,8 +1697,9 @@ window.MusicHub = window.MusicHub || {};
     els.historyToggle.setAttribute('aria-expanded', historyOpen ? 'true' : 'false');
     els.historyToggle.title = historyOpen ? 'Hide album history' : 'Show album history';
     els.historyToggle.setAttribute('aria-label', els.historyToggle.title);
+    // Search and sort as soon as there's an album - one is enough to search.
     els.historyToolbar.hidden = !history.length;
-    els.historyControls.hidden = history.length < 2;
+    els.historyControls.hidden = !history.length;
     els.historyEmpty.hidden = history.length > 0;
     els.historyNoMatch.hidden = !history.length || shown.length > 0;
     els.historyList.hidden = !shown.length;
@@ -1573,7 +1751,6 @@ window.MusicHub = window.MusicHub || {};
     els.libraryFetched = document.getElementById('library-fetched');
     els.libraryRefresh = document.getElementById('library-refresh');
     els.libraryError = document.getElementById('library-error');
-    els.libraryErrorText = document.getElementById('library-error-text');
     els.libraryRelogin = document.getElementById('library-relogin');
     els.window = document.getElementById('reel-window');
     els.strip = document.getElementById('reel-strip');
@@ -1607,7 +1784,6 @@ window.MusicHub = window.MusicHub || {};
     els.historySearchClear = document.getElementById('history-search-clear');
     els.historyNoMatch = document.getElementById('history-no-match');
     els.historyNotice = document.getElementById('history-notice');
-    els.historyNoticeText = document.getElementById('history-notice-text');
 
     document.getElementById('case-retry').addEventListener('click', refreshLibrary);
     els.libraryRefresh.addEventListener('click', refreshLibrary);
@@ -1630,10 +1806,44 @@ window.MusicHub = window.MusicHub || {};
     els.revealListened.addEventListener('click', openListenedDialog);
     els.sortGroup.addEventListener('click', onSortClick);
     els.historyClear.addEventListener('click', clearHistory);
+    els.addDialog = document.getElementById('add-album-dialog');
+    els.addLink = document.getElementById('add-album-link');
+    els.addRating = document.getElementById('add-album-rating');
+    els.addError = document.getElementById('add-album-error');
+    els.addSubmit = document.getElementById('add-album-submit');
+    els.addCancel = document.getElementById('add-album-cancel');
+    document.getElementById('history-add').addEventListener('click', openAddDialog);
+    els.ratingDialog = document.getElementById('rating-dialog');
+    els.ratingText = document.getElementById('rating-dialog-text');
+    els.ratingInput = document.getElementById('rating-dialog-input');
+    els.ratingError = document.getElementById('rating-dialog-error');
+    document.getElementById('rating-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      saveRating();
+    });
+    document.getElementById('rating-cancel').addEventListener('click', function () {
+      els.ratingDialog.close();
+    });
+    document.getElementById('add-album-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!addingAlbum) {
+        addAlbumByLink();
+      }
+    });
+    els.addCancel.addEventListener('click', function () {
+      els.addDialog.close();
+    });
+    // No closing it with Escape halfway through the request.
+    els.addDialog.addEventListener('cancel', function (event) {
+      if (addingAlbum) {
+        event.preventDefault();
+      }
+    });
     // The whole header row toggles; the chevron button inside it is the
     // keyboard and screen-reader control, and its clicks land here too.
-    els.historyHeader.addEventListener('click', function () {
-      if (els.historyToggle.hidden) {
+    els.historyHeader.addEventListener('click', function (event) {
+      // Adding and clearing are buttons of their own in the same row.
+      if (els.historyToggle.hidden || event.target.closest('.history-actions')) {
         return;
       }
       historyOpen = !historyOpen;
@@ -1681,6 +1891,7 @@ window.MusicHub = window.MusicHub || {};
   MusicHub.albumSuggester = {
     sortHistory: sortHistory,
     parseRating: parseRating,
+    parseAlbumId: parseAlbumId,
     discogsSearchUrl: discogsSearchUrl,
     buildReelAlbums: buildReelAlbums,
   };

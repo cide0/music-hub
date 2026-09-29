@@ -38,7 +38,6 @@ window.MusicHub = window.MusicHub || {};
   var focusedGenre = null;
   // Which nodes the current filters leave on screen, by id.
   var visibleIds = null;
-  var toastTimer = null;
   // Estimated time left, shown in the progress bar.
   var eta = null;
   // The node whose connections are being shown on their own, if any.
@@ -473,33 +472,23 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
-  /** A note that fades out on its own, shown over the graph. */
+  /** A note that fades out on its own (notice.js), shown over the graph. */
   function showToast(text) {
-    window.clearTimeout(toastTimer);
-    els.toast.textContent = text;
-    els.toast.classList.remove('graph-toast--fading');
-    els.toast.hidden = false;
-
-    toastTimer = window.setTimeout(function () {
-      els.toast.classList.add('graph-toast--fading');
-      toastTimer = window.setTimeout(function () {
-        els.toast.hidden = true;
-        els.toast.classList.remove('graph-toast--fading');
-      }, 600);
-    }, 4000);
+    MusicHub.notice.flash(els.toast, text);
   }
 
   function hideToast() {
-    window.clearTimeout(toastTimer);
-    els.toast.hidden = true;
-    els.toast.classList.remove('graph-toast--fading');
+    MusicHub.notice.hide(els.toast);
   }
 
-  function setMessage(text) {
-    // With a graph on screen the page's own message area is hidden behind it,
-    // so notes appear as a toast in the controls instead.
+  /**
+   * A note that fades out on its own - `error` marks it as an error. With a
+   * graph on screen the page's own message area is hidden behind it, so
+   * notes appear as a toast in the controls instead.
+   */
+  function setMessage(text, error) {
     if (graphVisible) {
-      els.message.hidden = true;
+      MusicHub.notice.hide(els.message);
       if (text) {
         showToast(text);
       } else {
@@ -510,10 +499,9 @@ window.MusicHub = window.MusicHub || {};
 
     hideToast();
     if (text) {
-      els.message.textContent = text;
-      els.message.hidden = false;
+      MusicHub.notice.flash(els.message, text, { error: !!error });
     } else {
-      els.message.hidden = true;
+      MusicHub.notice.hide(els.message);
     }
   }
 
@@ -522,8 +510,7 @@ window.MusicHub = window.MusicHub || {};
       els.failedNotice.hidden = true;
       return;
     }
-    els.failedText.textContent = "Couldn't fetch similarity data for: " + names.join(', ');
-    els.failedNotice.hidden = false;
+    MusicHub.notice.flash(els.failedNotice, "Couldn't fetch similarity data for: " + names.join(', '));
   }
 
   /** The round refresh button: its icon turning while busy, its name saying so. */
@@ -828,7 +815,7 @@ window.MusicHub = window.MusicHub || {};
       showFailed(outcome.fetched.failed);
     }).catch(function (err) {
       if (!run.cancelled) {
-        setMessage('Something went wrong: ' + err.message);
+        setMessage('Something went wrong: ' + err.message, true);
       }
     }).then(function () {
       setStatus('');
@@ -2908,7 +2895,6 @@ window.MusicHub = window.MusicHub || {};
     els.toast = document.getElementById('graph-toast');
     els.statusSlot = document.getElementById('status-slot');
     els.failedNotice = document.getElementById('graph-failed-notice');
-    els.failedText = document.getElementById('graph-failed-text');
     els.overlayLeft = document.getElementById('overlay-left');
     els.overlayRight = document.getElementById('overlay-right');
     els.canvas = document.getElementById('graph-canvas');

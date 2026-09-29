@@ -77,8 +77,8 @@
           </button>
         </div>
 
-        <!-- What the last check found; fades out on its own. -->
-        <p class="page-toast" id="check-toast" hidden></p>
+        <!-- What the last check found, or why it couldn't run; fades out on its own. -->
+        <div class="notice" id="check-toast" role="status" hidden></div>
 
         <div class="notice" id="failed-notice" hidden>
           <span class="notice__text" id="failed-text"></span>
@@ -99,6 +99,7 @@
       </section>
     </main>
 
+    <script src="/js/notice.js"></script>
     <script src="/js/storage.js"></script>
     <script src="/js/google.js"></script>
     <script src="/js/sync.js"></script>

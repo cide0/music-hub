@@ -16,14 +16,12 @@ window.MusicHub = window.MusicHub || {};
   var STORAGE_KEY = 'followedArtists';
   var CHANGE_EVENT = 'musichub:followedartistschange';
   var TIMEZONE = 'Europe/Berlin';
-  var TOAST_MS = 4500;
   // What a page says when it needs the list and it was never fetched.
   var MISSING_MESSAGE = 'Fetch your followed artists first, with the refresh button in the navbar.';
 
   var els = {};
   // The refresh underway, so a second press joins it rather than starting another.
   var refreshing = null;
-  var toastTimer = null;
 
   /* ------------------------------------------------------------ storage */
 
@@ -144,13 +142,9 @@ window.MusicHub = window.MusicHub || {};
     els.button.classList.toggle('navbar__refresh--empty', !stored);
   }
 
-  function showToast(message) {
-    window.clearTimeout(toastTimer);
-    els.toast.textContent = message;
-    els.toast.hidden = false;
-    toastTimer = window.setTimeout(function () {
-      els.toast.hidden = true;
-    }, TOAST_MS);
+  /** A note under the navbar that fades out on its own (notice.js). */
+  function showToast(message, error) {
+    MusicHub.notice.flash(els.toast, message, { error: !!error });
   }
 
   function onButtonClick() {
@@ -159,7 +153,7 @@ window.MusicHub = window.MusicHub || {};
     }, function (err) {
       console.warn('Could not refresh the followed artists', err);
       showToast("Couldn't update your followed artists: " + err.message
-        + (err.status === 429 ? ' - Spotify is limiting requests right now, try again in a while.' : '.'));
+        + (err.status === 429 ? ' - Spotify is limiting requests right now, try again in a while.' : '.'), true);
     });
   }
 

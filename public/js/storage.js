@@ -96,7 +96,8 @@ window.MusicHub = window.MusicHub || {};
   /**
    * A write that failed would otherwise only show up in the console, and the
    * change would silently be gone after a reload. One notice at the bottom of
-   * the page says so; later failures update it rather than stacking up.
+   * the page says so, fading out on its own like every message (notice.js);
+   * later failures update it rather than stacking up.
    */
   function showWriteFailure(err) {
     if (!document.body) {
@@ -125,15 +126,14 @@ window.MusicHub = window.MusicHub || {};
         + 'stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" />'
         + '<line x1="6" y1="6" x2="18" y2="18" /></svg>';
       dismiss.addEventListener('click', function () {
-        notice.hidden = true;
+        MusicHub.notice.hide(notice);
       });
       notice.appendChild(dismiss);
 
       document.body.appendChild(notice);
     }
 
-    notice.querySelector('.notice__text').textContent = writeFailureMessage(err);
-    notice.hidden = false;
+    MusicHub.notice.flash(notice, writeFailureMessage(err));
   }
 
   function remove(key) {

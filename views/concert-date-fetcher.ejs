@@ -65,8 +65,8 @@
           </button>
         </div>
 
-        <!-- What the last fetch added; fades out on its own. -->
-        <p class="page-toast" id="fetch-toast" hidden></p>
+        <!-- What the last fetch added, or why it couldn't run; fades out on its own. -->
+        <div class="notice" id="fetch-toast" role="status" hidden></div>
 
         <div class="notice" id="failed-notice" hidden>
           <span class="notice__text" id="failed-text"></span>
@@ -88,6 +88,7 @@
       </section>
     </main>
 
+    <script src="/js/notice.js"></script>
     <script src="/js/storage.js"></script>
     <script src="/js/google.js"></script>
     <script src="/js/sync.js"></script>

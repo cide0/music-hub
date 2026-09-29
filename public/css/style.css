@@ -174,7 +174,10 @@ button[aria-disabled='true'] {
 /* The round "clear saved data" button beside it (Albums, Concerts, Artist
    Graph, Discogs): just the trash can, "Clear saved data" in the tooltip
    and aria-label. */
-.clear-button {
+/* The round "add" button (the Gallery's +) looks like it too, e.g. the
+   Albums page's "Add an album" beside the history's clear button. */
+.clear-button,
+.add-button {
   flex: none;
   width: 44px;
   height: 44px;
@@ -187,6 +190,11 @@ button[aria-disabled='true'] {
 .clear-button svg {
   width: 18px;
   height: 18px;
+}
+
+.add-button svg {
+  width: 20px;
+  height: 20px;
 }
 
 @keyframes refresh-button-spin {
@@ -679,28 +687,17 @@ button[aria-disabled='true'] {
   margin: 0.5rem 0 0;
 }
 
-/* A short-lived note, e.g. "the graph is already up to date". */
-.graph-toast,
-.page-toast {
+/* A short-lived note over the graph, e.g. "the graph is already up to date" -
+   plain text, as it sits inside the controls' panel already. It fades like
+   every other message (notice.js). */
+.graph-toast {
   margin: 0.5rem 0 0;
   color: var(--color-text-soft);
   font-size: 0.875rem;
-  transition: opacity 0.6s ease;
 }
 
-.graph-toast--fading,
-.page-toast--fading {
-  opacity: 0;
-}
-
-/* In the page flow rather than over a graph, so it needs the same spacing as
-   the notice it sits above. */
-.page-toast {
-  margin: 0 0 1rem;
-}
-
-/* Any message that fades out on its own (the Setlists page's notes and
-   errors). */
+/* Any message that fades out on its own (notice.js): every page's notes,
+   warnings and errors. */
 .fade-message {
   transition: opacity 0.6s ease;
 }
@@ -710,8 +707,6 @@ button[aria-disabled='true'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .graph-toast,
-  .page-toast,
   .fade-message {
     transition: none;
   }
@@ -2263,6 +2258,11 @@ textarea.text-input {
   outline-offset: 2px;
 }
 
+.switch:has(input:disabled) {
+  cursor: default;
+  opacity: 0.5;
+}
+
 /* ----------------------------------------------------------------- modal */
 
 .modal {
@@ -3140,9 +3140,19 @@ textarea.text-input {
   text-decoration: none;
 }
 
-.setlist__title-link:hover {
+/* Hovered, it turns the link colour; its external-site arrow always shows. */
+.setlist__title-link:is(:hover, :focus-visible) {
   color: var(--color-link);
-  text-decoration: underline;
+}
+
+.setlist__title-link svg {
+  margin-left: 0.375rem;
+  vertical-align: -1px;
+}
+
+/* The Discogs page's external link, without its hover underline. */
+.setlist__artist-link:hover {
+  text-decoration: none;
 }
 
 /* In the search row, pushed to its right-hand end. */
@@ -3253,9 +3263,15 @@ textarea.text-input {
 }
 
 /* Added to a playlist, the songs pay out one by one (setlist-fetcher.js,
-   rewardSongs) - and can't be edited meanwhile. */
+   rewardSongs) - and can't be edited from the moment the add starts: the
+   ✕ go, their space kept so the rows don't shift. */
+.song-list--locked,
 .song-list--rewarding {
   pointer-events: none;
+}
+
+.song-list--locked .song__remove {
+  visibility: hidden;
 }
 
 /* A song's turn: lit up first, then the gold runs in over it, its content
@@ -3391,28 +3407,11 @@ textarea.text-input {
   flex: none;
 }
 
-.song__remove {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 50%;
-  background-color: transparent;
-  color: var(--color-text-muted);
-  font: inherit;
-  cursor: pointer;
-}
-
-.song__remove:hover:not(:disabled):not([aria-disabled='true']) {
-  background-color: var(--color-surface-raised);
-  color: var(--color-text);
-}
-
+/* Square-cornered, like the song rows it opens under. */
 .track-picker {
   margin: 0 0 0.75rem;
   padding: 0.75rem;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
   background-color: var(--color-surface);
 }
 
@@ -3467,14 +3466,19 @@ textarea.text-input {
   flex: none;
   width: 44px;
   height: 44px;
+  padding: 0;
   border: 1px solid var(--color-border);
   border-radius: 50%;
   background-color: transparent;
-  color: var(--color-text-soft);
-  font: inherit;
-  font-size: 1.125rem;
-  font-weight: 600;
+  color: var(--color-text);
   cursor: pointer;
+}
+
+/* The Gallery's add-card "+", button-sized - and the tick that replaces it
+   once picked, drawn the same way. */
+.track-option__add svg {
+  width: 22px;
+  height: 22px;
 }
 
 .track-option__add:hover:not(:disabled):not([aria-disabled='true']) {
@@ -3509,17 +3513,35 @@ textarea.text-input {
 }
 
 .track-picker__picked-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* Each picked track a rounded chip in the primary purple, its round ✕ at
+   the end. */
 .track-picker__picked-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
+  max-width: 100%;
+  padding: 0.25rem 0.25rem 0.25rem 0.875rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  color: var(--color-text);
   font-size: 0.9375rem;
+}
+
+/* A little smaller than the song's own ✕, to sit inside the chip. */
+.track-picker__picked-item .track-picker__picked-remove {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
 }
 
 .track-picker__picked-name {
@@ -3549,13 +3571,6 @@ textarea.text-input {
 .track-picker__part:hover:not(:disabled):not([aria-disabled='true']) {
   background-color: var(--color-surface-raised);
   border-color: var(--color-purple-800);
-}
-
-.track-picker__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
 }
 
 .playlist-add__controls {
@@ -3796,6 +3811,11 @@ textarea.text-input {
   align-items: center;
 }
 
+/* Below a section's buttons rather than above the content. */
+.settings-section__notice {
+  margin: 1rem 0 0;
+}
+
 .settings-account__status {
   display: inline-flex;
   align-items: center;
@@ -3837,6 +3857,17 @@ textarea.text-input {
 
 /* A part of a section with its own heading, set off by a rule (the Google
    section's Drive sync). */
+/* The Sounds section's switches, one per row, each a comfortable tap. */
+.settings-switches {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.settings-switches .switch {
+  min-height: 2.75rem;
+}
+
 .settings-subsection {
   margin-top: 1.25rem;
   padding-top: 1.25rem;
@@ -5647,6 +5678,13 @@ button.turntable__power:focus-visible {
   }
 }
 
+/* Adding an album and clearing the history, right beside the title. */
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* The count and the open / close toggle, together on the right. */
 .history-summary {
   display: flex;
@@ -5776,9 +5814,12 @@ button.turntable__power:focus-visible {
 }
 
 /* Above the overlay link and the sheen. */
-/* Shared with the remove button on the Setlists page's past concerts. */
+/* Shared with the history entry's pen and the Setlists page's remove
+   buttons: its past concerts, each song and each track picked for one. */
+.history-item__edit,
 .history-item__remove,
-.past-show__remove {
+.past-show__remove,
+.song__remove {
   position: relative;
   z-index: 3;
   flex: none;
@@ -5792,7 +5833,8 @@ button.turntable__power:focus-visible {
 }
 
 .history-item__remove svg,
-.past-show__remove svg {
+.past-show__remove svg,
+.song__remove svg {
   width: 16px;
   height: 16px;
 }
@@ -5906,14 +5948,9 @@ button.turntable__power:focus-visible {
     --reel-gap: 8px;
   }
 
-  /* Search on its own full-width row under the sort buttons. */
-  .history-controls {
-    flex-basis: 100%;
-    margin-left: 0;
-  }
-
+  /* Search on its own full-width row, the sort buttons under it on the
+     right. */
   .history-search {
-    order: 1;
     width: 100%;
   }
 
@@ -6201,6 +6238,7 @@ button.turntable__power:focus-visible {
 .name-pill[data-name-style="gold"] .name-pill__name,
 .wheel__banner-text,
 .vinyl-card--exclusive .vinyl-card__style-name,
+.song--paid .song__name,
 .wheel__title,
 .wheel__prizes-number,
 .wheel__prizes-icon {
@@ -8272,7 +8310,7 @@ button.turntable__power:focus-visible {
   scale: calc(1 + var(--wheel-charge) * 0.08);
   filter: brightness(calc(1 + var(--wheel-charge) * 0.9));
   animation:
-    wheel-charge 2.4s ease-in forwards,
+    wheel-charge 3.8s ease-in forwards,
     wheel-jitter 70ms linear infinite;
 }
 
@@ -9075,6 +9113,30 @@ button.turntable__power:focus-visible {
 
 /* ... and sparks of every colour streaking in to it like comets: a long
    tail fading out behind a bright white head, the end nearest the wheel. */
+/* An exclusive's own record covering the whole screen before it lands in
+   the reveal (daily-wheel.js, artworkTakeover): the screen-sized frame is
+   what the diagonal wipe uncovers; the record's width - the screen's
+   diagonal, the least that covers every corner - is set by the script. */
+.wheel-fx__takeover {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.wheel-fx__artwork {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  will-change: transform, opacity;
+}
+
+.wheel-fx__artwork > .vinyl {
+  inset: 0;
+}
+
 .wheel-fx__spark {
   position: absolute;
   top: 0;

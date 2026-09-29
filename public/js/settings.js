@@ -1,6 +1,6 @@
 /*
- * Settings: the Google login state, the Google Drive sync, the Gallery's Drive folder, the
- * Setlists page's default playlist,
+ * Settings: the sound switches, the Google login state, the Google Drive sync, the Gallery's
+ * Drive folder, the Setlists page's default playlist,
  * the Discogs username, and the Export / Import / Clear data controls. Every choice made here is saved
  * through MusicHub.storage.setSetting, so it travels with Export / Import.
  */
@@ -36,7 +36,7 @@ window.MusicHub = window.MusicHub || {};
           }
         })
         .catch(function (err) {
-          window.alert('Import failed: ' + err.message);
+          MusicHub.notice.flash(document.getElementById('import-error'), 'Import failed: ' + err.message);
         })
         .then(function () {
           // Allow picking the same file again.
@@ -163,17 +163,25 @@ window.MusicHub = window.MusicHub || {};
     document.getElementById('sync-now').disabled = sync.running;
     document.getElementById('sync-disable').hidden = !sync.available || !sync.enabled;
 
+    // Fades out on its own (notice.js), once for each new error.
     var error = document.getElementById('sync-error');
-    error.textContent = sync.available && sync.enabled && sync.lastError
+    var text = sync.available && sync.enabled && sync.lastError
       ? 'The last sync failed: ' + sync.lastError
       : '';
-    error.hidden = !error.textContent;
+    if (text !== (error.dataset.shown || '')) {
+      if (text) {
+        MusicHub.notice.flash(error, text);
+      } else {
+        MusicHub.notice.hide(error);
+      }
+    }
+    error.dataset.shown = text;
   }
 
   function initSyncControls() {
     document.getElementById('sync-enable').addEventListener('click', function () {
       MusicHub.sync.turnOn().catch(function (err) {
-        window.alert('Couldn\u2019t turn on sync: ' + err.message);
+        MusicHub.notice.flash(document.getElementById('sync-error'), 'Couldn\u2019t turn on sync: ' + err.message);
       });
     });
 
@@ -202,7 +210,6 @@ window.MusicHub = window.MusicHub || {};
   }
 
   var DEFAULT_PLAYLIST_SETTING = 'setlistDefaultPlaylist';
-  var SAVED_MESSAGE_MS = 3000;
 
   /* --------------------------------------------------- gallery folder */
 
@@ -229,16 +236,10 @@ window.MusicHub = window.MusicHub || {};
     var clearButton = document.getElementById('gallery-folder-clear');
     var error = document.getElementById('gallery-folder-error');
     var saved = document.getElementById('gallery-folder-saved');
-    var savedTimer = null;
 
     function confirmSaved(text) {
-      error.hidden = true;
-      saved.textContent = text;
-      saved.hidden = false;
-      window.clearTimeout(savedTimer);
-      savedTimer = window.setTimeout(function () {
-        saved.hidden = true;
-      }, SAVED_MESSAGE_MS);
+      MusicHub.notice.hide(error);
+      MusicHub.notice.flash(saved, text);
     }
 
     var current = MusicHub.storage.getSetting(GALLERY_FOLDER_SETTING, null);
@@ -249,11 +250,10 @@ window.MusicHub = window.MusicHub || {};
       event.preventDefault();
       var folderId = parseDriveFolderId(input.value);
       if (!folderId) {
-        saved.hidden = true;
-        error.textContent = input.value.trim()
+        MusicHub.notice.hide(saved);
+        MusicHub.notice.flash(error, input.value.trim()
           ? 'That doesn\u2019t look like a Google Drive folder link.'
-          : 'Paste the link of a Google Drive folder first.';
-        error.hidden = false;
+          : 'Paste the link of a Google Drive folder first.');
         return;
       }
       MusicHub.storage.setSetting(GALLERY_FOLDER_SETTING, folderId);
@@ -275,20 +275,17 @@ window.MusicHub = window.MusicHub || {};
     var message = document.getElementById('default-playlist-message');
     var clearButton = document.getElementById('default-playlist-clear');
     var saved = document.getElementById('default-playlist-saved');
-    var savedTimer = null;
-
     function confirmSaved(text) {
-      saved.textContent = text;
-      saved.hidden = false;
-      window.clearTimeout(savedTimer);
-      savedTimer = window.setTimeout(function () {
-        saved.hidden = true;
-      }, SAVED_MESSAGE_MS);
+      MusicHub.notice.flash(saved, text);
     }
 
-    function showMessage(text) {
-      message.textContent = text;
-      message.hidden = !text;
+    // Fades out on its own (notice.js); "Loading…" (`stay`) until replaced.
+    function showMessage(text, stay) {
+      if (!text) {
+        MusicHub.notice.hide(message);
+      } else {
+        MusicHub.notice[stay ? 'hold' : 'flash'](message, text);
+      }
     }
 
     // Stored as { id, name }: the name lets the page say which playlist it
@@ -314,7 +311,7 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
 
-    showMessage('Loading your playlists…');
+    showMessage('Loading your playlists…', true);
     MusicHub.spotify.getEditablePlaylists().then(function (playlists) {
       if (!playlists.length) {
         showMessage('You don’t have any editable playlists yet — create one in Spotify first');
@@ -364,16 +361,10 @@ window.MusicHub = window.MusicHub || {};
     var clearButton = document.getElementById('discogs-username-clear');
     var error = document.getElementById('discogs-username-error');
     var saved = document.getElementById('discogs-username-saved');
-    var savedTimer = null;
 
     function confirmSaved(text) {
-      error.hidden = true;
-      saved.textContent = text;
-      saved.hidden = false;
-      window.clearTimeout(savedTimer);
-      savedTimer = window.setTimeout(function () {
-        saved.hidden = true;
-      }, SAVED_MESSAGE_MS);
+      MusicHub.notice.hide(error);
+      MusicHub.notice.flash(saved, text);
     }
 
     var current = MusicHub.storage.getSetting(DISCOGS_USERNAME_SETTING, null);
@@ -384,11 +375,10 @@ window.MusicHub = window.MusicHub || {};
       event.preventDefault();
       var username = parseDiscogsUsername(input.value);
       if (!username) {
-        saved.hidden = true;
-        error.textContent = input.value.trim()
+        MusicHub.notice.hide(saved);
+        MusicHub.notice.flash(error, input.value.trim()
           ? 'That doesn’t look like a Discogs username.'
-          : 'Enter your Discogs username first.';
-        error.hidden = false;
+          : 'Enter your Discogs username first.');
         return;
       }
       MusicHub.storage.setSetting(DISCOGS_USERNAME_SETTING, username);
@@ -405,7 +395,38 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  // Read by wallet.js (every sound) and collection.js (the listening coins).
+  var SOUND_SETTING = 'soundEffects';
+  var LISTEN_COIN_SOUND_SETTING = 'listenCoinSound';
+
+  /**
+   * The Sounds switches, both on unless turned off. With every sound off,
+   * the listening coins' switch is greyed out but keeps its own choice.
+   */
+  function initSoundSwitches() {
+    var sound = document.getElementById('sound-effects');
+    var listenCoins = document.getElementById('listen-coin-sound');
+
+    function render() {
+      listenCoins.disabled = !sound.checked;
+    }
+
+    sound.checked = MusicHub.storage.getSetting(SOUND_SETTING, true) !== false;
+    listenCoins.checked = MusicHub.storage.getSetting(LISTEN_COIN_SOUND_SETTING, true) !== false;
+    render();
+
+    // Only "off" is stored; on is the default.
+    sound.addEventListener('change', function () {
+      MusicHub.storage.setSetting(SOUND_SETTING, sound.checked ? null : false);
+      render();
+    });
+    listenCoins.addEventListener('change', function () {
+      MusicHub.storage.setSetting(LISTEN_COIN_SOUND_SETTING, listenCoins.checked ? null : false);
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    initSoundSwitches();
     initGoogleControls();
     initSyncControls();
     initGalleryFolder();

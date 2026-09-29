@@ -54,6 +54,9 @@ window.MusicHub = window.MusicHub || {};
   var LISTEN_MS = 20000;
   var LISTEN_TICK_MS = 1000;
   var listenTimer = 0;
+  // Settings' switch for those coins' clink: on unless turned off, so it
+  // can be kept from sounding over the album.
+  var LISTEN_COIN_SOUND_SETTING = 'listenCoinSound';
   var pollTimer = 0;
   // Bumped each time a new ask is scheduled, so an answer overtaken by one
   // (from before a pause, say) is ignored.
@@ -891,7 +894,11 @@ window.MusicHub = window.MusicHub || {};
       if (player.listenedMs >= LISTEN_MS) {
         player.listenedMs -= LISTEN_MS;
         // One flying coin for each coin earned.
-        MusicHub.wallet.earn(coins, { from: playerParts.record, coins: coins });
+        MusicHub.wallet.earn(coins, {
+          from: playerParts.record,
+          coins: coins,
+          silent: MusicHub.storage.getSetting(LISTEN_COIN_SOUND_SETTING, true) === false,
+        });
       }
     }, LISTEN_TICK_MS);
   }

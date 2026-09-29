@@ -29,8 +29,6 @@ window.MusicHub = window.MusicHub || {};
   // Ticking countdown to the next concert the user is attending.
   var countdownTimer = null;
   var countdownTarget = null;
-  // The self-dismissing note shown after a fetch.
-  var toastTimer = null;
   // Estimated time left, shown in the progress bar.
   var eta = null;
   // Artists whose lookup failed in the last run, for the notice's Retry.
@@ -354,33 +352,21 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
-  /** A note about the run just finished, fading out on its own. */
-  function showToast(text) {
+  /**
+   * A note that fades out on its own (notice.js): what the last run found,
+   * or why it couldn't run - `error` marks it as an error.
+   */
+  function showToast(text, error) {
     if (!els.toast || !text) {
       return;
     }
-    window.clearTimeout(toastTimer);
-    els.toast.textContent = text;
-    els.toast.classList.remove('page-toast--fading');
-    els.toast.hidden = false;
-
-    toastTimer = window.setTimeout(function () {
-      els.toast.classList.add('page-toast--fading');
-      toastTimer = window.setTimeout(function () {
-        els.toast.hidden = true;
-        els.toast.classList.remove('page-toast--fading');
-      }, 600);
-    }, 6000);
+    MusicHub.notice.flash(els.toast, text, { error: !!error });
   }
 
   function hideToast() {
-    if (!els.toast) {
-      return;
-    }
-    window.clearTimeout(toastTimer);
-    els.toast.hidden = true;
-    els.toast.classList.remove('page-toast--fading');
+    MusicHub.notice.hide(els.toast);
   }
+
 
   /** Pure filter, kept separate from the DOM so it can be tested directly. */
   function filterConcerts(concerts, filter, newIds) {
@@ -1132,7 +1118,7 @@ window.MusicHub = window.MusicHub || {};
     // Fetched by the navbar's refresh button only - never from here.
     var followed = MusicHub.followedArtists.list();
     if (!followed) {
-      setMessage(MusicHub.followedArtists.MISSING_MESSAGE);
+      showToast(MusicHub.followedArtists.MISSING_MESSAGE);
       return Promise.resolve();
     }
 
@@ -1146,7 +1132,7 @@ window.MusicHub = window.MusicHub || {};
         return null;
       }
       if (!artists.length) {
-        setMessage("You don't follow any artists on Spotify yet.");
+        showToast("You don't follow any artists on Spotify yet.");
         els.list.textContent = '';
         return null;
       }
@@ -1166,7 +1152,7 @@ window.MusicHub = window.MusicHub || {};
       storeRunResult(previous, matches, failed, run, true);
     }).catch(function (err) {
       if (!run.cancelled) {
-        setMessage('Something went wrong: ' + err.message);
+        showToast('Something went wrong: ' + err.message, true);
       }
     }).then(function () {
       endRun(run);
@@ -1193,7 +1179,7 @@ window.MusicHub = window.MusicHub || {};
       storeRunResult(previous, matches, failed, run, false);
     }).catch(function (err) {
       if (!run.cancelled) {
-        setMessage('Something went wrong: ' + err.message);
+        showToast('Something went wrong: ' + err.message, true);
       }
     }).then(function () {
       endRun(run);

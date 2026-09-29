@@ -60,7 +60,7 @@ window.MusicHub = window.MusicHub || {};
   var WIND_UP_MS = 380;
   // Winding up to a wheel exclusive, before it bursts. Must match
   // wheel-charge's length in style.css (.wheel--charging .wheel__machine).
-  var CHARGE_MS = 2400;
+  var CHARGE_MS = 3800;
   var WIND_UP_DEGREES = 14;
   var SPIN_MS = 6200;
   var MIN_TURNS = 5;
@@ -283,6 +283,24 @@ window.MusicHub = window.MusicHub || {};
         sfx.noise(ctx, at + 0.12 + i * 0.045 + Math.random() * 0.03, 0.03, 'highpass', 4500, 1, 0.1, 0.001);
       }
       sparkles(ctx, at + 0.1, 5);
+    },
+    // An exclusive's artwork being uncovered (artworkTakeover): the flash's
+    // crack, a sweep rising with the wipe, then an airy, choir-like chord
+    // swelling while the pattern fills the screen.
+    unveil: function (ctx, at) {
+      sfx.noise(ctx, at, 0.25, 'highpass', 3000, 0.7, 0.3, 0.002);
+      sfx.tone(ctx, at, 120, 60, 0.35, 0.4);
+      sfx.noise(ctx, at, 0.8, 'bandpass', 400, 1.5, 0.28, 0.5, 6000);
+      [523, 659, 784, 1047, 1319].forEach(function (note, index) {
+        sfx.noise(ctx, at + 0.3 + index * 0.05, 2.1, 'bandpass', note, 40, 0.4, 0.9);
+        sfx.tone(ctx, at + 0.35, note, note, 0.012, 2);
+      });
+      sparkles(ctx, at + 0.6, 12);
+    },
+    // ... and swooping down into the record in the reveal.
+    land: function (ctx, at) {
+      sfx.noise(ctx, at, 0.75, 'bandpass', 5000, 1.2, 0.22, 0.4, 300);
+      sfx.tone(ctx, at, 900, 200, 0.05, 0.75, 'triangle');
     },
     // ... and it bursts: a deep boom and a cascade of bells, up two octaves.
     legendary: function (ctx, at) {
@@ -1247,11 +1265,12 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * A wheel exclusive: the wheel shakes as the light builds, the screen
-   * bursts white, and the record rises out of a whirl of rainbow light,
-   * its name spelling itself out.
+   * bursts white, the record's own pattern takes over the whole screen
+   * (artworkTakeover), then shrinks down into the reveal's record, which
+   * bursts out of a whirl of rainbow light, its name spelling itself out.
    */
   function revealExclusive(prize, record) {
-    var motion = !reducedMotion();
+    var motion = !reducedMotion() && !!document.body.animate;
     highlight(prize);
     showResult(prize, record);
     els.dialog.classList.add('wheel--charging');
@@ -1262,25 +1281,106 @@ window.MusicHub = window.MusicHub || {};
     return wait(motion ? CHARGE_MS : 200).then(function () {
       claim(record);
       spinning = false;
-      sound('legendary');
       flash(1);
       resetCelebration();
-      showReveal(record, true);
-      // Out of the record itself, now it's up in the reveal.
-      var from = centreOf(els.revealRecord);
-      if (motion) {
-        burst(from);
-        fireworks(6);
+      if (!motion) {
+        sound('legendary');
+        showReveal(record, true);
+        celebrateExclusive(record, false);
+        return null;
       }
-      var glow = MusicHub.vinyl.glowColors(MusicHub.vinyl.describe(record.format));
-      confetti(90, from, [glow.glow, glow.accent, 'var(--color-text)', 'var(--rarity-gold-shine)'], { stars: true, spread: Math.PI * 2, power: 0.9 });
-      confetti(120, { x: window.innerWidth / 2, y: window.innerHeight * 0.1 }, TIER_COLORS.legendary, { angle: Math.PI / 2, spread: Math.PI * 1.2, power: 0.5 });
-      window.setTimeout(function () {
-        confetti(60, { x: 0, y: window.innerHeight }, TIER_COLORS.legendary, { angle: -Math.PI / 3, spread: 0.7, power: 1.5 });
-        confetti(60, { x: window.innerWidth, y: window.innerHeight }, TIER_COLORS.legendary, { angle: -Math.PI * 2 / 3, spread: 0.7, power: 1.5 });
-      }, 500);
-      render();
+      sound('unveil');
+      var takeover = artworkTakeover(record);
+      return wait(TAKEOVER_GROW_MS + TAKEOVER_HOLD_MS).then(function () {
+        // The reveal comes up under the artwork, which lands on its record.
+        showReveal(record, true, { landed: true });
+        sound('land');
+        return takeover.land(els.revealRecord.querySelector('.vinyl') || els.revealRecord);
+      }).then(function () {
+        celebrateExclusive(record, true);
+      });
     });
+  }
+
+  /** The exclusive up in the reveal: the burst out of it, fireworks and confetti. */
+  function celebrateExclusive(record, motion) {
+    // Out of the record itself, now it's up in the reveal.
+    var from = centreOf(els.revealRecord);
+    if (motion) {
+      // The rainbow rings' boom and bells (without motion, it played at the flash).
+      sound('legendary');
+      burst(from);
+      fireworks(6);
+    }
+    var glow = MusicHub.vinyl.glowColors(MusicHub.vinyl.describe(record.format));
+    confetti(90, from, [glow.glow, glow.accent, 'var(--color-text)', 'var(--rarity-gold-shine)'], { stars: true, spread: Math.PI * 2, power: 0.9 });
+    confetti(120, { x: window.innerWidth / 2, y: window.innerHeight * 0.1 }, TIER_COLORS.legendary, { angle: Math.PI / 2, spread: Math.PI * 1.2, power: 0.5 });
+    window.setTimeout(function () {
+      confetti(60, { x: 0, y: window.innerHeight }, TIER_COLORS.legendary, { angle: -Math.PI / 3, spread: 0.7, power: 1.5 });
+      confetti(60, { x: window.innerWidth, y: window.innerHeight }, TIER_COLORS.legendary, { angle: -Math.PI * 2 / 3, spread: 0.7, power: 1.5 });
+    }, 500);
+    render();
+  }
+
+  // The exclusive's pattern over the whole screen: uncovered from the
+  // bottom-left corner to the top-right, held still, then landing.
+  var TAKEOVER_GROW_MS = 750;
+  var TAKEOVER_HOLD_MS = 1300;
+  var TAKEOVER_LAND_MS = 750;
+
+  /**
+   * The exclusive record, just big enough to cover the whole screen,
+   * uncovered by a diagonal wipe from the bottom-left corner to the top-right,
+   * held still (not spinning) so the pattern can be taken in. Returns { land(target) }: shrinking down
+   * onto `target` (the reveal's record), resolving once it's there and gone.
+   */
+  function artworkTakeover(exclusive) {
+    var screen = el('span', 'wheel-fx__fx wheel-fx__takeover');
+    var art = el('span', 'wheel-fx__artwork');
+    var record = MusicHub.vinyl.render(MusicHub.vinyl.describe(exclusive.format), { seed: exclusive.seed });
+    record.classList.add('vinyl--house');
+    art.appendChild(record);
+    // Exactly as wide as the screen's diagonal: the furthest out it can be
+    // while its circle still covers every corner.
+    art.style.width = Math.ceil(Math.hypot(window.innerWidth, window.innerHeight)) + 'px';
+    screen.appendChild(art);
+    raiseFx().appendChild(screen);
+    // Its pattern's own animations running (glitter, glow, ...) - the record
+    // itself doesn't turn.
+    MusicHub.vinyl.setPlaying(record, true);
+
+    var middle = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    // The edge of the wipe runs corner to corner; at 200% it's past the top-right.
+    screen.animate([
+      { clipPath: 'polygon(0 100%, 0 100%, 0 100%)', filter: 'brightness(2.2)' },
+      { clipPath: 'polygon(0 100%, 0 -100%, 200% 100%)', filter: 'brightness(1)' },
+    ], { duration: TAKEOVER_GROW_MS, easing: 'cubic-bezier(0.45, 0, 0.2, 1)', fill: 'forwards' });
+    // Not turning - just drifting the slightest bit closer while it's shown.
+    art.animate([
+      { transform: 'scale(1)' },
+      { transform: 'scale(1.03)' },
+    ], { duration: TAKEOVER_GROW_MS + TAKEOVER_HOLD_MS, easing: 'ease-out', fill: 'forwards' });
+
+    return {
+      land: function (target) {
+        // Unturned sizes: a turning record's bounding box is bigger than it is.
+        var size = art.offsetWidth;
+        var rect = target.getBoundingClientRect();
+        var to = 'translate(' + (rect.left + rect.width / 2 - middle.x).toFixed(0) + 'px, '
+          + (rect.top + rect.height / 2 - middle.y).toFixed(0) + 'px) scale(' + (target.offsetWidth / size).toFixed(4) + ')';
+        var landing = art.animate([
+          { transform: 'scale(1.03)', opacity: 1 },
+          { transform: to, opacity: 1, offset: 0.85 },
+          { transform: to, opacity: 0 },
+        ], { duration: TAKEOVER_LAND_MS, easing: 'cubic-bezier(0.6, 0, 0.3, 1)', fill: 'forwards' });
+        return new Promise(function (resolve) {
+          landing.onfinish = landing.oncancel = function () {
+            screen.remove();
+            resolve();
+          };
+        });
+      },
+    };
   }
 
   // The screen darkening round the wheel as an exclusive winds up.
@@ -1301,7 +1401,7 @@ window.MusicHub = window.MusicHub || {};
     chargeDim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: CHARGE_MS, easing: 'ease-in', fill: 'forwards' });
 
     var reach = Math.hypot(window.innerWidth, window.innerHeight) * 0.6;
-    var count = 130;
+    var count = 300;
     var pieces = [];
     for (var i = 0; i < count; i += 1) {
       var progress = i / count;
@@ -1321,7 +1421,8 @@ window.MusicHub = window.MusicHub || {};
           { transform: sparkAt(centre, heading, 0.55), opacity: 0.35 },
         ],
         timing: {
-          duration: 950 - progress * 500,
+          // Long, slow streaks at first, quicker ones as it builds.
+          duration: 1500 - progress * 850,
           delay: Math.pow(progress, 0.75) * (CHARGE_MS - 650),
           easing: 'cubic-bezier(0.5, 0, 0.9, 0.5)',
           fill: 'both',
@@ -1330,7 +1431,7 @@ window.MusicHub = window.MusicHub || {};
     }
     launch(pieces);
     // Quicker and quicker, up to the burst.
-    [0, 0.72, 1.28, 1.7, 2.0, 2.2, 2.33].forEach(function (seconds) {
+    [0, 0.95, 1.75, 2.4, 2.9, 3.25, 3.5, 3.65, 3.74].forEach(function (seconds) {
       sound('heartbeat', seconds);
     });
   }
@@ -1399,7 +1500,7 @@ window.MusicHub = window.MusicHub || {};
    * The reveal overlay for `exclusive` (won or waiting): `fresh` plays the
    * whole entrance; otherwise it's just shown, ready to be pressed.
    */
-  function showReveal(exclusive, fresh) {
+  function showReveal(exclusive, fresh, options) {
     revealing = exclusive;
     var spec = MusicHub.vinyl.describe(exclusive.format);
     var glow = MusicHub.vinyl.glowColors(spec);
@@ -1434,7 +1535,9 @@ window.MusicHub = window.MusicHub || {};
     els.reveal.classList.remove('wheel-reveal--in');
     void els.reveal.offsetWidth;
     els.reveal.classList.add('wheel-reveal--in');
-    if (fresh && record.animate && !reducedMotion()) {
+    // Landed on by the full-screen artwork, it needs no entrance of its own.
+    var landed = options && options.landed;
+    if (fresh && !landed && record.animate && !reducedMotion()) {
       record.animate([
         { transform: 'scale(0.1) rotate(-540deg)', filter: 'brightness(4)', opacity: 0 },
         { transform: 'scale(1.18) rotate(20deg)', filter: 'brightness(1.6)', opacity: 1, offset: 0.65 },

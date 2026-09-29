@@ -44,7 +44,6 @@ window.MusicHub = window.MusicHub || {};
   // Tells the reloaded page why it reloaded.
   var RELOADED_FLAG = 'musichub:syncReloaded';
   var UPDATED_MESSAGE = 'Updated with changes from another device.';
-  var UPDATED_MESSAGE_MS = 4000;
   // Closing the "which data wins" question on the automatic turn-on means
   // "not now": it isn't asked again until the next visit.
   var ASKED_FLAG = 'musichub:syncAsked';
@@ -416,6 +415,10 @@ window.MusicHub = window.MusicHub || {};
 
   /* -------------------------------------------------------------- notices */
 
+  /**
+   * A note at the bottom of the page: it fades out on its own (notice.js),
+   * unless it has an `action` button, which keeps it up until it's used.
+   */
   function showNotice(text, action) {
     var notice = document.getElementById('sync-notice');
     if (!notice) {
@@ -449,19 +452,19 @@ window.MusicHub = window.MusicHub || {};
       + 'stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" />'
       + '<line x1="6" y1="6" x2="18" y2="18" /></svg>';
     dismiss.addEventListener('click', function () {
-      notice.hidden = true;
+      MusicHub.notice.hide(notice);
     });
     notice.appendChild(dismiss);
 
-    notice.hidden = false;
-    return notice;
+    if (action) {
+      MusicHub.notice.hold(notice);
+    } else {
+      MusicHub.notice.flash(notice);
+    }
   }
 
   function showUpdatedNotice() {
-    var notice = showNotice(UPDATED_MESSAGE);
-    window.setTimeout(function () {
-      notice.hidden = true;
-    }, UPDATED_MESSAGE_MS);
+    showNotice(UPDATED_MESSAGE);
   }
 
   /* ---------------------------------------------------------- page flow */

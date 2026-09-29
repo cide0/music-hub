@@ -68,8 +68,9 @@ routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
 views/               EJS pages + partials/ (head, navbar, daily-wheel, unbox)
 public/css/          variables.css (palette) + style.css
-public/js/           storage.js, google.js, sync.js, navbar.js, auth.js,
-                     followed-artists.js, wallet.js (every page; storage.js =
+public/js/           notice.js, storage.js, google.js, sync.js, navbar.js, auth.js,
+                     followed-artists.js, wallet.js (every page; notice.js =
+                     every message's fade-out, loaded first; storage.js =
                      all localStorage access + the "couldn't save" notice;
                      google.js = Google login, Calendar, the Drive app
                      folder and reading the Gallery's Drive folder; sync.js = the Google Drive sync, loaded right

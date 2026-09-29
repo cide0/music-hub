@@ -1263,6 +1263,10 @@ window.MusicHub = window.MusicHub || {};
         return null;
       });
     }
+    // A "Show hidden" button keeps the box up, even after its message faded.
+    if (!els.unhide.hidden && els.driveStatus.textContent) {
+      showDriveBox();
+    }
   }
 
   function render() {
@@ -1298,7 +1302,6 @@ window.MusicHub = window.MusicHub || {};
   /** The status line: text parts (strings, or a node like a Settings link). */
   function showDriveStatus(parts, options) {
     options = options || {};
-    els.drive.hidden = false;
     els.driveStatus.textContent = '';
     parts.forEach(function (part) {
       els.driveStatus.appendChild(typeof part === 'string' ? document.createTextNode(part) : part);
@@ -1317,6 +1320,17 @@ window.MusicHub = window.MusicHub || {};
 
     els.driveShare.textContent = options.shareTip || '';
     els.driveShare.hidden = !options.shareTip;
+    showDriveBox();
+  }
+
+  /**
+   * The Drive box stays up while it has a button (the sync button, or
+   * "Show hidden"); a message on its own fades out like every note
+   * (notice.js).
+   */
+  function showDriveBox() {
+    var withButton = !els.driveSync.hidden || !els.unhide.hidden;
+    MusicHub.notice[withButton ? 'hold' : 'flash'](els.drive);
   }
 
   function hasDriveMedia(current) {
@@ -1494,8 +1508,7 @@ window.MusicHub = window.MusicHub || {};
     els.artistList.textContent = '';
 
     if (!followedArtists) {
-      els.pickerMessage.textContent = MusicHub.followedArtists.MISSING_MESSAGE;
-      els.pickerMessage.hidden = false;
+      MusicHub.notice.flash(els.pickerMessage, MusicHub.followedArtists.MISSING_MESSAGE);
       return;
     }
 
@@ -1505,8 +1518,7 @@ window.MusicHub = window.MusicHub || {};
     });
 
     if (!available.length) {
-      els.pickerMessage.textContent = 'No more artists to add';
-      els.pickerMessage.hidden = false;
+      MusicHub.notice.hold(els.pickerMessage, 'No more artists to add');
       return;
     }
 
@@ -1515,11 +1527,10 @@ window.MusicHub = window.MusicHub || {};
     });
 
     if (!matching.length) {
-      els.pickerMessage.textContent = 'No followed artist matches "' + els.artistSearch.value.trim() + '"';
-      els.pickerMessage.hidden = false;
+      MusicHub.notice.hold(els.pickerMessage, 'No followed artist matches "' + els.artistSearch.value.trim() + '"');
       return;
     }
-    els.pickerMessage.hidden = true;
+    MusicHub.notice.hide(els.pickerMessage);
 
     matching.slice(0, 50).forEach(function (artist) {
       var item = el('li', 'picker__item');
@@ -1623,8 +1634,7 @@ window.MusicHub = window.MusicHub || {};
     }
 
     if (!ok) {
-      els.concertError.textContent = 'Enter a name for this concert';
-      els.concertError.hidden = false;
+      MusicHub.notice.flash(els.concertError, 'Enter a name for this concert');
       return;
     }
 
@@ -1674,7 +1684,7 @@ window.MusicHub = window.MusicHub || {};
       els.mediaError.textContent = notes.join(' · ');
       // Duplicates alone are a note, not an error.
       els.mediaError.className = result.failed ? 'form-error' : 'form-message';
-      els.mediaError.hidden = false;
+      MusicHub.notice.flash(els.mediaError);
       return;
     }
 

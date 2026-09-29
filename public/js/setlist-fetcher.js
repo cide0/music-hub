@@ -31,7 +31,7 @@ window.MusicHub = window.MusicHub || {};
   // fly off while the next one starts.
   var REWARD_FOCUS_MS = 300;
   var REWARD_FILL_MS = 800;
-  var REWARD_BUMP_MS = 550;
+  var REWARD_BUMP_MS = 700;
 
   var els = {};
   var searching = false;
@@ -55,10 +55,6 @@ window.MusicHub = window.MusicHub || {};
   // Set when the matching run hit Spotify's search limit; the remaining
   // songs stay pending until the notice's Retry.
   var matchPaused = false;
-  // How long a fading message stays before it fades, and the fade itself
-  // (matches the CSS transition).
-  var FADE_AFTER_MS = 6000;
-  var FADE_DURATION_MS = 600;
 
   function delay(ms) {
     return new Promise(function (resolve) {
@@ -77,32 +73,44 @@ window.MusicHub = window.MusicHub || {};
     return node;
   }
 
+  // The app's icons, as on its other pages: the ✕ of a remove button, the
+  // Gallery's "+" of an add card, and the external-site arrow of a link.
+  var X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" />'
+    + '<line x1="6" y1="6" x2="18" y2="18" /></svg>';
+  var PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" />'
+    + '<line x1="5" y1="12" x2="19" y2="12" /></svg>';
+  // The picked result's tick, drawn like the "+" it replaces (same size and line).
+  var CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.75l5 5L20 6.75" /></svg>';
+  var EXTERNAL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="14" height="14">'
+    + '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />'
+    + '<polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>';
+
+  /** A round ✕ button, like every other page's remove buttons. */
+  function removeButton(className, label) {
+    var button = el('button', 'icon-button ' + className);
+    button.type = 'button';
+    button.innerHTML = X_ICON;
+    button.setAttribute('aria-label', label);
+    button.title = 'Remove';
+    return button;
+  }
+
+  /** Shows `node` until it's hidden again - for what stays, e.g. a notice with Retry. */
   function show(node, text) {
-    if (text !== undefined) {
-      node.textContent = text;
-    }
-    node.hidden = false;
+    MusicHub.notice.hold(node, text);
   }
 
   function hide(node) {
-    window.clearTimeout(node.fadeTimer);
-    node.classList.remove('fade-message--fading');
-    node.hidden = true;
+    MusicHub.notice.hide(node);
   }
 
-  /**
-   * Shows a message that fades out on its own - the success note and the
-   * error messages alike, like the Artist Graph's notes.
-   */
+  /** Shows a note, warning or error that fades out on its own (notice.js). */
   function flash(node, text) {
-    hide(node);
-    show(node, text);
-    node.fadeTimer = window.setTimeout(function () {
-      node.classList.add('fade-message--fading');
-      node.fadeTimer = window.setTimeout(function () {
-        hide(node);
-      }, FADE_DURATION_MS);
-    }, FADE_AFTER_MS);
+    MusicHub.notice.flash(node, text);
   }
 
   /** Lowercase, diacritics and punctuation gone: "Beyoncé" == "beyonce". */
@@ -192,13 +200,7 @@ window.MusicHub = window.MusicHub || {};
         });
         item.appendChild(open);
 
-        var remove = el('button', 'icon-button past-show__remove');
-        remove.type = 'button';
-        remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
-          + 'stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" />'
-          + '<line x1="6" y1="6" x2="18" y2="18" /></svg>';
-        remove.title = 'Remove';
-        remove.setAttribute('aria-label', 'Remove ' + artist + ', ' + when);
+        var remove = removeButton('past-show__remove', 'Remove ' + artist + ', ' + when);
         remove.disabled = searching;
         remove.addEventListener('click', function () {
           confirmRemoveShow(concert.id, artist, when);
@@ -392,7 +394,7 @@ window.MusicHub = window.MusicHub || {};
     fetchSetlists(artist, city)
       .then(function (setlists) {
         if (!setlists.length) {
-          show(els.empty, 'No setlists found for that artist and city.');
+          flash(els.empty, 'No setlists found for that artist and city.');
           return null;
         }
 
@@ -406,7 +408,7 @@ window.MusicHub = window.MusicHub || {};
             return setlist.songs.length && setlist.id !== newest.id;
           })[0];
           if (!withSongs) {
-            show(els.empty, 'The newest setlist for ' + (newest.artistName || artist) + ' in ' + city
+            flash(els.empty, 'The newest setlist for ' + (newest.artistName || artist) + ' in ' + city
               + ' has no songs listed yet, and none of their other shows has one either.');
             return null;
           }
@@ -458,7 +460,7 @@ window.MusicHub = window.MusicHub || {};
     };
 
     if (fallbackFrom) {
-      show(els.fallback, 'No setlist found for ' + fallbackFrom + ' — showing ' + artistName
+      flash(els.fallback, 'No setlist found for ' + fallbackFrom + ' — showing ' + artistName
         + '’s most recent show instead, in ' + (setlist.city || 'another city') + '.');
     } else {
       hide(els.fallback);
@@ -470,6 +472,7 @@ window.MusicHub = window.MusicHub || {};
     els.title.textContent = '';
     if (setlist.url) {
       var titleLink = el('a', 'setlist__title-link', titleText);
+      titleLink.insertAdjacentHTML('beforeend', EXTERNAL_ICON);
       titleLink.href = setlist.url;
       titleLink.target = '_blank';
       titleLink.rel = 'noopener';
@@ -479,7 +482,7 @@ window.MusicHub = window.MusicHub || {};
       els.title.textContent = titleText;
     }
     toggleLink(els.artistLink, setlist.artistUrl);
-    els.artistLink.textContent = 'All recent ' + artistName + ' shows';
+    els.artistLinkText.textContent = 'All recent ' + artistName + ' shows';
 
     hide(els.playlistError);
     matchPaused = false;
@@ -615,7 +618,9 @@ window.MusicHub = window.MusicHub || {};
     body.type = 'button';
     body.disabled = pending;
     body.setAttribute('aria-expanded', song.panelOpen ? 'true' : 'false');
-    var title = el('span', 'song__title', song.name);
+    var title = el('span', 'song__title');
+    // Its own span, so it can turn to gold when the song pays (rewardSong).
+    title.appendChild(el('span', 'song__name', song.name));
     if (song.tape) {
       var tape = el('span', 'song__label', 'Tape');
       tape.title = 'Played from tape, not performed live';
@@ -630,9 +635,7 @@ window.MusicHub = window.MusicHub || {};
     body.appendChild(renderSongStatus(song));
     row.appendChild(body);
 
-    var remove = el('button', 'song__remove', '✕');
-    remove.type = 'button';
-    remove.setAttribute('aria-label', 'Remove ' + song.name);
+    var remove = removeButton('song__remove', 'Remove ' + song.name);
     remove.addEventListener('click', function (event) {
       event.stopPropagation();
       removeSong(song);
@@ -641,7 +644,12 @@ window.MusicHub = window.MusicHub || {};
     // On the row rather than the button, so the song number and the gaps
     // around it count as part of the line too.
     row.addEventListener('click', function () {
-      if (song.status !== 'pending') {
+      if (song.status === 'pending') {
+        return;
+      }
+      if (song.panelOpen) {
+        closePanel(song);
+      } else {
         togglePanel(song);
       }
     });
@@ -725,6 +733,34 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
+  /**
+   * Closes a song's search - its row clicked again, or a click anywhere
+   * outside it. Closing on a partly matched medley accepts the tracks
+   * picked so far.
+   */
+  function closePanel(song) {
+    if (song.status === 'unmatched' && song.tracks.length) {
+      song.panelOpen = false;
+      setSongTracks(song, 'matched', song.tracks);
+      return;
+    }
+    togglePanel(song);
+  }
+
+  /**
+   * A click anywhere outside the song whose search is open closes it. By
+   * the event's path rather than contains(): a click inside it may already
+   * have redrawn it, taking the clicked element out of the page.
+   */
+  function closePanelOutside(event) {
+    var open = current && current.songs.filter(function (song) {
+      return song.panelOpen;
+    })[0];
+    if (open && open.node && event.composedPath().indexOf(open.node) === -1) {
+      closePanel(open);
+    }
+  }
+
   /** The inline Spotify search for fixing (or confirming) one song's track. */
   function renderTrackPicker(song) {
     var panel = el('div', 'track-picker');
@@ -744,7 +780,7 @@ window.MusicHub = window.MusicHub || {};
     input.addEventListener('input', function () {
       song.query = input.value;
     });
-    var submit = el('button', 'button button--ghost', 'Search');
+    var submit = el('button', 'button button--primary', 'Search');
     submit.type = 'submit';
     form.appendChild(label);
     form.appendChild(input);
@@ -774,28 +810,6 @@ window.MusicHub = window.MusicHub || {};
     results.setAttribute('data-results', '');
     panel.appendChild(results);
     renderResults(song, results);
-
-    var actions = el('div', 'track-picker__actions');
-    // Same as the row's ✕ - and undoable the same way.
-    var remove = el('button', 'button button--ghost', 'Remove this song');
-    remove.type = 'button';
-    remove.addEventListener('click', function () {
-      removeSong(song);
-    });
-    var close = el('button', 'button button--ghost', 'Done');
-    close.type = 'button';
-    close.addEventListener('click', function () {
-      // Closing on a partly matched medley accepts the tracks picked so far.
-      if (song.status === 'unmatched' && song.tracks.length) {
-        song.panelOpen = false;
-        setSongTracks(song, 'matched', song.tracks);
-        return;
-      }
-      togglePanel(song);
-    });
-    actions.appendChild(remove);
-    actions.appendChild(close);
-    panel.appendChild(actions);
 
     return panel;
   }
@@ -863,9 +877,7 @@ window.MusicHub = window.MusicHub || {};
     song.tracks.forEach(function (track) {
       var item = el('li', 'track-picker__picked-item');
       item.appendChild(el('span', 'track-picker__picked-name', trackLabel(track)));
-      var remove = el('button', 'song__remove track-picker__picked-remove', '✕');
-      remove.type = 'button';
-      remove.setAttribute('aria-label', 'Take ' + track.name + ' off this entry');
+      var remove = removeButton('song__remove track-picker__picked-remove', 'Take ' + track.name + ' off this entry');
       remove.addEventListener('click', function () {
         toggleExtraTrack(song, track);
       });
@@ -905,10 +917,8 @@ window.MusicHub = window.MusicHub || {};
     item.appendChild(button);
 
     // "+": one more track for this entry (a medley), search stays open.
-    var extra = el('button', 'track-option__add', picked ? null : '+');
-    if (picked) {
-      extra.appendChild(MusicHub.wallet.checkSvg());
-    }
+    var extra = el('button', 'track-option__add');
+    extra.innerHTML = picked ? CHECK_ICON : PLUS_ICON;
     extra.type = 'button';
     extra.setAttribute('aria-pressed', picked ? 'true' : 'false');
     extra.setAttribute('aria-label', picked
@@ -1122,7 +1132,7 @@ window.MusicHub = window.MusicHub || {};
 
   function renderPlaylists() {
     if (!playlists.length) {
-      show(els.playlistMessage, 'You don’t have any editable playlists yet — create one in Spotify first');
+      flash(els.playlistMessage, 'You don’t have any editable playlists yet — create one in Spotify first');
       hide(els.picker);
       updateAddState();
       return;
@@ -1202,6 +1212,9 @@ window.MusicHub = window.MusicHub || {};
     });
 
     adding = true;
+    // Nothing can be edited from here on: the songs' ✕ go (back only if
+    // the add fails - on success the setlist is cleared away).
+    els.songList.classList.add('song-list--locked');
     els.addButton.textContent = 'Adding…';
     updateHistoryButtons();
     hide(els.playlistError);
@@ -1262,6 +1275,7 @@ window.MusicHub = window.MusicHub || {};
       })
       .then(function () {
         adding = false;
+        els.songList.classList.remove('song-list--locked');
         els.addButton.textContent = 'Add to playlist';
         updateHistoryButtons();
         updateAddState();
@@ -1338,6 +1352,8 @@ window.MusicHub = window.MusicHub || {};
     }
 
     function pay() {
+      // The name turns to polished gold as its coins fly.
+      song.node.classList.add('song--paid');
       var rect = row.getBoundingClientRect();
       MusicHub.wallet.earn(SONG_COINS, {
         from: { x: rect.right - 24, y: rect.top + rect.height / 2 },
@@ -1369,12 +1385,12 @@ window.MusicHub = window.MusicHub || {};
       // Knocked by the gold hitting the end: a shake, dying down.
       var bump = playAnimation(row, [
         { transform: 'none' },
-        { transform: 'translateX(12px) rotate(0.6deg) scale(1.03)', offset: 0.14 },
-        { transform: 'translateX(-10px) rotate(-0.5deg) scale(1.015)', offset: 0.3 },
-        { transform: 'translateX(8px) rotate(0.35deg)', offset: 0.45 },
-        { transform: 'translateX(-6px) rotate(-0.25deg)', offset: 0.6 },
-        { transform: 'translateX(4px)', offset: 0.74 },
-        { transform: 'translateX(-2px)', offset: 0.87 },
+        { transform: 'translateX(20px) rotate(1deg) scale(1.05)', offset: 0.12 },
+        { transform: 'translateX(-17px) rotate(-0.85deg) scale(1.03)', offset: 0.26 },
+        { transform: 'translateX(13px) rotate(0.6deg) scale(1.015)', offset: 0.4 },
+        { transform: 'translateX(-10px) rotate(-0.4deg)', offset: 0.54 },
+        { transform: 'translateX(6px) rotate(0.2deg)', offset: 0.68 },
+        { transform: 'translateX(-3px)', offset: 0.83 },
         { transform: 'none' },
       ], { duration: REWARD_BUMP_MS, easing: 'ease-out' });
       var paid = pay();
@@ -1403,6 +1419,7 @@ window.MusicHub = window.MusicHub || {};
     els.fallback = document.getElementById('setlist-fallback');
     els.title = document.getElementById('setlist-title');
     els.artistLink = document.getElementById('setlist-artist-link');
+    els.artistLinkText = document.getElementById('setlist-artist-link-text');
     els.matchStatus = document.getElementById('match-status');
     els.matchLimitNotice = document.getElementById('match-limit-notice');
     document.getElementById('match-limit-retry').addEventListener('click', resumeMatching);
@@ -1452,6 +1469,7 @@ window.MusicHub = window.MusicHub || {};
       runSearch(els.artistInput.value, els.cityInput.value, els.searchButton, null);
     });
     picker = MusicHub.playlistPicker.create(els.picker, { onChange: updateAddState });
+    document.addEventListener('click', closePanelOutside);
     els.addButton.addEventListener('click', addToPlaylist);
     // Throws the whole setlist away - matching stops, edits and history go.
     els.closeButton = document.getElementById('setlist-close');

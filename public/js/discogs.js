@@ -33,8 +33,6 @@ window.MusicHub = window.MusicHub || {};
   // Estimated time left, shown in the progress bar.
   var eta = null;
   var pickLoaded = false;
-  // The self-dismissing note shown after a check.
-  var toastTimer = null;
   // What's typed into the release search - only for this visit, not stored.
   var query = '';
   // 'all' | 'new': every release, or only what the last check found.
@@ -350,37 +348,24 @@ window.MusicHub = window.MusicHub || {};
       els.failedNotice.hidden = true;
       return;
     }
-    els.failedText.textContent = "Couldn't check Discogs for: " + names.join(', ');
-    els.failedNotice.hidden = false;
+    MusicHub.notice.flash(els.failedNotice, "Couldn't check Discogs for: " + names.join(', '));
   }
 
-  /** A note about the check just finished, fading out on its own. */
-  function showToast(text) {
+  /**
+   * A note that fades out on its own (notice.js): what the last check
+   * found, or why it couldn't run - `error` marks it as an error.
+   */
+  function showToast(text, error) {
     if (!els.toast || !text) {
       return;
     }
-    window.clearTimeout(toastTimer);
-    els.toast.textContent = text;
-    els.toast.classList.remove('page-toast--fading');
-    els.toast.hidden = false;
-
-    toastTimer = window.setTimeout(function () {
-      els.toast.classList.add('page-toast--fading');
-      toastTimer = window.setTimeout(function () {
-        els.toast.hidden = true;
-        els.toast.classList.remove('page-toast--fading');
-      }, 600);
-    }, 6000);
+    MusicHub.notice.flash(els.toast, text, { error: !!error });
   }
 
   function hideToast() {
-    if (!els.toast) {
-      return;
-    }
-    window.clearTimeout(toastTimer);
-    els.toast.hidden = true;
-    els.toast.classList.remove('page-toast--fading');
+    MusicHub.notice.hide(els.toast);
   }
+
 
   /**
    * What the toast says after a check, worded like Concert Date Fetcher's:
@@ -930,7 +915,7 @@ window.MusicHub = window.MusicHub || {};
     // Fetched by the navbar's refresh button only - never from here.
     var followed = MusicHub.followedArtists.list();
     if (!followed) {
-      setMessage(MusicHub.followedArtists.MISSING_MESSAGE);
+      showToast(MusicHub.followedArtists.MISSING_MESSAGE);
       return Promise.resolve();
     }
 
@@ -958,7 +943,7 @@ window.MusicHub = window.MusicHub || {};
       }
       if (!artists.length) {
         els.list.textContent = '';
-        setMessage("You don't follow any artists on Spotify yet.");
+        showToast("You don't follow any artists on Spotify yet.");
         return;
       }
 
@@ -1011,7 +996,7 @@ window.MusicHub = window.MusicHub || {};
       });
     }).catch(function (err) {
       if (!run.cancelled) {
-        setMessage('Something went wrong: ' + err.message);
+        showToast('Something went wrong: ' + err.message, true);
       }
     }).then(function () {
       setStatus('');
@@ -1041,7 +1026,6 @@ window.MusicHub = window.MusicHub || {};
     els.message = document.getElementById('releases-message');
     els.list = document.getElementById('releases-list');
     els.failedNotice = document.getElementById('failed-notice');
-    els.failedText = document.getElementById('failed-text');
     els.summary = document.getElementById('releases-summary');
     els.toast = document.getElementById('check-toast');
     els.searchWrap = document.getElementById('releases-search-wrap');

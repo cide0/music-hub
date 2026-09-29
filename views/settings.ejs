@@ -40,6 +40,23 @@
               Clear all data
             </button>
           </div>
+          <div class="notice notice--error settings-section__notice" id="import-error" role="alert" hidden></div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-sounds-title">
+          <h2 class="settings-section__title" id="settings-sounds-title">Sounds</h2>
+          <div class="settings-switches">
+            <label class="switch">
+              <input type="checkbox" id="sound-effects" checked />
+              <span class="switch__track"><span class="switch__thumb"></span></span>
+              <span class="switch__label">Sound effects</span>
+            </label>
+            <label class="switch">
+              <input type="checkbox" id="listen-coin-sound" checked />
+              <span class="switch__track"><span class="switch__thumb"></span></span>
+              <span class="switch__label">Coin sound while playing an album</span>
+            </label>
+          </div>
         </section>
 
         <section class="settings-section" aria-labelledby="settings-google-title">
@@ -152,6 +169,7 @@
       </section>
     </main>
 
+    <script src="/js/notice.js"></script>
     <script src="/js/storage.js"></script>
     <script src="/js/google.js"></script>
     <script src="/js/sync.js"></script>

@@ -312,9 +312,18 @@ window.MusicHub = window.MusicHub || {};
   var audio = null;
   var audioOut = null;
 
+  // Settings' "Sound effects" switch: on unless turned off.
+  var SOUND_SETTING = 'soundEffects';
+
+  /** Whether the app plays its sound effects at all. */
+  function soundOn() {
+    return MusicHub.storage.getSetting(SOUND_SETTING, true) !== false;
+  }
+
+  /** The app's audio context - null without Web Audio or with sound off. */
   function audioContext() {
     var AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) {
+    if (!AudioCtx || !soundOn()) {
       return null;
     }
     if (!audio) {
@@ -908,7 +917,8 @@ window.MusicHub = window.MusicHub || {};
    * setting off, for a shower that runs longer the bigger the win (at most
    * MAX_LAUNCH_MS otherwise). `options.layer`: where they fly instead of
    * the page, e.g. a popover over an open modal - the balance is then
-   * lifted up there with them. Resolves once the last coin has landed.
+   * lifted up there with them. `options.silent`: no clinks, just the
+   * coins. Resolves once the last coin has landed.
    */
   function earn(amount, options) {
     amount = Math.floor(Number(amount) || 0);
@@ -922,13 +932,16 @@ window.MusicHub = window.MusicHub || {};
 
     var from = centreOf(options && options.from);
     var layer = (options && options.layer) || null;
+    var silent = !!(options && options.silent);
     var to = target();
 
     if (reducedMotion() || !to || !document.body.animate) {
       setShown(Math.max(0, balance() - inFlight));
       bump();
-      clink(1);
-      clink(0.6, 0.12);
+      if (!silent) {
+        clink(1);
+        clink(0.6, 0.12);
+      }
       return Promise.resolve();
     }
 
@@ -947,7 +960,9 @@ window.MusicHub = window.MusicHub || {};
     // A longer shower clinks on for longer, as thickly.
     var clinks = Math.min(count, Math.round(MAX_CLINKS * Math.max(1, (launchMs || 0) / MAX_LAUNCH_MS)));
     // A little jingle as they burst out.
-    spill(count);
+    if (!silent) {
+      spill(count);
+    }
 
     var goal = centreOf(to);
     var letGo = layer ? liftBalance(layer, to) : function () {};
@@ -967,7 +982,9 @@ window.MusicHub = window.MusicHub || {};
         }
       }));
     }
-    clinkLandings(landings, clinks, Math.max(0.35, 1 - clinks * 0.025));
+    if (!silent) {
+      clinkLandings(landings, clinks, Math.max(0.35, 1 - clinks * 0.025));
+    }
     return landing;
   }
 
@@ -1040,6 +1057,7 @@ window.MusicHub = window.MusicHub || {};
     drawCoin: drawCoin,
     // The Store's own sounds share this context and limiter.
     audioContext: audioContext,
+    soundOn: soundOn,
     // One coin landing on the pile, as each one of a shower does.
     clink: clink,
     audioOutput: output,

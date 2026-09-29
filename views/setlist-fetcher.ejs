@@ -45,11 +45,12 @@
           <ul class="past-shows" id="past-shows-list"></ul>
         </section>
 
-        <p class="form-error fade-message" id="setlist-error" role="alert" hidden></p>
-        <p class="empty-state" id="setlist-empty" hidden></p>
+        <!-- The search's error and "no setlist found"; fade out on their own. -->
+        <div class="notice notice--error" id="setlist-error" role="alert" hidden></div>
+        <div class="notice" id="setlist-empty" role="status" hidden></div>
 
         <!-- "N songs added to …" after a successful add; fades out on its own. -->
-        <p class="page-toast fade-message" id="setlist-toast" role="status" hidden></p>
+        <div class="notice" id="setlist-toast" role="status" hidden></div>
 
         <section class="setlist" id="setlist" hidden>
           <p class="notice" id="setlist-fallback" hidden></p>
@@ -57,7 +58,12 @@
           <div class="setlist__header">
             <p class="setlist__title" id="setlist-title"></p>
             <p class="setlist__links">
-              <a id="setlist-artist-link" target="_blank" rel="noopener">All recent shows</a>
+              <a class="external-link setlist__artist-link" id="setlist-artist-link" target="_blank" rel="noopener">
+                <span id="setlist-artist-link-text">All recent shows</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="14" height="14">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
             </p>
           </div>
 
@@ -103,7 +109,7 @@
               <button type="button" class="button button--primary" id="playlist-add-button" disabled>Add to playlist</button>
             </div>
             <p class="form-message" id="playlist-hint" hidden></p>
-            <p class="form-error fade-message" id="playlist-error" role="alert" hidden></p>
+            <p class="form-error" id="playlist-error" role="alert" hidden></p>
           </div>
         </section>
 
@@ -132,6 +138,7 @@
       </section>
     </main>
 
+    <script src="/js/notice.js"></script>
     <script src="/js/storage.js"></script>
     <script src="/js/google.js"></script>
     <script src="/js/sync.js"></script>
