@@ -512,6 +512,14 @@ window.MusicHub = window.MusicHub || {};
     card.playRecord = play;
     card.stopRecord = stop;
 
+    // On touch screens the spotlight alone starts and stops a card: a touch
+    // ending, or turning into a scroll, counts as the pointer leaving, and a
+    // tap can move the focus - either would stop a card still in the middle
+    // of the screen.
+    if (NO_HOVER) {
+      return;
+    }
+
     card.addEventListener('pointerenter', function (event) {
       if (event.pointerType !== 'touch') {
         play();

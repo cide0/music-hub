@@ -1899,6 +1899,8 @@ window.MusicHub = window.MusicHub || {};
     if (!node || celebrating) {
       return;
     }
+    // On a phone, out of the way of the welcome it plays on the graph.
+    setMenuOpen(false);
     els.followedButton.disabled = true;
     celebrateFollow(node).catch(function (err) {
       console.warn('Could not welcome ' + node.name, err);

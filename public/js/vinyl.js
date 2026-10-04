@@ -2003,39 +2003,76 @@ window.MusicHub = window.MusicHub || {};
     // The streamers: fine spikes of light, one shared fade from white at
     // the moon's edge to nothing at the rim, reaching furthest along the
     // sun's equator (`axis`) and short at its poles.
+    // A touch fainter than the light they show, standing in for the soft
+    // blur they no longer get (see the clusters below).
     var fade = gradient(svg, 'radial', { gradientUnits: 'userSpaceOnUse', cx: '100', cy: '100', r: '110' }, [
-      [moon / 110, white, 0.95], [0.6, corona, 0.7], [0.8, corona, 0.25], [1, corona, 0],
+      [moon / 110, white, 0.85], [0.6, corona, 0.58], [0.8, corona, 0.2], [1, corona, 0],
     ]);
-    var soften = addFilter(svg, function (filter) {
-      filter.appendChild(svgNode('feGaussianBlur', { stdDeviation: '0.45' }));
-    });
     var axis = between(random, 0, 180);
+    // Crackling - shooting out further and falling back - goes by clusters:
+    // every STREAMER_CLUSTERS-th streamer round the moon together, each
+    // cluster on its own beat, stretched outwards from the moon's middle.
+    // Reshaping all ninety paths every frame (as it once did) made the
+    // record stutter; stretching a group doesn't rebuild them. Each spike
+    // has a stem reaching in to STREAMER_ROOT under the moon, so even
+    // stretched furthest (about 1.45 times) it still starts at the edge.
+    // No blur or blend over them either: redoing those on two big turning
+    // groups every frame cost more than the softness was worth.
+    var STREAMER_CLUSTERS = 7;
+    var STREAMER_ROOT = 30;
     [
       { count: 56, width: [0.8, 2], reach: [60, 78], stretch: 34, turn: 240 },
       { count: 34, width: [0.5, 1.2], reach: [64, 84], stretch: 42, turn: -360 },
     ].forEach(function (set) {
-      var group = turning(svgNode('g', { filter: soften }, { fill: fade, mixBlendMode: 'screen' }), animate, set.turn);
+      var group = turning(svgNode('g', {}, { fill: fade }), animate, set.turn);
+      // Each cluster scales about the moon's middle: moved there, scaled,
+      // moved back.
+      var clusters = [];
+      for (var c = 0; c < STREAMER_CLUSTERS; c++) {
+        var centre = svgNode('g', { transform: 'translate(100 100)' });
+        var stretch = svgNode('g');
+        var back = svgNode('g', { transform: 'translate(-100 -100)' });
+        stretch.appendChild(back);
+        centre.appendChild(stretch);
+        group.appendChild(centre);
+        clusters.push({ centre: centre, stretch: stretch, back: back, beat: null });
+      }
       for (var i = 0; i < set.count; i++) {
         var angle = i * 360 / set.count + between(random, -3, 3);
         var equator = Math.pow(Math.abs(Math.cos((angle - axis) * Math.PI / 180)), 2);
         var reach = between(random, set.reach[0], set.reach[1]) + set.stretch * equator;
         var width = between(random, set.width[0], set.width[1]);
         var bend = between(random, -2.5, 2.5);
-        var spike = function (tip) {
-          return 'M' + xy(polar(moon - 1, angle - width)) + ' Q' + xy(polar((moon + tip) / 2, angle + bend)) + ' ' + xy(polar(tip, angle + bend))
-            + ' Q' + xy(polar((moon + tip) / 2, angle + bend)) + ' ' + xy(polar(moon - 1, angle + width)) + ' Z';
-        };
-        var streamer = svgNode('path', { d: spike(reach) });
-        // Crackling: shooting out further and falling back, each on its own beat.
-        loop(streamer, animate, Object.assign({
-          attributeName: 'd', values: [spike(reach), spike(reach + between(random, 10, 26)), spike(reach)].join(';'),
-          dur: seconds(between(random, 1.4, 3.4)), begin: seconds(-random() * 3.4),
-        }, EASE_BACK_AND_FORTH));
+        var mid = xy(polar((moon + reach) / 2, angle + bend));
+        var streamer = svgNode('path', {
+          d: 'M' + xy(polar(STREAMER_ROOT, angle - width)) + ' L' + xy(polar(moon - 1, angle - width))
+            + ' Q' + mid + ' ' + xy(polar(reach, angle + bend))
+            + ' Q' + mid + ' ' + xy(polar(moon - 1, angle + width)) + ' L' + xy(polar(STREAMER_ROOT, angle + width)) + ' Z',
+        });
+        // Drawn in the order they always were, so the rest of the record
+        // (flames, bubbles, the diamond ring) lands where it always did; a
+        // cluster's first streamer sets its beat.
+        var grow = between(random, 10, 26);
+        var beat = { scale: (reach + grow) / reach, dur: between(random, 1.4, 3.4), begin: -random() * 3.4, flicker: null };
         if (random() < 0.4) {
-          loop(streamer, animate, Object.assign({ attributeName: 'opacity', values: '1;0.45;1', dur: seconds(between(random, 3, 7)), begin: seconds(-random() * 7) }, EASE_BACK_AND_FORTH));
+          beat.flicker = { dur: between(random, 3, 7), begin: -random() * 7 };
         }
-        group.appendChild(streamer);
+        var cluster = clusters[i % STREAMER_CLUSTERS];
+        cluster.beat = cluster.beat || beat;
+        cluster.back.appendChild(streamer);
       }
+      clusters.forEach(function (cluster) {
+        loop(cluster.stretch, animate, Object.assign({
+          attributeName: 'transform', type: 'scale', values: '1;' + cluster.beat.scale.toFixed(3) + ';1',
+          dur: seconds(cluster.beat.dur), begin: seconds(cluster.beat.begin),
+        }, EASE_BACK_AND_FORTH), 'animateTransform');
+        if (cluster.beat.flicker) {
+          loop(cluster.centre, animate, Object.assign({
+            attributeName: 'opacity', values: '1;0.45;1',
+            dur: seconds(cluster.beat.flicker.dur), begin: seconds(cluster.beat.flicker.begin),
+          }, EASE_BACK_AND_FORTH));
+        }
+      });
       svg.appendChild(group);
     });
 
@@ -2059,10 +2096,19 @@ window.MusicHub = window.MusicHub || {};
     svg.appendChild(flames);
 
     // Eruptions: bubbles of plasma bursting off the edge and flying out to
-    // the rim, swelling and fading as they go - one after another.
-    var erupting = svgNode('g', { filter: glowFilter(svg, 1.1) }, {
-      fill: gradient(svg, 'radial', {}, [[0, white, 0.1], [0.7, flame, 0.25], [1, mix(white, flame, 40), 0.7]]),
-      stroke: mix(white, flame, 40), strokeWidth: '0.8',
+    // the rim, swelling and fading as they go - one after another. Each
+    // carries its glow in its own fill - drawn BUBBLE_HALO times as big,
+    // the bright rim inside and a halo fading out beyond it - rather than a
+    // glow filter, which had to be redone over nearly the whole record as
+    // they flew out.
+    var BUBBLE_HALO = 1.35;
+    var rimAt = 1 / BUBBLE_HALO;
+    var bubbleRim = mix(white, flame, 40);
+    var erupting = svgNode('g', {}, {
+      fill: gradient(svg, 'radial', {}, [
+        [0, white, 0.1], [0.7 * rimAt, flame, 0.25], [rimAt - 0.05, bubbleRim, 0.7], [rimAt, bubbleRim, 0.95],
+        [rimAt + 0.06, bubbleRim, 0.45], [1, flame, 0],
+      ]),
     });
     for (var e = 0; e < 3; e++) {
       var heading = between(random, 0, 360);
@@ -2070,11 +2116,12 @@ window.MusicHub = window.MusicHub || {};
       var to = polar(104, heading + between(random, -8, 8));
       var burstFor = seconds(between(random, 4.5, 6.5));
       var when = seconds(-e * 1.9);
-      var bubble = svgNode('circle', { cx: from.x.toFixed(1), cy: from.y.toFixed(1), r: 1.5, opacity: 0 });
+      var bubble = svgNode('circle', { cx: from.x.toFixed(1), cy: from.y.toFixed(1), r: (1.5 * BUBBLE_HALO).toFixed(2), opacity: 0 });
       var outwards = { keyTimes: '0;0.5;1', calcMode: 'spline', keySplines: '0.3 0.4 0.6 1;0 0 1 1', dur: burstFor, begin: when };
       loop(bubble, animate, Object.assign({ attributeName: 'cx', values: [from.x, to.x, to.x].map(function (v) { return v.toFixed(1); }).join(';') }, outwards));
       loop(bubble, animate, Object.assign({ attributeName: 'cy', values: [from.y, to.y, to.y].map(function (v) { return v.toFixed(1); }).join(';') }, outwards));
-      loop(bubble, animate, Object.assign({ attributeName: 'r', values: '1.5;' + between(random, 9, 14).toFixed(1) + ';1.5' }, outwards));
+      var small = (1.5 * BUBBLE_HALO).toFixed(2);
+      loop(bubble, animate, Object.assign({ attributeName: 'r', values: small + ';' + (between(random, 9, 14) * BUBBLE_HALO).toFixed(1) + ';' + small }, outwards));
       loop(bubble, animate, { attributeName: 'opacity', values: '0;1;0;0', keyTimes: '0;0.06;0.5;1', dur: burstFor, begin: when });
       erupting.appendChild(bubble);
     }
