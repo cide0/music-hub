@@ -5035,7 +5035,11 @@ textarea.text-input {
    each spin, laid over the reel inside its neon frame, then faded out over
    the rolling covers; on the Collection it plays a vinyl, big. Sized off
    the plinth's height (--reel-cover); everything inside is in % of the
-   plinth, so it scales with it. */
+   plinth, so it scales with it. With track buttons (the Collection's
+   player, the Store's preview of it) the plinth is --plinth-grow times as
+   tall, the extra at the bottom for the song's progress groove: what's
+   placed by its height divides its % by that, so the record and the arm
+   keep their size and place. */
 
 .turntable {
   position: absolute;
@@ -5052,8 +5056,8 @@ textarea.text-input {
 
 .turntable__plinth {
   position: relative;
-  height: calc(var(--reel-cover) + 1.5rem);
-  aspect-ratio: 1.45;
+  height: calc((var(--reel-cover) + 1.5rem) * var(--plinth-grow, 1));
+  aspect-ratio: 1.45 / var(--plinth-grow, 1);
   border: 1px solid var(--color-purple-800);
   border-radius: 14px;
   background: linear-gradient(160deg, var(--color-purple-900), var(--color-purple-950));
@@ -5066,9 +5070,9 @@ textarea.text-input {
 .turntable__platter,
 .turntable__record {
   position: absolute;
-  top: 6%;
+  top: calc(6% / var(--plinth-grow, 1));
   left: 4%;
-  height: 88%;
+  height: calc(88% / var(--plinth-grow, 1));
   aspect-ratio: 1;
 }
 
@@ -5256,14 +5260,14 @@ button.turntable__power:focus-visible {
   filter: drop-shadow(0 0 2px var(--color-purple-300)) drop-shadow(0 0 5px var(--color-purple-300));
 }
 
-/* The Collection's previous / next track buttons, on the strip of plinth
-   between the platter and the arm's pivot - clear of the arm wherever it
-   is. Round like the power button, lit the way it is when on: the icon
-   and ring glowing. Disabled (turntable.js leaves that to the page) they
-   go dark, like the power button switched off. */
+/* The Collection's previous / next track buttons, under the record on
+   either side of the song's progress groove. Round like the power button,
+   lit the way it is when on: the icon and ring glowing. Disabled
+   (turntable.js leaves that to the page) they go dark, like the power
+   button switched off. */
 .turntable__skip {
   position: absolute;
-  top: 7.5%;
+  top: var(--transport-y);
   display: grid;
   place-items: center;
   width: 6.5%;
@@ -5292,11 +5296,72 @@ button.turntable__power:focus-visible {
 }
 
 .turntable__skip--prev {
-  left: 59.5%;
+  right: calc(100% - var(--transport-x) + var(--progress-width) / 2 + 2.5%);
+  translate: 0 -50%;
 }
 
 .turntable__skip--next {
-  left: 69%;
+  left: calc(var(--transport-x) + var(--progress-width) / 2 + 2.5%);
+  translate: 0 -50%;
+}
+
+/* The song's progress (turntable.js setProgress): a groove cut into the
+   plinth, centred under the record, a layer deeper - dark, shadowed at the
+   top, its lower lip catching the light. The fill glows like the lit
+   buttons while the turntable is on (its window's filter, so the light
+   follows the fill), and goes dark with them when it's off. */
+.turntable__plinth {
+  /* The record's centre across the plinth (left 4%, 88% of the plinth's
+     height wide, at 1.45 times as wide as tall), and halfway down the
+     strip under it. */
+  --transport-x: calc(4% + 88% / 1.45 / 2);
+  --transport-y: calc((94% / var(--plinth-grow, 1) + 100%) / 2);
+  --progress-width: 36%;
+}
+
+.turntable__progress {
+  position: absolute;
+  top: var(--transport-y);
+  left: var(--transport-x);
+  width: var(--progress-width);
+  height: max(4px, calc(3.4% / var(--plinth-grow, 1)));
+  translate: -50% -50%;
+  border: 1px solid color-mix(in srgb, var(--color-black) 60%, var(--color-purple-950));
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--color-black) 75%, var(--color-purple-950)),
+    color-mix(in srgb, var(--color-black) 45%, var(--color-purple-950)));
+  box-shadow:
+    inset 0 2px 3px color-mix(in srgb, var(--color-black) 75%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-text) 5%, transparent),
+    0 1px 0 color-mix(in srgb, var(--color-text) 9%, transparent);
+}
+
+.turntable__progress-window {
+  position: absolute;
+  inset: 1px;
+  overflow: hidden;
+  border-radius: inherit;
+  filter: drop-shadow(0 0 2px var(--color-purple-300)) drop-shadow(0 0 5px var(--color-purple-300));
+  transition: filter 0.3s ease;
+}
+
+.turntable__progress-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-purple-300), var(--color-purple-100) 75%, var(--color-purple-50));
+  /* Empty until setProgress says otherwise. */
+  translate: -100% 0;
+  transition: background 0.3s ease;
+}
+
+.turntable:not(:has(.turntable__power--on)) .turntable__progress-window {
+  filter: none;
+}
+
+.turntable:not(:has(.turntable__power--on)) .turntable__progress-fill {
+  background: var(--color-purple-800);
 }
 
 .turntable__skip:hover:not(:disabled) {
@@ -5335,10 +5400,10 @@ button.turntable__power:focus-visible {
    platter, ARM_PLAY_DEG (turntable.js) puts the needle on the record. */
 .turntable__arm {
   position: absolute;
-  top: 8%;
+  top: calc(8% / var(--plinth-grow, 1));
   right: 10%;
   width: 8%;
-  height: 80%;
+  height: calc(80% / var(--plinth-grow, 1));
   transform-origin: 50% 7%;
   /* ARM_REST_DEG in turntable.js. */
   rotate: 9deg;
@@ -5392,8 +5457,9 @@ button.turntable__power:focus-visible {
    (:root[data-player-style], wallet.js), and the Store's preview of it
    (.player-preview). The Album Suggester's turntable keeps its own look.
    Gold: the Gold Navbar's dark gold plate for the plinth, edged in gold,
-   glowing, with the gold shine sweeping across it; a polished gold
-   headshell; and the three buttons ringed in gold, lit in gold. */
+   glowing, with the gold shine sweeping across it; a dark gold platter
+   in a polished gold rim; a polished gold headshell; and the three
+   buttons ringed in gold, lit in gold. */
 :is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__plinth {
   /* Edged like the Gold Navbar's items: its turning gold frame. */
   border: 2px solid transparent;
@@ -5533,6 +5599,72 @@ button.turntable__power:focus-visible {
   filter: drop-shadow(0 0 2px var(--rarity-gold-bright)) drop-shadow(0 0 5px var(--rarity-gold-bright));
 }
 
+/* The platter in gold: a dark gold mat with its thin ring in gold, inside
+   a polished gold rim - the buttons' turning gold frame, the mat laid
+   over it so only its outer edge shows - glowing softly gold. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__platter {
+  background:
+    /* Measured to the platter's edge (closest-side), the ring where the
+       purple one sits, the mat stopping short of the edge for the rim. */
+    radial-gradient(circle closest-side,
+      color-mix(in srgb, var(--rarity-gold-deep) 16%, var(--color-black)) 0 86%,
+      color-mix(in srgb, var(--rarity-gold) 55%, var(--color-black)) 86.5% 88.5%,
+      color-mix(in srgb, var(--rarity-gold-deep) 16%, var(--color-black)) 89% 93%,
+      transparent 93.5%),
+    conic-gradient(from var(--name-angle),
+      var(--rarity-gold-deep),
+      var(--rarity-gold) 18%,
+      var(--rarity-gold-shine) 25%,
+      var(--rarity-gold) 32%,
+      var(--rarity-gold-deep) 50%,
+      var(--rarity-gold) 68%,
+      var(--rarity-gold-shine) 75%,
+      var(--rarity-gold) 82%,
+      var(--rarity-gold-deep));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-black) 50%, transparent),
+    0 0 16px color-mix(in srgb, var(--rarity-gold-bright) 22%, transparent);
+  animation: name-border-turn 2.4s linear infinite;
+}
+
+/* The progress groove cut into the gold plate, ringed in gold like the
+   buttons, and filled with polished gold glowing gold - the Gold Navbar's
+   band of light running through it while it's on. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__progress {
+  border-color: color-mix(in srgb, var(--rarity-gold) 60%, transparent);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--rarity-gold-deep) 10%, var(--color-black)),
+    color-mix(in srgb, var(--rarity-gold-deep) 22%, var(--color-black)));
+  box-shadow:
+    inset 0 2px 3px color-mix(in srgb, var(--color-black) 75%, transparent),
+    0 1px 0 color-mix(in srgb, var(--rarity-gold-shine) 18%, transparent);
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__progress-window {
+  filter: drop-shadow(0 0 2px var(--rarity-gold-bright)) drop-shadow(0 0 5px var(--rarity-gold-bright));
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__progress-fill {
+  background:
+    linear-gradient(115deg,
+      transparent 35%,
+      color-mix(in srgb, var(--rarity-gold-shine) 70%, transparent) 50%,
+      transparent 65%) no-repeat,
+    linear-gradient(90deg, var(--rarity-gold-deep), var(--rarity-gold) 45%, var(--rarity-gold-bright) 85%, var(--rarity-gold-shine));
+  background-size: 250% 100%, 100% 100%;
+  background-position: 150% 0, 0 0;
+  animation: gold-shine 2.4s ease-in-out infinite;
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable:not(:has(.turntable__power--on)) .turntable__progress-window {
+  filter: none;
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable:not(:has(.turntable__power--on)) .turntable__progress-fill {
+  background: color-mix(in srgb, var(--rarity-gold-deep) 45%, var(--color-black));
+  animation: none;
+}
+
 /* The headshell in polished gold, glowing gold. */
 :is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__head {
   background: linear-gradient(160deg,
@@ -5549,7 +5681,9 @@ button.turntable__power:focus-visible {
   :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) .turntable__plinth,
   :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) .turntable__plinth::before,
   :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) :is(.turntable__power, .turntable__skip),
-  :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) :is(.turntable__power, .turntable__skip)::after {
+  :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) :is(.turntable__power, .turntable__skip)::after,
+  :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) .turntable__progress-fill,
+  :is(:root[data-player-style] .player__deck, .player-preview[data-player-style]) .turntable__platter {
     animation: none !important;
   }
 }
@@ -5558,7 +5692,9 @@ button.turntable__power:focus-visible {
    record - a picture, not a player. Its own stacking context, so the
    turntable's z-index stays inside it, under the card's "Equipped" tag. */
 .player-preview {
-  --reel-cover: 100px;
+  /* As tall as ever with the progress groove's strip: a little smaller. */
+  --reel-cover: 86px;
+  --plinth-grow: 1.16;
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -7717,10 +7853,12 @@ button.turntable__power:focus-visible {
 }
 
 /* ---- Play: the turntable in place of the collection, as big as the page
-   allows - the plinth is --reel-cover + 1.5rem tall and 1.45 times as
-   wide - its album below. */
+   allows - the plinth is --reel-cover + 1.5rem wide 1.45 times over, and
+   --plinth-grow times that tall, for the progress groove under the
+   record - its album below. */
 .player {
   --reel-cover: min(52vh, 440px, calc((100vw - 2rem) / 1.45 - 3rem));
+  --plinth-grow: 1.16;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -7762,7 +7900,7 @@ button.turntable__power:focus-visible {
   --deck-top: 0px;
   position: relative;
   width: 100%;
-  height: calc(var(--reel-cover) + 1.5rem + 3rem + var(--deck-top));
+  height: calc((var(--reel-cover) + 1.5rem) * var(--plinth-grow) + 3rem + var(--deck-top));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background-color: var(--color-surface);

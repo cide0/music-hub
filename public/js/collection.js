@@ -599,6 +599,7 @@ window.MusicHub = window.MusicHub || {};
       player.playing = false;
       hideTrack();
       MusicHub.turntable.setNeedle(playerParts, player.fraction, 0, { still: still });
+      MusicHub.turntable.setProgress(playerParts, null);
       if (!state || !player.started || player.elsewhere) {
         return POLL_MS;
       }
@@ -631,6 +632,10 @@ window.MusicHub = window.MusicHub || {};
     showTrack(progress.number, progress.count, state.item, state.is_playing);
     MusicHub.turntable.setNeedle(playerParts, progress.fraction,
       state.is_playing ? 1 / progress.totalMs : 0, { still: still });
+    // The song's own progress in the groove under the record - held where
+    // it is once switched off, even if Spotify hasn't paused yet.
+    MusicHub.turntable.setProgress(playerParts, state.progress_ms / state.item.duration_ms,
+      state.is_playing && playerParts.on ? 1 / state.item.duration_ms : 0);
 
     if (!state.is_playing) {
       return POLL_MS;
@@ -708,6 +713,7 @@ window.MusicHub = window.MusicHub || {};
       MusicHub.turntable.setNeedle(playerParts, player.fraction, at.playing ? 1 / totalMs : 0, {
         still: reducedMotion(), lift: true,
       });
+      MusicHub.turntable.setProgress(playerParts, 0, at.playing ? 1 / player.tracks[index].durationMs : 0);
     }
 
     request.then(function () {

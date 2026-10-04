@@ -96,6 +96,27 @@ window.MusicHub = window.MusicHub || {};
     return svg;
   }
 
+  /**
+   * The song's progress: a groove cut into the plinth under the record, a
+   * glowing fill running along it (setProgress). The fill slides in from
+   * the left inside a rounded window (translate - composited, and its
+   * leading end stays round); the window's glow is a filter, so it lights
+   * up round the fill alone.
+   */
+  function progressBar() {
+    var bar = el('div', 'turntable__progress');
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-label', 'Song progress');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', '100');
+    bar.setAttribute('aria-valuenow', '0');
+    var windowEl = el('span', 'turntable__progress-window');
+    var fill = el('span', 'turntable__progress-fill');
+    windowEl.appendChild(fill);
+    bar.appendChild(windowEl);
+    return { bar: bar, fill: fill };
+  }
+
   function skipButton(forward) {
     var button = el('button', 'turntable__skip turntable__skip--' + (forward ? 'next' : 'prev'));
     button.type = 'button';
@@ -112,7 +133,9 @@ window.MusicHub = window.MusicHub || {};
    * button is a real button the page can switch it on and off with
    * (setPower); otherwise the whole turntable is only a picture.
    * `options.trackButtons`: previous and next track buttons too, lit
-   * while they can be used (the page disables them otherwise).
+   * while they can be used (the page disables them otherwise), either side
+   * of the song's progress groove under the record (setProgress) - on a
+   * plinth taller at the bottom to hold them (--plinth-grow, style.css).
    */
   function build(vinyl, options) {
     var o = options || {};
@@ -139,10 +162,13 @@ window.MusicHub = window.MusicHub || {};
 
     var prev = null;
     var next = null;
+    var progress = null;
     if (o.trackButtons) {
       prev = skipButton(false);
       next = skipButton(true);
+      progress = progressBar();
       plinth.appendChild(prev);
+      plinth.appendChild(progress.bar);
       plinth.appendChild(next);
     }
 
@@ -168,6 +194,9 @@ window.MusicHub = window.MusicHub || {};
     return {
       root: root, record: record, disc: record.querySelector('.vinyl__disc'),
       arm: arm, head: head, power: power, powerOn: powerOn, prev: prev, next: next,
+      progressBar: progress && progress.bar, progressFill: progress && progress.fill,
+      // How far through its song the record is (setProgress).
+      progress: null,
       // Whether it's switched on, and the animations running each part -
       // replaced, not piled up, each time it's switched.
       on: false,
@@ -286,6 +315,41 @@ window.MusicHub = window.MusicHub || {};
     followNeedle(parts, !!o.still, !!o.lift);
   }
 
+  /** How far through the song the progress groove is at `time` (a performance.now() time), 0 to 1. */
+  function progressAt(parts, time) {
+    var progress = parts.progress;
+    if (!progress) {
+      return 0;
+    }
+    return Math.min(1, Math.max(0, progress.fraction + progress.perMs * (time - progress.at)));
+  }
+
+  /**
+   * The song's progress in the groove: `fraction` of the way through it,
+   * moving on by `perMs` of it each ms (0 while paused) - filling up to
+   * the end on its own, linearly, until it's told otherwise. Null empties
+   * it. Only for a turntable built with track buttons.
+   */
+  function setProgress(parts, fraction, perMs) {
+    if (!parts.progressFill) {
+      return;
+    }
+    var from = fraction === null ? 0 : Math.min(1, Math.max(0, fraction));
+    var speed = fraction === null ? 0 : perMs || 0;
+    parts.progress = { fraction: from, perMs: speed, at: performance.now() };
+    parts.progressBar.setAttribute('aria-valuenow', String(Math.round(from * 100)));
+    var start = { translate: ((from - 1) * 100) + '% 0' };
+    if (speed > 0 && from < 1) {
+      swap(parts, 'progress', [
+        parts.progressFill.animate([start, { translate: '0% 0' }], {
+          duration: (1 - from) / speed, easing: 'linear', fill: 'forwards',
+        }),
+      ]);
+    } else {
+      swap(parts, 'progress', [parts.progressFill.animate([start, start], { duration: 1, fill: 'forwards' })]);
+    }
+  }
+
   /**
    * The platter starting up from `fromDeg`, after `delay` ms, and turning
    * on for good. A zoetrope turns on in steps of one frame slot, as it
@@ -385,6 +449,11 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
     markOn(parts, on);
+    // Off, the song stops where it is - the page's next look at Spotify
+    // sets it going again once it's back on.
+    if (!on && parts.progress) {
+      setProgress(parts, progressAt(parts, performance.now()), 0);
+    }
     var still = !!(options && options.still);
     var time = still ? 0 : 1;
     if (parts.power.tagName === 'BUTTON') {
@@ -538,6 +607,7 @@ window.MusicHub = window.MusicHub || {};
     showPlaying: showPlaying,
     setPower: setPower,
     setNeedle: setNeedle,
+    setProgress: setProgress,
     playSounds: playSounds,
   };
 })(window.MusicHub);

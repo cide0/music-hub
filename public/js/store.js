@@ -232,8 +232,9 @@ window.MusicHub = window.MusicHub || {};
     // Only a picture: its track buttons are no stops for the keyboard.
     parts.prev.tabIndex = -1;
     parts.next.tabIndex = -1;
-    // Switched on, as it's shown.
+    // Switched on, as it's shown, part of the way through a song.
     parts.power.classList.add('turntable__power--on');
+    MusicHub.turntable.setProgress(parts, 0.4, 0);
     box.appendChild(parts.root);
     return box;
   }
