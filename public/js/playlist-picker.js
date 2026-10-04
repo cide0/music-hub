@@ -295,9 +295,15 @@ window.MusicHub = window.MusicHub || {};
    * A list of playlists to tick any number of, inside `list` (a <ul>).
    * `onToggle(playlist, checked)` runs when the user ticks or unticks one.
    * The ticks survive setPlaylists and filter, so a search never loses them.
+   * `extra(playlist, checked)`, if given, returns what else a row holds:
+   * { side, below } - `side` in the row, just before the tick, `below`
+   * under it - or null; asked again whenever the row is ticked or unticked.
+   * The tick has its own label for the checkbox, so whatever sits between
+   * the name and the tick isn't inside a label and doesn't tick the row.
    */
   function createChecklist(list, options) {
     var onToggle = (options && options.onToggle) || function () {};
+    var extra = (options && options.extra) || null;
     var idPrefix = (list.id || 'playlist-checklist') + '-';
     var playlists = [];
     var checkedIds = {};
@@ -326,18 +332,40 @@ window.MusicHub = window.MusicHub || {};
         input.type = 'checkbox';
         input.id = idPrefix + index;
         input.checked = !!checkedIds[playlist.id];
+        var side = el('span', 'playlist-check__side');
+        var below = el('div', 'playlist-check__extra');
+        function fillExtra() {
+          var parts = extra ? extra(playlist, input.checked) : null;
+          side.textContent = '';
+          below.textContent = '';
+          if (parts && parts.side) {
+            side.appendChild(parts.side);
+          }
+          if (parts && parts.below) {
+            below.appendChild(parts.below);
+          }
+          side.hidden = !(parts && parts.side);
+          below.hidden = !(parts && parts.below);
+        }
         input.addEventListener('change', function () {
           checkedIds[playlist.id] = input.checked;
           row.classList.toggle('playlist-check--on', input.checked);
           onToggle(playlist, input.checked);
+          fillExtra();
         });
         label.appendChild(input);
         label.appendChild(playlistSummary(playlist));
+        var boxLabel = el('label', 'playlist-check__box-label');
+        boxLabel.htmlFor = input.id;
         var box = el('span', 'playlist-check__box');
         box.appendChild(svgIcon('playlist-check__tick', ['M20 6 9 17l-5-5']));
-        label.appendChild(box);
+        boxLabel.appendChild(box);
         row.classList.toggle('playlist-check--on', input.checked);
         row.appendChild(label);
+        row.appendChild(side);
+        row.appendChild(boxLabel);
+        row.appendChild(below);
+        fillExtra();
         list.appendChild(row);
         return { playlist: playlist, row: row };
       });

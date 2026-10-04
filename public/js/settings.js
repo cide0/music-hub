@@ -1,7 +1,7 @@
 /*
  * Settings: the sound switches, the Google login state, the Google Drive sync, the Gallery's
  * Drive folder, the Spotify playlists' refresh, the Setlists page's default playlist,
- * the Collection record player's playlists,
+ * the Collection record player's playlists (and which of them are rotation playlists),
  * the Discogs username, and the Export / Import / Clear data controls. Every choice made here is saved
  * through MusicHub.storage.setSetting, so it travels with Export / Import.
  */
@@ -347,20 +347,129 @@ window.MusicHub = window.MusicHub || {};
   /**
    * The playlists the record player's + puts a song on (song-playlists.js),
    * ticked in a list of every stored playlist, Liked Songs first. Stored
-   * as [{ id, name }] - the names say which ones have since gone missing.
+   * as [{ id, name, rotation? }] - the names say which ones have since gone
+   * missing; `rotation` makes a ticked playlist (never Liked Songs) a
+   * rotation playlist keeping that many songs, set under its row.
    */
   function initCollectionPlaylists() {
     var wrap = document.getElementById('collection-playlists-wrap');
     var message = document.getElementById('collection-playlists-message');
     var saved = document.getElementById('collection-playlists-saved');
+    var error = document.getElementById('collection-playlists-error');
     var SETTING = MusicHub.songPlaylists.SETTING;
+    // A playlist turned into a rotation one with no song count known yet.
+    var DEFAULT_ROTATION = 10;
 
     function stored() {
       var chosen = MusicHub.storage.getSetting(SETTING, null);
       return Array.isArray(chosen) ? chosen : [];
     }
 
+    function songs(count) {
+      return count + (count === 1 ? ' song' : ' songs');
+    }
+
+    /** Sets (or, with null, clears) a chosen playlist's rotation limit. */
+    function saveRotation(playlist, limit) {
+      var next = stored().map(function (entry) {
+        if (entry.id !== playlist.id) {
+          return entry;
+        }
+        var changed = { id: entry.id, name: entry.name };
+        if (limit) {
+          changed.rotation = limit;
+        }
+        return changed;
+      });
+      MusicHub.storage.setSetting(SETTING, next);
+      MusicHub.notice.hide(error);
+      MusicHub.notice.flash(saved, limit
+        ? 'Saved \u2014 \u201c' + playlist.name + '\u201d keeps the newest ' + songs(limit) + '.'
+        : 'Saved \u2014 \u201c' + playlist.name + '\u201d is a normal playlist again.');
+    }
+
+    /**
+     * A ticked playlist's rotation: the Rotation switch in its row, before
+     * the tick, and under the row, while it's on, how many songs it keeps.
+     */
+    function rotationControls(playlist, checked) {
+      if (!checked || playlist.liked) {
+        return null;
+      }
+      var limit = MusicHub.songPlaylists.rotationOf(playlist.id);
+      var idBase = 'rotation-' + playlist.id;
+
+      var toggle = document.createElement('label');
+      toggle.className = 'switch rotation__switch';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!limit;
+      input.setAttribute('aria-label', 'Rotation playlist: ' + playlist.name);
+      var track = document.createElement('span');
+      track.className = 'switch__track';
+      var thumb = document.createElement('span');
+      thumb.className = 'switch__thumb';
+      track.appendChild(thumb);
+      var text = document.createElement('span');
+      text.className = 'switch__label';
+      text.textContent = 'Rotation';
+      toggle.appendChild(input);
+      toggle.appendChild(track);
+      toggle.appendChild(text);
+
+      var box = document.createElement('div');
+      box.className = 'rotation';
+      box.hidden = !limit;
+
+      var field = document.createElement('div');
+      field.className = 'rotation__limit';
+      var fieldLabel = document.createElement('label');
+      fieldLabel.htmlFor = idBase + '-limit';
+      fieldLabel.textContent = 'Keep the newest';
+      var number = document.createElement('input');
+      number.type = 'number';
+      number.className = 'text-input rotation__input';
+      number.id = idBase + '-limit';
+      number.min = '1';
+      number.max = String(MusicHub.songPlaylists.MAX_ROTATION);
+      number.step = '1';
+      number.inputMode = 'numeric';
+      number.value = limit ? String(limit) : '';
+      var unit = document.createElement('span');
+      unit.textContent = 'songs';
+      field.appendChild(fieldLabel);
+      field.appendChild(number);
+      field.appendChild(unit);
+      box.appendChild(field);
+
+      input.addEventListener('change', function () {
+        box.hidden = !input.checked;
+        if (input.checked) {
+          // As many songs as it holds now, so turning it on takes nothing off.
+          var start = MusicHub.songPlaylists.validRotation(playlist.trackCount) || DEFAULT_ROTATION;
+          number.value = String(start);
+          saveRotation(playlist, start);
+        } else {
+          saveRotation(playlist, null);
+        }
+      });
+      number.addEventListener('change', function () {
+        var keep = MusicHub.songPlaylists.validRotation(number.value);
+        if (!keep) {
+          MusicHub.notice.flash(error, 'A rotation playlist keeps a whole number of songs, from 1 to '
+            + MusicHub.songPlaylists.MAX_ROTATION.toLocaleString('en-US') + '.');
+          number.value = String(MusicHub.songPlaylists.rotationOf(playlist.id) || '');
+          return;
+        }
+        if (keep !== MusicHub.songPlaylists.rotationOf(playlist.id)) {
+          saveRotation(playlist, keep);
+        }
+      });
+      return { side: toggle, below: box };
+    }
+
     var checklist = MusicHub.playlistPicker.createChecklist(document.getElementById('collection-playlists'), {
+      extra: rotationControls,
       onToggle: function (playlist, checked) {
         var next = stored().filter(function (entry) {
           return entry.id !== playlist.id;

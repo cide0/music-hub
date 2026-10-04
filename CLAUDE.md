@@ -88,7 +88,9 @@ public/js/           notice.js, storage.js, google.js, sync.js, navbar.js, auth.
                      multi-select checklist), song-playlists.js (which
                      playlists each song went on from the Collection's
                      record player - the + / heart; Liked Songs included;
-                     in memory only, forgotten on "Back to collection"),
+                     in memory only, forgotten on "Back to collection";
+                     and the rotation playlists, which drop their oldest
+                     songs past the limit set in Settings),
                      vinyl.js (Discogs format -> CSS-drawn record),
                      vinyl-catalog.js (the Store's mystery vinyls + the
                      wheel exclusives), sfx.js (synthesised sounds),
