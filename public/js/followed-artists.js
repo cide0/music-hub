@@ -157,7 +157,7 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     els.button = document.getElementById('followed-refresh');
     els.toast = document.getElementById('followed-toast');
     if (!els.button || !els.toast) {

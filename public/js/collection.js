@@ -1197,7 +1197,7 @@ window.MusicHub = window.MusicHub || {};
     els.view.hidden = false;
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     els.view = document.getElementById('collection-view');
     els.grid = document.getElementById('collection-grid');
     els.empty = document.getElementById('collection-empty');

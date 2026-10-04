@@ -1692,7 +1692,7 @@ window.MusicHub = window.MusicHub || {};
     els.mediaDialog.close();
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     els.breadcrumb = document.getElementById('breadcrumb');
     if (!els.breadcrumb) {
       return;

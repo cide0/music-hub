@@ -605,8 +605,10 @@ window.MusicHub = window.MusicHub || {};
    * Straight away rather than on DOMContentLoaded: this script sits at the
    * end of the page, so everything it needs is already there, and the
    * username cards appear with the rest of the page instead of after it.
+   * Unless the page is held for the Google Drive sync's check (sync.js):
+   * then once that's done, like every page script, so it reads the new data.
    */
-  (function init() {
+  function init() {
     els.usernames = document.getElementById('username-items');
     els.navbars = document.getElementById('navbar-items');
     els.players = document.getElementById('player-items');
@@ -643,10 +645,26 @@ window.MusicHub = window.MusicHub || {};
     });
 
     render();
-  })();
+  }
 
-  document.addEventListener('musichub:walletchange', render);
-  document.addEventListener('musichub:unboxchange', renderVinylOffer);
+  if (MusicHub.sync.holding()) {
+    MusicHub.sync.ready(init);
+  } else {
+    init();
+  }
+
+  // Only once init() has run - a page held for the sync check may hear of
+  // another tab's change before it.
+  document.addEventListener('musichub:walletchange', function () {
+    if (els.usernames) {
+      render();
+    }
+  });
+  document.addEventListener('musichub:unboxchange', function () {
+    if (els.vinylOffer) {
+      renderVinylOffer();
+    }
+  });
   // The profile pill in the previews shows the Spotify name once it's in.
   document.addEventListener('musichub:authchange', function () {
     if (els.usernames) {

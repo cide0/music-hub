@@ -1724,7 +1724,7 @@ window.MusicHub = window.MusicHub || {};
 
   /* ---------------------------------------------------------------- init */
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     els.views = {
       loading: document.getElementById('case-loading'),
       error: document.getElementById('case-error'),

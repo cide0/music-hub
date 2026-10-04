@@ -26,6 +26,59 @@ a {
   color: var(--color-link);
 }
 
+/* Google Drive sync's page-load check (sync.js): the page stays hidden
+   until what's newer on Drive is in - set before the first paint by the
+   head partial. A spinning ring and "Syncing with Google Drive..." centred
+   on the screen, fading in only after a moment, so a quick check shows
+   nothing but the background. */
+.is-sync-loading body {
+  visibility: hidden;
+}
+
+.is-sync-loading::before,
+.is-sync-loading::after {
+  position: fixed;
+  left: 50%;
+  z-index: 2147483647;
+  translate: -50% 0;
+  opacity: 0;
+  animation: sync-loading-in 0.3s ease-out 0.4s forwards;
+}
+
+.is-sync-loading::before {
+  content: '';
+  top: calc(50% - 2.75rem);
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid var(--color-purple-800);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: sync-loading-in 0.3s ease-out 0.4s forwards, sync-loading-spin 0.9s linear infinite;
+}
+
+.is-sync-loading::after {
+  content: 'Syncing with Google Drive\2026';
+  top: calc(50% + 0.5rem);
+  color: var(--color-text-soft);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+}
+
+@keyframes sync-loading-in {
+  to { opacity: 1; }
+}
+
+@keyframes sync-loading-spin {
+  to { rotate: 360deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-sync-loading::before {
+    animation: sync-loading-in 0.3s ease-out 0.4s forwards;
+  }
+}
+
 /* A link in running text to another page of the app ("…in Settings"):
    bold rather than underlined, in the link colour. */
 .page-link {

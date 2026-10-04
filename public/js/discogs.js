@@ -1011,7 +1011,7 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------------------ init */
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     els.checkButton = document.getElementById('check-releases');
     if (!els.checkButton) {
       return;

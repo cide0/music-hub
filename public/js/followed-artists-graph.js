@@ -2878,7 +2878,7 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------------------ init */
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     els.generate = document.getElementById('generate-graph');
     if (!els.generate) {
       return;

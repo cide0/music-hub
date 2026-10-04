@@ -1399,7 +1399,7 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------------------ init */
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     els.form = document.getElementById('setlist-search');
     if (!els.form) {
       return;

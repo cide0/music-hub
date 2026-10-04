@@ -140,8 +140,14 @@ nothing hand-made is ever removed by it. Its merge is `mergeDriveTree`.
 logged in to Google with Drive access, and only Settings' "Turn off" keeps it
 off. Where Drive and the browser both hold data on the first turn-on, the user
 picks whose wins. After that, per key, the newer change wins (`changedAt` in
-each Drive file's `appProperties`). Every page load downloads what's newer and
-reloads once; every change uploads ~1.5 s later (a page change cuts that off,
+each Drive file's `appProperties`). Every page load fetches what's newer
+*before* the page starts: `views/partials/head.ejs` hides the page
+("Syncing with Google Drive...") and the page scripts wait - so every page
+script starts with `MusicHub.sync.ready(fn)`, never `DOMContentLoaded` (one
+that starts straight away, like `store.js` / `daily-wheel.js`, does so only
+when `!MusicHub.sync.holding()`). Anything downloaded reloads the still-hidden
+page; Drive slower than 8 s lets it start with what it has. Every change
+uploads ~1.5 s later (a page change cuts that off,
 so it stays marked and the next page load finishes it). Deleting one page's
 data leaves a `deleted` file on Drive; "Clear all data" deletes every Drive file
 and leaves only `cleared.json` (the time of the clear), so the other browsers

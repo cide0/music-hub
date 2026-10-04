@@ -233,7 +233,7 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     initMenu();
     initDropdown();
     initLeaveGuard();

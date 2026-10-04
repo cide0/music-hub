@@ -2093,7 +2093,12 @@ window.MusicHub = window.MusicHub || {};
 
   /* ---------------------------------------------------------------- init */
 
-  (function init() {
+  /*
+   * Straight away, like the navbar it sits in - unless the page is held for
+   * the Google Drive sync's check (sync.js): then once that's done, so a
+   * leftover prize is claimed from the new data, not the old.
+   */
+  function init() {
     els.open = document.getElementById('wheel-open');
     els.dialog = document.getElementById('wheel-dialog');
     if (!els.open || !els.dialog) {
@@ -2199,7 +2204,13 @@ window.MusicHub = window.MusicHub || {};
 
     claimLeftover();
     render();
-  })();
+  }
+
+  if (MusicHub.sync.holding()) {
+    MusicHub.sync.ready(init);
+  } else {
+    init();
+  }
 
   document.addEventListener('musichub:walletchange', function () {
     if (els.open) {

@@ -36,6 +36,28 @@
     } catch (err) {
       // No styles, then.
     }
+
+    /*
+     * With the Google Drive sync on, the page stays hidden ("Syncing with
+     * Google Drive...") until public/js/sync.js has fetched what's newer on
+     * Drive - see `holding` there. Not right after a reload that sync made:
+     * that page already has the new data. Must stay in sync with sync.js's
+     * STATE_KEY and RELOADED_FLAG, and with google.js's AUTH_KEY and
+     * DRIVE_SCOPE.
+     */
+    try {
+      var syncAvailable = <%- driveSync ? 'true' : 'false' %>;
+      var syncState = JSON.parse(localStorage.getItem('syncState') || 'null');
+      var googleAuth = JSON.parse(localStorage.getItem('googleAuth') || 'null');
+      var driveAccess = !!(googleAuth && googleAuth.accessToken && typeof googleAuth.scope === 'string'
+        && googleAuth.scope.split(' ').indexOf('https://www.googleapis.com/auth/drive.appdata') !== -1);
+      if (syncAvailable && syncState && syncState.enabled === true && driveAccess
+        && sessionStorage.getItem('musichub:syncReloaded') !== '1') {
+        root.classList.add('is-sync-loading');
+      }
+    } catch (err) {
+      // No waiting for Drive, then.
+    }
   })();
 </script>
 <meta charset="utf-8" />

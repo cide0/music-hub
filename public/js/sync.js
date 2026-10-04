@@ -6,9 +6,14 @@
  * change it holds (`changedAt`). Where both sides changed a key, the newer
  * change wins.
  *
- * - Every page load compares the Drive files with this browser's copy: newer
- *   files are downloaded and the page reloads once, so it shows them; this
- *   browser's changes that aren't on Drive yet are uploaded.
+ * - Every page load compares the Drive files with this browser's copy before
+ *   the page starts: it stays hidden ("Syncing with Google Drive...", the
+ *   `is-sync-loading` class the head partial sets) and its scripts wait in
+ *   ready() until the check is done. Newer files are downloaded and the page
+ *   reloads, still hidden, so even what was drawn before any script ran
+ *   shows them; this browser's changes that aren't on Drive yet are
+ *   uploaded. A Drive that doesn't answer within HOLD_TIMEOUT_MS lets the
+ *   page start with what it has (and reload once the check catches up).
  * - Every change is uploaded shortly after it's made. A page change cuts that
  *   upload off, so a change stays marked until an upload succeeds - the next
  *   page load finishes it.
@@ -27,7 +32,8 @@
  * last change and whether it's uploaded yet) lives under `syncState`: it
  * describes this browser, so like the logins it isn't app data and isn't
  * exported. Must load right after storage.js and google.js, before anything
- * that writes.
+ * that writes - and every script after it starts with ready(), not
+ * DOMContentLoaded.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -49,6 +55,10 @@ window.MusicHub = window.MusicHub || {};
   var ASKED_FLAG = 'musichub:syncAsked';
   // The one Drive file that isn't a key: when "Clear all data" last ran.
   var CLEARED_FILE = 'cleared.json';
+  // The page hidden while the page-load check runs - set by the head partial.
+  var LOADING_CLASS = 'is-sync-loading';
+  // How long the page waits for Drive before it starts with what it has.
+  var HOLD_TIMEOUT_MS = 8000;
 
   // False in local development, where sync must never touch the real data.
   var AVAILABLE = (function () {
@@ -67,6 +77,14 @@ window.MusicHub = window.MusicHub || {};
   var running = null;
   // The turn-on underway (turnOn), so a second one joins it.
   var turningOn = null;
+
+  // Whether the page is held for the page-load check (see ready()); and
+  // whether it was at all, so the check isn't run a second time.
+  var holding = document.documentElement.classList.contains(LOADING_CLASS);
+  var heldForDrive = holding;
+  var domParsed = false;
+  // The page scripts' starts, waiting for the DOM and the check.
+  var waiting = [];
 
   /* ------------------------------------------------------------- state */
 
@@ -501,8 +519,76 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
+  /* ---------------------------------------------------------- the hold */
+
   /**
-   * The page-load round. It compares Drive with what this page loaded with
+   * How every page script starts, instead of DOMContentLoaded: `start` runs
+   * once the DOM is parsed and - with sync on - the page-load check has
+   * fetched what's newer on Drive, so no script ever reads the old data.
+   * The starts run in the order they were asked for, like DOMContentLoaded
+   * listeners; one that throws doesn't stop the rest.
+   */
+  function ready(start) {
+    if (domParsed && !holding) {
+      start();
+      return;
+    }
+    waiting.push(start);
+  }
+
+  function startPage() {
+    if (!domParsed || holding) {
+      return;
+    }
+    waiting.splice(0).forEach(function (start) {
+      try {
+        start();
+      } catch (err) {
+        window.setTimeout(function () {
+          throw err;
+        });
+      }
+    });
+  }
+
+  /** The check is done (or gave up waiting): the page shows and its scripts start. */
+  function release() {
+    if (!holding) {
+      return;
+    }
+    holding = false;
+    document.documentElement.classList.remove(LOADING_CLASS);
+    startPage();
+  }
+
+  /**
+   * The page-load check of a held page, started as soon as this script
+   * runs - before any page script, so loadedWith is exactly what's stored.
+   * Anything downloaded reloads the page while it's still hidden: the bits
+   * drawn before any script ran (the head partial's styles, the navbar's
+   * balance) would show the old data otherwise. Drive taking longer than
+   * HOLD_TIMEOUT_MS lets the page start; a download after that reloads it
+   * as a page that's already showing would.
+   */
+  function holdForDrive() {
+    var timer = window.setTimeout(release, HOLD_TIMEOUT_MS);
+    sync({ newerThan: loadedWith }).then(function (result) {
+      window.clearTimeout(timer);
+      if (result && result.downloaded.length) {
+        reloadWith(result.downloaded);
+        return;
+      }
+      release();
+    }).catch(function (err) {
+      console.warn('Google Drive sync failed', err);
+      window.clearTimeout(timer);
+      release();
+    });
+  }
+
+  /**
+   * The page-load round of a page that isn't held (no Drive login, or sync
+   * not decided yet). It compares Drive with what this page loaded with
    * (`loadedWith`), not with the stored times: whatever a page script wrote
    * while the round was underway was based on the old data, so a newer
    * Drive file still wins. Anything downloaded means the page shows old
@@ -743,13 +829,26 @@ window.MusicHub = window.MusicHub || {};
     syncNow: function () {
       return sync();
     },
+    ready: ready,
+    /** Whether the page is still waiting for the page-load check. */
+    holding: function () {
+      return holding;
+    },
   };
+
+  if (holding) {
+    holdForDrive();
+  }
 
   document.addEventListener('DOMContentLoaded', function () {
     if (reloadFlag(false)) {
       showUpdatedNotice();
     }
-    runPageLoad();
+    if (!heldForDrive) {
+      runPageLoad();
+    }
+    domParsed = true;
+    startPage();
   });
   document.addEventListener('visibilitychange', recheck);
 })(window.MusicHub);

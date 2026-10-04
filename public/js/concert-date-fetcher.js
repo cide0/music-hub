@@ -1188,7 +1188,7 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------------------ init */
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     els.fetchButton = document.getElementById('fetch-concerts');
     if (!els.fetchButton) {
       return;

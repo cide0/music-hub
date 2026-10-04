@@ -559,7 +559,7 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
+  MusicHub.sync.ready(function () {
     initSoundSwitches();
     initGoogleControls();
     initSyncControls();
