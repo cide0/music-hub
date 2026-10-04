@@ -388,8 +388,9 @@ window.MusicHub = window.MusicHub || {};
       : core.charAt(0).toUpperCase() + core.slice(1);
   }
 
-  // Touch screens never hover, so there every card shows a sliver of its
-  // record - drawn once the card comes near the screen, not all at once.
+  // Touch screens never hover: there each card's record is drawn once the
+  // card comes near the screen, not all at once, ready for the spotlight
+  // (spotlightWhenCentred) to bring out.
   var NO_HOVER = window.matchMedia && window.matchMedia('(hover: none)').matches;
   var REDUCED_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var recordObserver = null;
@@ -422,7 +423,7 @@ window.MusicHub = window.MusicHub || {};
    * comes through) play as a hovered one does - sleeve aside, record out
    * and spinning - and stop again as they move on. Not with reduced motion:
    * cards jumping out and back while scrolling would be the very motion
-   * that's unwanted, so the record just peeks out (style.css).
+   * that's unwanted, so the cards just stay as they are.
    */
   var SPOTLIGHT_MARGIN = '-48% 0px -48% 0px';
   var spotlightObserver = null;

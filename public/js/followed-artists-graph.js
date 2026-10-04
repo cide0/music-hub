@@ -1644,6 +1644,35 @@ window.MusicHub = window.MusicHub || {};
     els.menuToggle.addEventListener('click', function () {
       setMenuOpen(!menuOpen());
     });
+    // A press on the graph while the menu is open only closes the menu:
+    // the press and the rest of that tap are kept from the graph (caught
+    // on the way down, before d3's zoom, drag and click handlers), so it
+    // doesn't pan, pick a node or bring the whole graph back. Swallowing
+    // ends with that tap's click - or the next press, if none came.
+    var swallowing = false;
+    window.addEventListener('pointerdown', function (event) {
+      swallowing = false;
+      if (menuOpen() && els.canvas.contains(event.target)) {
+        setMenuOpen(false);
+        swallowing = true;
+        event.stopPropagation();
+      }
+    }, true);
+    ['touchstart', 'mousedown'].forEach(function (type) {
+      window.addEventListener(type, function (event) {
+        if (swallowing) {
+          event.stopPropagation();
+        }
+      }, true);
+    });
+    window.addEventListener('click', function (event) {
+      if (swallowing) {
+        swallowing = false;
+        event.stopPropagation();
+        event.preventDefault();
+      }
+    }, true);
+
     // The path as it was when tapped: a control that redraws itself (a
     // search result, a genre) is gone from the page by now, but was inside.
     document.addEventListener('click', function (event) {

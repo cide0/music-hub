@@ -743,6 +743,12 @@ button[aria-disabled='true'] {
 /* "Last generated: <date> · <n> artists" - on phones the date and the
    count on a line each, the dot between them gone. */
 @media (max-width: 900px) {
+  /* Stops short of the right-hand controls' menu button (44px, 0.75rem in
+     from the edge) and a gap, so the text never runs underneath it. */
+  .graph-overlay--left {
+    max-width: calc(100vw - 44px - 0.75rem - 1rem);
+  }
+
   #last-generated > span {
     display: block;
   }
@@ -2541,9 +2547,8 @@ textarea.text-input {
 }
 
 /* The touch screens' cover over an image's embed (concert-history.js
-   addTouchCover): not there with a mouse, nor on videos. Painted over the embed but
-   under the heart and the X (positioned after it, no z-index), with an
-   "opens" hint in the bottom-right corner, round like those buttons. */
+   addTouchCover): not there with a mouse, nor on videos. Painted over the
+   embed but under the heart and the X (positioned after it, no z-index). */
 .media-item__cover {
   display: none;
 }
@@ -2556,21 +2561,8 @@ textarea.text-input {
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--color-text-soft);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-  }
-
-  .media-item__cover-hint {
-    position: absolute;
-    right: 0.5rem;
-    bottom: 0.5rem;
-    width: 32px;
-    height: 32px;
-    padding: 8px;
-    border: 1px solid var(--color-border);
-    border-radius: 50%;
-    background-color: var(--color-surface);
   }
 }
 
@@ -4661,24 +4653,6 @@ textarea.text-input {
     0 0 28px color-mix(in srgb, var(--vinyl-glow) 70%, transparent);
 }
 
-/* Touch screens have no hover: every card shows a sliver of its record
-   instead (drawn as the card scrolls into view), so the variant is still
-   there to see - and the cards crossing the middle of the screen play as
-   a hovered one does (spotlightWhenCentred in discogs.js / collection.js),
-   gliding on from the sliver and back to it. */
-@media (hover: none) {
-  .release-card:not(.release-card--playing) .release-card__sleeve {
-    transform: translateX(-12%);
-    box-shadow: 8px 0 16px color-mix(in srgb, var(--color-black) 55%, transparent);
-  }
-
-  /* Only a card's record - not the turntable's, which would land off
-     the platter. */
-  .release-card:not(.release-card--playing) .vinyl {
-    transform: translateX(22%);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .release-card,
   .release-card__sleeve,
@@ -4735,13 +4709,6 @@ textarea.text-input {
 
 .release-card--playing .vinyl-backdrop {
   opacity: 1;
-}
-
-/* Touch screens show it all the time, like the peeking record. */
-@media (hover: none) {
-  .vinyl-backdrop {
-    opacity: 1;
-  }
 }
 
 .vinyl-backdrop__pattern {

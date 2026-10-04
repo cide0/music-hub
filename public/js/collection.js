@@ -193,7 +193,10 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  /** Touch screens can't hover: the record peeks out once the card is in view. */
+  /**
+   * Touch screens can't hover: the record is drawn once the card comes near
+   * the screen, ready for the spotlight (spotlightWhenCentred) to bring out.
+   */
   function drawRecordWhenVisible(card, cover, vinyl) {
     if (!('IntersectionObserver' in window)) {
       addRecord(card, cover, vinyl);
@@ -222,7 +225,7 @@ window.MusicHub = window.MusicHub || {};
    * comes through) play as a hovered one does - sleeve aside, record out
    * and spinning - and stop again as they move on. Not with reduced motion:
    * cards jumping out and back while scrolling would be the very motion
-   * that's unwanted, so the record just peeks out (style.css).
+   * that's unwanted, so the cards just stay as they are.
    */
   var SPOTLIGHT_MARGIN = '-48% 0px -48% 0px';
   var spotlightObserver = null;

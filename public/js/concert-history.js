@@ -1004,22 +1004,6 @@ window.MusicHub = window.MusicHub || {};
       openViewer(embedSrc);
     });
     cover.setAttribute('aria-label', 'Open image');
-    // A hint in the corner that it opens: two arrows pointing apart.
-    var hint = document.createElementNS(SVG_NS, 'svg');
-    hint.setAttribute('viewBox', '0 0 24 24');
-    hint.setAttribute('fill', 'none');
-    hint.setAttribute('stroke', 'currentColor');
-    hint.setAttribute('stroke-width', '2');
-    hint.setAttribute('stroke-linecap', 'round');
-    hint.setAttribute('stroke-linejoin', 'round');
-    hint.setAttribute('aria-hidden', 'true');
-    hint.setAttribute('class', 'media-item__cover-hint');
-    ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'].forEach(function (d) {
-      var path = document.createElementNS(SVG_NS, 'path');
-      path.setAttribute('d', d);
-      hint.appendChild(path);
-    });
-    cover.appendChild(hint);
     wrapper.appendChild(cover);
   }
 
