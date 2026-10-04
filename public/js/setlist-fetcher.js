@@ -4,8 +4,10 @@
  * Spotify track and appends the result to one of their playlists.
  *
  * Nothing of this page's own is persisted - a reload starts at the search
- * form. The one storage write is into Concert Date Fetcher's data: once a
- * past concert's setlist is on a playlist, that artist is taken off it.
+ * form. The playlists come from the stored list (playlists.js, refreshed in
+ * Settings); after an add, that playlist's stored song count goes up. The
+ * other storage write is into Concert Date Fetcher's data: once a past
+ * concert's setlist is on a playlist, that artist is taken off it.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -50,7 +52,6 @@ window.MusicHub = window.MusicHub || {};
   // The playlist dropdown (playlist-picker.js) and what it was filled with.
   var picker = null;
   var playlists = null;
-  var playlistsLoading = null;
   var adding = false;
   // Set when the matching run hit Spotify's search limit; the remaining
   // songs stay pending until the notice's Retry.
@@ -1109,30 +1110,25 @@ window.MusicHub = window.MusicHub || {};
 
   /* -------------------------------------------------------------- playlist */
 
-  /** Only playlists the user can add to: their own and collaborative ones. */
+  /**
+   * Only playlists the user can add to: their own and collaborative ones,
+   * as Settings' refresh button last fetched them - never from here.
+   */
   function loadPlaylists() {
-    if (playlistsLoading) {
-      return playlistsLoading;
+    playlists = MusicHub.playlists.list();
+    if (!playlists) {
+      flash(els.playlistMessage, MusicHub.playlists.MISSING_MESSAGE);
+      hide(els.picker);
+      updateAddState();
+      return;
     }
-
-    show(els.playlistMessage, 'Loading your playlists…');
-    playlistsLoading = MusicHub.spotify.getEditablePlaylists().then(function (list) {
-      playlists = list;
-      renderPlaylists();
-    }).catch(function (err) {
-      console.warn('Could not load playlists', err);
-      // Let the next setlist try again.
-      playlistsLoading = null;
-      hide(els.playlistMessage);
-      flash(els.playlistError, 'Could not load your Spotify playlists.');
-    });
-
-    return playlistsLoading;
+    renderPlaylists();
   }
 
   function renderPlaylists() {
     if (!playlists.length) {
-      flash(els.playlistMessage, 'You don’t have any editable playlists yet — create one in Spotify first');
+      flash(els.playlistMessage, 'You don’t have any editable playlists yet — create one in Spotify, '
+        + 'then refresh your playlists in Settings.');
       hide(els.picker);
       updateAddState();
       return;
@@ -1249,6 +1245,7 @@ window.MusicHub = window.MusicHub || {};
     chain
       .then(function () {
         markShowHandled(snapshot.setlist, snapshot.source);
+        MusicHub.playlists.adjustTrackCount(playlist.id, uris.length);
         els.addButton.textContent = 'Added';
         // Every song that went on the playlist pays its coins, one by one.
         var added = snapshot.songs.filter(function (song) {
@@ -1469,6 +1466,12 @@ window.MusicHub = window.MusicHub || {};
       runSearch(els.artistInput.value, els.cityInput.value, els.searchButton, null);
     });
     picker = MusicHub.playlistPicker.create(els.picker, { onChange: updateAddState });
+    // Refreshed in Settings (another tab) while a setlist is open.
+    document.addEventListener(MusicHub.playlists.CHANGE_EVENT, function () {
+      if (current) {
+        loadPlaylists();
+      }
+    });
     document.addEventListener('click', closePanelOutside);
     els.addButton.addEventListener('click', addToPlaylist);
     // Throws the whole setlist away - matching stops, edits and history go.

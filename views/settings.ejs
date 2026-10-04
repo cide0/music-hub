@@ -122,27 +122,59 @@
           </div>
         </section>
 
-        <section class="settings-section" aria-labelledby="settings-setlist-title">
-          <h2 class="settings-section__title" id="settings-setlist-title">Setlists</h2>
+        <section class="settings-section" aria-labelledby="settings-playlists-title">
+          <h2 class="settings-section__title" id="settings-playlists-title">Spotify playlists</h2>
           <p class="settings-section__text">
-            The playlist that's already selected when you open a setlist. You can still
-            pick a different one there.
+            Music Hub keeps a copy of your playlists here and only asks Spotify for them when
+            you refresh, so after creating or renaming a playlist on Spotify, refresh them here.
           </p>
-          <p class="form-message settings-section__message" id="default-playlist-message" hidden></p>
-          <div class="settings-section__actions">
-            <!-- Same dropdown as on the Setlists page (playlist-picker.js). -->
-            <div class="playlist-picker" id="default-playlist-picker" hidden>
-              <span class="visually-hidden" id="default-playlist-label">Default playlist</span>
-              <button type="button" class="playlist-picker__toggle"
-                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="default-playlist-label default-playlist-current">
-                <span class="playlist-picker__current" id="default-playlist-current">No default playlist</span>
-              </button>
-              <ul class="playlist-picker__list" role="listbox" tabindex="-1"
-                aria-labelledby="default-playlist-label" hidden></ul>
-            </div>
-            <button type="button" class="button button--ghost" id="default-playlist-clear" hidden>Remove default</button>
+          <div class="settings-section__actions settings-account">
+            <button type="button" class="icon-button refresh-button" id="playlists-refresh" aria-label="Fetch your playlists from Spotify" title="Fetch your playlists from Spotify">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+            </button>
+            <span class="toolbar__meta" id="playlists-meta">Not fetched yet</span>
           </div>
-          <p class="form-message" id="default-playlist-saved" role="status" hidden></p>
+          <p class="form-error" id="playlists-error" role="alert" hidden></p>
+          <p class="form-message" id="playlists-saved" role="status" hidden></p>
+
+          <div class="settings-subsection" role="group" aria-labelledby="settings-setlist-title">
+            <h3 class="settings-subsection__title" id="settings-setlist-title">Setlists</h3>
+            <p class="settings-section__text">
+              The playlist that's already selected when you open a setlist. You can still
+              pick a different one there.
+            </p>
+            <p class="form-message settings-section__message" id="default-playlist-message" hidden></p>
+            <div class="settings-section__actions">
+              <!-- Same dropdown as on the Setlists page (playlist-picker.js). -->
+              <div class="playlist-picker" id="default-playlist-picker" hidden>
+                <span class="visually-hidden" id="default-playlist-label">Default playlist</span>
+                <button type="button" class="playlist-picker__toggle"
+                  aria-haspopup="listbox" aria-expanded="false" aria-labelledby="default-playlist-label default-playlist-current">
+                  <span class="playlist-picker__current" id="default-playlist-current">No default playlist</span>
+                </button>
+                <ul class="playlist-picker__list" role="listbox" tabindex="-1"
+                  aria-labelledby="default-playlist-label" hidden></ul>
+              </div>
+              <button type="button" class="button button--ghost" id="default-playlist-clear" hidden>Remove default</button>
+            </div>
+            <p class="form-message" id="default-playlist-saved" role="status" hidden></p>
+          </div>
+
+          <div class="settings-subsection" role="group" aria-labelledby="settings-collection-title">
+            <h3 class="settings-subsection__title" id="settings-collection-title">Collection</h3>
+            <p class="settings-section__text">
+              The playlists the record player's + puts the playing song on. Pick as many as you
+              like; you can add it to others from the player too.
+            </p>
+            <p class="form-message settings-section__message" id="collection-playlists-message" hidden></p>
+            <div class="playlist-checklist-wrap" id="collection-playlists-wrap" hidden>
+              <ul class="playlist-checklist" id="collection-playlists" aria-label="Playlists for the record player's +"></ul>
+            </div>
+            <p class="form-message" id="collection-playlists-saved" role="status" hidden></p>
+          </div>
         </section>
 
         <section class="settings-section" aria-labelledby="settings-discogs-title">
@@ -183,7 +215,9 @@
     <script src="/js/unbox.js"></script>
     <script src="/js/daily-wheel.js"></script>
     <script src="/js/spotify.js"></script>
+    <script src="/js/playlists.js"></script>
     <script src="/js/playlist-picker.js"></script>
+    <script src="/js/song-playlists.js"></script>
     <script src="/js/confirm-dialog.js"></script>
     <script src="/js/settings.js"></script>
   </body>

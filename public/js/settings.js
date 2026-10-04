@@ -1,6 +1,7 @@
 /*
  * Settings: the sound switches, the Google login state, the Google Drive sync, the Gallery's
- * Drive folder, the Setlists page's default playlist,
+ * Drive folder, the Spotify playlists' refresh, the Setlists page's default playlist,
+ * the Collection record player's playlists,
  * the Discogs username, and the Export / Import / Clear data controls. Every choice made here is saved
  * through MusicHub.storage.setSetting, so it travels with Export / Import.
  */
@@ -279,12 +280,12 @@ window.MusicHub = window.MusicHub || {};
       MusicHub.notice.flash(saved, text);
     }
 
-    // Fades out on its own (notice.js); "Loading…" (`stay`) until replaced.
-    function showMessage(text, stay) {
+    // Fades out on its own (notice.js).
+    function showMessage(text) {
       if (!text) {
         MusicHub.notice.hide(message);
       } else {
-        MusicHub.notice[stay ? 'hold' : 'flash'](message, text);
+        MusicHub.notice.flash(message, text);
       }
     }
 
@@ -307,33 +308,166 @@ window.MusicHub = window.MusicHub || {};
       confirmSaved('Saved — no default playlist.');
     });
 
-    if (!MusicHub.auth.isLoggedIn()) {
-      return;
-    }
-
-    showMessage('Loading your playlists…', true);
-    MusicHub.spotify.getEditablePlaylists().then(function (playlists) {
+    // Read from the stored list only - the refresh button above is the one
+    // place that asks Spotify for it.
+    function render() {
+      var playlists = MusicHub.playlists.list();
+      var current = MusicHub.storage.getSetting(DEFAULT_PLAYLIST_SETTING, null);
+      clearButton.hidden = !(current && current.id);
+      if (!playlists) {
+        root.hidden = true;
+        showMessage('Fetch your playlists first, with the refresh button above.');
+        return;
+      }
       if (!playlists.length) {
-        showMessage('You don’t have any editable playlists yet — create one in Spotify first');
+        root.hidden = true;
+        showMessage('You don’t have any editable playlists yet — create one in Spotify, then refresh your playlists above.');
         return;
       }
       showMessage('');
       picker.setPlaylists(playlists);
       root.hidden = false;
 
-      var current = MusicHub.storage.getSetting(DEFAULT_PLAYLIST_SETTING, null);
       if (!current || !current.id) {
+        picker.clear();
         return;
       }
-      clearButton.hidden = false;
       if (!picker.select(current.id)) {
         showMessage('Your default playlist “' + current.name + '” isn’t available any more '
           + '(deleted, or no longer yours to edit). Choose another one.');
       }
-    }).catch(function (err) {
-      console.warn('Could not load playlists', err);
-      showMessage('Could not load your Spotify playlists.');
+    }
+
+    document.addEventListener(MusicHub.playlists.CHANGE_EVENT, render);
+    render();
+  }
+
+  /* ------------------------------------------------ collection playlists */
+
+  /**
+   * The playlists the record player's + puts a song on (song-playlists.js),
+   * ticked in a list of every stored playlist, Liked Songs first. Stored
+   * as [{ id, name }] - the names say which ones have since gone missing.
+   */
+  function initCollectionPlaylists() {
+    var wrap = document.getElementById('collection-playlists-wrap');
+    var message = document.getElementById('collection-playlists-message');
+    var saved = document.getElementById('collection-playlists-saved');
+    var SETTING = MusicHub.songPlaylists.SETTING;
+
+    function stored() {
+      var chosen = MusicHub.storage.getSetting(SETTING, null);
+      return Array.isArray(chosen) ? chosen : [];
+    }
+
+    var checklist = MusicHub.playlistPicker.createChecklist(document.getElementById('collection-playlists'), {
+      onToggle: function (playlist, checked) {
+        var next = stored().filter(function (entry) {
+          return entry.id !== playlist.id;
+        });
+        if (checked) {
+          next.push({ id: playlist.id, name: playlist.name });
+        }
+        MusicHub.storage.setSetting(SETTING, next.length ? next : null);
+        MusicHub.notice.flash(saved, next.length
+          ? 'Saved \u2014 the + adds the song to ' + next.length + (next.length === 1 ? ' playlist.' : ' playlists.')
+          : 'Saved \u2014 the + only opens the playlist list now.');
+      },
     });
+
+    // Read from the stored list only, like the default playlist above.
+    function render() {
+      var choices = MusicHub.songPlaylists.choices();
+      var chosen = stored();
+      checklist.setPlaylists(choices, chosen.map(function (entry) { return entry.id; }));
+      wrap.hidden = false;
+      if (!MusicHub.playlists.list()) {
+        MusicHub.notice.flash(message, 'Fetch your playlists first, with the refresh button above \u2014 until then there\u2019s only Liked Songs.');
+        return;
+      }
+      var missing = chosen.filter(function (entry) {
+        return !choices.some(function (playlist) { return playlist.id === entry.id; });
+      });
+      if (missing.length) {
+        MusicHub.notice.flash(message, 'Not available any more (deleted, or no longer yours to edit): '
+          + missing.map(function (entry) { return '\u201c' + entry.name + '\u201d'; }).join(', ') + '.');
+        return;
+      }
+      MusicHub.notice.hide(message);
+    }
+
+    document.addEventListener(MusicHub.playlists.CHANGE_EVENT, render);
+    render();
+  }
+
+  /* ------------------------------------------------- spotify playlists */
+
+  function formatFetchedAt(iso) {
+    var date = new Date(iso);
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    return new Intl.DateTimeFormat('de-DE', {
+      timeZone: 'Europe/Berlin', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(date);
+  }
+
+  function pluralPlaylists(count) {
+    return count + (count === 1 ? ' playlist' : ' playlists');
+  }
+
+  /** The refresh button - the only place the playlists are fetched from Spotify. */
+  function initPlaylists() {
+    var button = document.getElementById('playlists-refresh');
+    var meta = document.getElementById('playlists-meta');
+    var error = document.getElementById('playlists-error');
+    var saved = document.getElementById('playlists-saved');
+
+    // Spinning while it fetches; its name and the note beside it say when
+    // the list was fetched.
+    function render() {
+      var busy = MusicHub.playlists.isRefreshing();
+      var playlists = MusicHub.playlists.list();
+      var label;
+      if (busy) {
+        label = 'Fetching your playlists…';
+      } else if (playlists) {
+        label = 'Refresh playlists';
+      } else {
+        label = 'Fetch your playlists from Spotify';
+      }
+      button.disabled = busy;
+      button.setAttribute('aria-busy', String(busy));
+      button.setAttribute('aria-label', label);
+      button.title = label;
+      if (busy) {
+        meta.textContent = 'Fetching your playlists…';
+      } else if (playlists) {
+        meta.textContent = pluralPlaylists(playlists.length) + ', fetched '
+          + formatFetchedAt(MusicHub.playlists.fetchedAt());
+      } else {
+        meta.textContent = 'Not fetched yet';
+      }
+    }
+
+    button.addEventListener('click', function () {
+      MusicHub.notice.hide(error);
+      MusicHub.notice.hide(saved);
+      var refreshing = MusicHub.playlists.refresh();
+      render();
+      refreshing.then(function (playlists) {
+        render();
+        MusicHub.notice.flash(saved, 'Playlists updated: ' + pluralPlaylists(playlists.length) + '.');
+      }, function (err) {
+        console.warn('Could not refresh the playlists', err);
+        render();
+        MusicHub.notice.flash(error, 'Couldn’t update your playlists: ' + err.message
+          + (err.status === 429 ? ' - Spotify is limiting requests right now, try again in a while.' : '.'));
+      });
+    });
+
+    document.addEventListener(MusicHub.playlists.CHANGE_EVENT, render);
+    render();
   }
 
   var DISCOGS_USERNAME_SETTING = 'discogsUsername';
@@ -430,7 +564,9 @@ window.MusicHub = window.MusicHub || {};
     initGoogleControls();
     initSyncControls();
     initGalleryFolder();
+    initPlaylists();
     initDefaultPlaylist();
+    initCollectionPlaylists();
     initDiscogsUsername();
     initDataControls();
   });

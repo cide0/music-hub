@@ -59,19 +59,13 @@
 
           <div class="reveal" id="case-reveal" hidden>
             <!-- Corner controls. Re-roll keeps this album out of the next spin;
-                 closing just goes back, so it can come up again. Discogs sits
-                 under re-roll (beside it on a phone). -->
+                 closing just goes back, so it can come up again. -->
             <button type="button" class="icon-button reveal__corner reveal__reroll" id="reveal-reroll" aria-label="Re-roll: suggest a different album" title="Re-roll">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
               </svg>
             </button>
-            <a class="icon-button reveal__corner reveal__discogs" id="reveal-discogs" href="#" target="_blank" rel="noopener noreferrer" aria-label="Find vinyl on Discogs (opens in a new tab)" title="Find vinyl on Discogs">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            </a>
             <button type="button" class="icon-button reveal__corner reveal__close" id="reveal-close" aria-label="Close this suggestion" title="Close">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -86,7 +80,7 @@
               </div>
             </a>
             <div class="reveal__actions">
-              <button type="button" class="button button--primary" id="reveal-listened">Mark as listened</button>
+              <button type="button" class="button button--primary" id="reveal-listened">Add to history</button>
             </div>
           </div>
         </div>
@@ -170,7 +164,7 @@
         </svg>
       </button>
       <form class="modal__form" id="listened-form" novalidate>
-        <h2 class="modal__title" id="listened-dialog-title">Mark as listened?</h2>
+        <h2 class="modal__title" id="listened-dialog-title">Add to history?</h2>
         <p class="modal__hint" id="listened-dialog-text"></p>
         <label class="rating-field">
           <span class="rating-field__label">Rating <span class="rating-field__optional">(optional, 1–100)</span></span>
@@ -179,7 +173,7 @@
         <p class="form-error" id="listened-error" role="alert" hidden></p>
         <div class="modal__actions">
           <button type="button" class="button button--ghost" id="listened-cancel">Cancel</button>
-          <button type="submit" class="button button--primary" id="listened-submit">Mark as listened</button>
+          <button type="submit" class="button button--primary" id="listened-submit">Add to history</button>
         </div>
       </form>
     </dialog>

@@ -21,6 +21,8 @@ window.MusicHub = window.MusicHub || {};
     'albumSuggesterLibrary',
     // The followed Spotify artists, as the navbar's refresh button last fetched them.
     'followedArtists',
+    // The Spotify playlists the user can add to, as Settings' refresh button last fetched them.
+    'spotifyPlaylists',
     // Coins, bought Store items, the equipped styles and unboxed vinyls.
     'store',
     // The user's choices on the Settings page - see getSetting / setSetting.

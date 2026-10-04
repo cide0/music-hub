@@ -4,9 +4,9 @@
  * how long it has been saved - the newest are gold, the oldest blue, so the
  * albums that have waited longest come up most - and, as in a real case,
  * the rarity is rolled first and an album from that tier second, so gold is
- * always the rarest pull. The reveal links to the album in the Spotify app
- * and to its vinyl releases on Discogs; marking it listened unsaves it on
- * Spotify and adds it to a listened history kept here. The history's "+"
+ * always the rarest pull. The reveal links to the album in the Spotify app;
+ * "Add to history" unsaves it on Spotify and adds it to a listened history
+ * kept here. The history's "+"
  * adds an album to it by hand, from its Spotify link - without a rarity.
  *
  * The pool is the Saved Albums as last fetched, remembered between
@@ -311,12 +311,6 @@ window.MusicHub = window.MusicHub || {};
 
   function spotifyAppUrl(album) {
     return 'spotify:album:' + album.id;
-  }
-
-  function discogsSearchUrl(album) {
-    return 'https://www.discogs.com/search/?q='
-      + encodeURIComponent(album.artistName + ' ' + album.name)
-      + '&type=release&format=Vinyl';
   }
 
   /* --------------------------------------------------------------- views */
@@ -1243,7 +1237,6 @@ window.MusicHub = window.MusicHub || {};
     els.revealAlbum.setAttribute('aria-label', album.name + ' by ' + album.artistName + ', open in Spotify');
     els.revealCover.dataset.rarity = album.tier;
     els.views.reveal.dataset.rarity = album.tier;
-    els.revealDiscogs.href = discogsSearchUrl(album);
     // Nothing else to re-roll to when it's the only album left.
     els.rerollButton.hidden = pool.length < 2;
     els.rerollButton.disabled = false;
@@ -1315,7 +1308,7 @@ window.MusicHub = window.MusicHub || {};
     els.dialogSubmit.disabled = on;
     els.dialogCancel.disabled = on;
     els.rating.disabled = on;
-    els.dialogSubmit.textContent = on ? 'Removing…' : 'Mark as listened';
+    els.dialogSubmit.textContent = on ? 'Removing…' : 'Add to history';
   }
 
   function showDialogError(message) {
@@ -1759,7 +1752,6 @@ window.MusicHub = window.MusicHub || {};
     els.revealTitle = document.getElementById('reveal-title');
     els.revealArtist = document.getElementById('reveal-artist');
     els.revealAlbum = document.getElementById('reveal-album');
-    els.revealDiscogs = document.getElementById('reveal-discogs');
     els.rerollButton = document.getElementById('reveal-reroll');
     els.revealClose = document.getElementById('reveal-close');
     els.revealListened = document.getElementById('reveal-listened');
@@ -1892,7 +1884,6 @@ window.MusicHub = window.MusicHub || {};
     sortHistory: sortHistory,
     parseRating: parseRating,
     parseAlbumId: parseAlbumId,
-    discogsSearchUrl: discogsSearchUrl,
     buildReelAlbums: buildReelAlbums,
   };
 })(window.MusicHub);

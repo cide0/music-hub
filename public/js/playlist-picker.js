@@ -5,6 +5,10 @@
  *
  *   .playlist-picker__toggle > .playlist-picker__current
  *   ul.playlist-picker__list[role=listbox]
+ *
+ * And the playlist checklist (createChecklist): the same rows, each with a
+ * checkbox, for picking any number of playlists - Settings' Collection
+ * playlists and the record player's playlist modal.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -22,10 +26,40 @@ window.MusicHub = window.MusicHub || {};
     return node;
   }
 
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  function svgIcon(className, paths) {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('class', className);
+    paths.forEach(function (d) {
+      var path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', d);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  var HEART_PATH = 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 '
+    + '7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z';
+
   /** Cover, name and song count - used by the options and the closed toggle. */
   function playlistSummary(playlist) {
     var summary = el('span', 'playlist-option__summary');
-    if (playlist.imageUrl) {
+    if (playlist.liked) {
+      // Liked Songs: Spotify's own look for it, a heart on a purple square.
+      var liked = el('span', 'playlist-option__cover playlist-option__cover--liked');
+      var heart = svgIcon('', [HEART_PATH]);
+      heart.setAttribute('fill', 'currentColor');
+      liked.appendChild(heart);
+      summary.appendChild(liked);
+    } else if (playlist.imageUrl) {
       var image = el('img', 'playlist-option__cover');
       image.src = playlist.imageUrl;
       image.alt = '';
@@ -257,7 +291,88 @@ window.MusicHub = window.MusicHub || {};
     };
   }
 
+  /**
+   * A list of playlists to tick any number of, inside `list` (a <ul>).
+   * `onToggle(playlist, checked)` runs when the user ticks or unticks one.
+   * The ticks survive setPlaylists and filter, so a search never loses them.
+   */
+  function createChecklist(list, options) {
+    var onToggle = (options && options.onToggle) || function () {};
+    var idPrefix = (list.id || 'playlist-checklist') + '-';
+    var playlists = [];
+    var checkedIds = {};
+    var rows = [];
+
+    function setPlaylists(next, checked) {
+      if (checked) {
+        checkedIds = {};
+        checked.forEach(function (id) {
+          checkedIds[id] = true;
+        });
+      }
+      // The ticked ones on top, each group in its own order. Only when the
+      // list is built - a row never jumps away from under the pointer.
+      var all = next || [];
+      playlists = all.filter(function (playlist) {
+        return checkedIds[playlist.id];
+      }).concat(all.filter(function (playlist) {
+        return !checkedIds[playlist.id];
+      }));
+      list.textContent = '';
+      rows = playlists.map(function (playlist, index) {
+        var row = el('li', 'playlist-check');
+        var label = el('label', 'playlist-check__label');
+        var input = el('input', 'playlist-check__input');
+        input.type = 'checkbox';
+        input.id = idPrefix + index;
+        input.checked = !!checkedIds[playlist.id];
+        input.addEventListener('change', function () {
+          checkedIds[playlist.id] = input.checked;
+          row.classList.toggle('playlist-check--on', input.checked);
+          onToggle(playlist, input.checked);
+        });
+        label.appendChild(input);
+        label.appendChild(playlistSummary(playlist));
+        var box = el('span', 'playlist-check__box');
+        box.appendChild(svgIcon('playlist-check__tick', ['M20 6 9 17l-5-5']));
+        label.appendChild(box);
+        row.classList.toggle('playlist-check--on', input.checked);
+        row.appendChild(label);
+        list.appendChild(row);
+        return { playlist: playlist, row: row };
+      });
+    }
+
+    /** The ticked ids, in list order. */
+    function checked() {
+      return playlists.filter(function (playlist) {
+        return checkedIds[playlist.id];
+      }).map(function (playlist) {
+        return playlist.id;
+      });
+    }
+
+    /** Shows only the playlists whose name holds `query`; returns how many are left. */
+    function filter(query) {
+      var needle = String(query || '').trim().toLowerCase();
+      var shown = 0;
+      rows.forEach(function (entry) {
+        var match = !needle || entry.playlist.name.toLowerCase().indexOf(needle) !== -1;
+        entry.row.hidden = !match;
+        shown += match ? 1 : 0;
+      });
+      return shown;
+    }
+
+    return {
+      setPlaylists: setPlaylists,
+      checked: checked,
+      filter: filter,
+    };
+  }
+
   MusicHub.playlistPicker = {
     create: create,
+    createChecklist: createChecklist,
   };
 })(window.MusicHub);

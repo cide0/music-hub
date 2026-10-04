@@ -531,9 +531,11 @@ window.MusicHub = window.MusicHub || {};
   /**
    * The track playing: its name under the artist, its letters in a wave
    * running through them while it plays (still while paused), and where
-   * it is in the album - "5/20" - in the deck's top-right corner.
+   * it is in the album - "5/20" - in the deck's top-right corner. `song`
+   * is { name, uri }: the + beside it puts that one on playlists.
    */
-  function showTrack(number, count, name, playing) {
+  function showTrack(number, count, song, playing) {
+    var name = song.name;
     if (els.trackName.dataset.name !== name) {
       els.trackName.dataset.name = name;
       els.trackName.textContent = '';
@@ -557,13 +559,14 @@ window.MusicHub = window.MusicHub || {};
     els.trackLabel.textContent = 'Now playing: ' + name;
     els.track.title = name;
     els.track.classList.toggle('player__track--paused', !playing);
-    els.track.hidden = false;
+    els.song.hidden = false;
     els.trackCount.textContent = number + '/' + count;
     els.trackCount.hidden = false;
+    showSaveButton(song);
   }
 
   function hideTrack() {
-    els.track.hidden = true;
+    els.song.hidden = true;
     els.trackCount.hidden = true;
   }
 
@@ -625,7 +628,7 @@ window.MusicHub = window.MusicHub || {};
     player.at = progress.index === -1 ? null : {
       index: progress.index, progressMs: state.progress_ms, playing: state.is_playing, time: Date.now(),
     };
-    showTrack(progress.number, progress.count, state.item.name, state.is_playing);
+    showTrack(progress.number, progress.count, state.item, state.is_playing);
     MusicHub.turntable.setNeedle(playerParts, progress.fraction,
       state.is_playing ? 1 / progress.totalMs : 0, { still: still });
 
@@ -701,7 +704,7 @@ window.MusicHub = window.MusicHub || {};
       player.at = { index: index, progressMs: 0, playing: at.playing, time: Date.now() };
       player.expect = { index: index, at: Date.now() };
       player.fraction = albumMs(index) / totalMs;
-      showTrack(index + 1, player.tracks.length, player.tracks[index].name, at.playing);
+      showTrack(index + 1, player.tracks.length, player.tracks[index], at.playing);
       MusicHub.turntable.setNeedle(playerParts, player.fraction, at.playing ? 1 / totalMs : 0, {
         still: reducedMotion(), lift: true,
       });
@@ -727,6 +730,13 @@ window.MusicHub = window.MusicHub || {};
    * onto it and spins - and the album starts on the user's Spotify
    * straight away, so the music comes in about as the platter gets going.
    */
+  /** The album's vinyl releases on Discogs - a plain search, no API call. */
+  function discogsSearchUrl(album) {
+    return 'https://www.discogs.com/search/?q='
+      + encodeURIComponent(album.artist + ' ' + album.name)
+      + '&type=release&format=Vinyl';
+  }
+
   function openPlayer(vinyl) {
     var album = vinyl.album;
     var run = ++playRun;
@@ -738,6 +748,7 @@ window.MusicHub = window.MusicHub || {};
     titleLink.title = 'Open in Spotify';
     els.title.appendChild(titleLink);
     els.artist.textContent = album.artist;
+    els.discogs.href = discogsSearchUrl(album);
 
     var spec = MusicHub.vinyl.describe(vinyl.format);
     var record = renderRecord(vinyl);
@@ -904,6 +915,269 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /** Back to the collection. The album keeps playing on Spotify. */
+  /* ------------------------------------------------- the song's playlists */
+
+  /*
+   * The + beside the track: puts the song on the playlists chosen in
+   * Settings (song-playlists.js) - it turns into a heart as it does. The
+   * heart then opens the song's playlists, every playlist ticked where the
+   * song is on it, to add it to more or take it off. (The + opens them
+   * itself only with no Settings playlists, or to name one that failed.)
+   * All of that is only remembered until "Back to collection".
+   * Every press of the + that puts the song somewhere pays SONG_COINS
+   * (the modal's own adds pay nothing).
+   */
+
+  // The song the + stands for, { name, uri }; and the one the modal is open for.
+  var saveSong = null;
+  var dialogSong = null;
+  var dialogInitial = [];
+  var saveBusy = false;
+  var songChecklist = null;
+  // Bumped each time the modal opens, so a delayed open overtaken by
+  // another (the + pressed again while the coins fly) is dropped.
+  var dialogRun = 0;
+  // The heart's pop, then the modal (see .player__save--pop).
+  var SAVE_POP_MS = 600;
+  var SONG_COINS = 5;
+
+  function showSaveButton(song) {
+    if (!saveSong || saveSong.uri !== song.uri) {
+      saveSong = { name: song.name, uri: song.uri };
+      paintSave(false);
+    }
+  }
+
+  /** Plus or heart, as the song is on no playlist or on some; `pop` plays the heart's animation. */
+  function paintSave(pop) {
+    if (!saveSong) {
+      return;
+    }
+    var saved = MusicHub.songPlaylists.isSaved(saveSong.uri);
+    els.save.classList.toggle('player__save--saved', saved);
+    var label = saved ? 'On your playlists \u2014 change which' : 'Add to playlists';
+    els.save.setAttribute('aria-label', label);
+    els.save.title = label;
+    els.save.classList.remove('player__save--pop');
+    if (pop && saved && !reducedMotion()) {
+      // Reflow first, so a second pop in a row starts over.
+      void els.save.offsetWidth;
+      els.save.classList.add('player__save--pop');
+    }
+  }
+
+  /**
+   * SONG_COINS out of the + - with the clink kept quiet like the listening
+   * coins'. Resolves once they've landed.
+   */
+  function earnSongCoins() {
+    return MusicHub.wallet.earn(SONG_COINS, {
+      from: els.save,
+      coins: SONG_COINS,
+      silent: MusicHub.storage.getSetting(LISTEN_COIN_SOUND_SETTING, true) === false,
+    });
+  }
+
+  function setSaveBusy(busy) {
+    saveBusy = busy;
+    els.save.disabled = busy;
+    els.save.setAttribute('aria-busy', String(busy));
+  }
+
+  function failedNames(ids) {
+    var choices = MusicHub.songPlaylists.choices();
+    return ids.map(function (id) {
+      var match = choices.filter(function (playlist) { return playlist.id === id; })[0];
+      return '\u201c' + (match ? match.name : id) + '\u201d';
+    }).join(', ');
+  }
+
+  function failureText(result) {
+    return 'Couldn\u2019t update ' + failedNames(result.failed) + ': ' + result.error.message
+      + (result.error.status === 429 ? ' - Spotify is limiting requests right now, try again in a while.' : '.');
+  }
+
+  function onSaveClick() {
+    if (!saveSong || saveBusy) {
+      return;
+    }
+    var song = saveSong;
+    if (MusicHub.songPlaylists.isSaved(song.uri) || !MusicHub.songPlaylists.defaultIds().length) {
+      openSongDialog(song);
+      return;
+    }
+    setSaveBusy(true);
+    MusicHub.songPlaylists.addToDefaults(song.uri).then(function (result) {
+      setSaveBusy(false);
+      var popped = result.added > 0 && saveSong === song;
+      if (popped) {
+        paintSave(true);
+      }
+      var coinsLanded = result.added > 0 ? earnSongCoins() : Promise.resolve();
+      // The modal only opens to name a playlist that failed - after the
+      // heart's pop and the coins, so neither plays out behind it.
+      if (!result.failed.length) {
+        return;
+      }
+      var popDone = new Promise(function (resolve) {
+        window.setTimeout(resolve, popped && !reducedMotion() ? SAVE_POP_MS : 0);
+      });
+      var run = dialogRun;
+      var album = playRun;
+      Promise.all([popDone, coinsLanded]).then(function () {
+        // Not after "Back to collection", nor over a modal opened meanwhile.
+        if (run === dialogRun && album === playRun) {
+          openSongDialog(song, failureText(result));
+        }
+      });
+    });
+  }
+
+  /** What Save would do: the ticked playlists the song isn't on, and the unticked ones it is on. */
+  function songDiff() {
+    var checked = songChecklist.checked();
+    return {
+      add: checked.filter(function (id) { return dialogInitial.indexOf(id) === -1; }),
+      remove: dialogInitial.filter(function (id) { return checked.indexOf(id) === -1; }),
+    };
+  }
+
+  function playlistCount(count) {
+    return count + (count === 1 ? ' playlist' : ' playlists');
+  }
+
+  function updateSongSubmit() {
+    var diff = songDiff();
+    var label = 'No changes';
+    if (diff.add.length && diff.remove.length) {
+      label = 'Save changes';
+    } else if (diff.add.length) {
+      label = 'Add to ' + playlistCount(diff.add.length);
+    } else if (diff.remove.length) {
+      label = 'Remove from ' + playlistCount(diff.remove.length);
+    }
+    els.songSubmit.textContent = label;
+    els.songSubmit.disabled = saveBusy || !(diff.add.length || diff.remove.length);
+  }
+
+  function applySongSearch() {
+    els.songSearchClear.hidden = !els.songSearch.value;
+    var shown = songChecklist.filter(els.songSearch.value);
+    if (els.songSearch.value && !shown) {
+      MusicHub.notice.hold(els.songMessage, 'No playlist matches \u201c' + els.songSearch.value.trim() + '\u201d.');
+    } else if (!MusicHub.playlists.list()) {
+      MusicHub.notice.hold(els.songMessage, 'Fetch your playlists in Settings to see them here '
+        + '\u2014 until then there\u2019s only Liked Songs.');
+    } else {
+      MusicHub.notice.hide(els.songMessage);
+    }
+  }
+
+  /** The song's playlists: every one there is, ticked where the song is on it. */
+  function fillSongChecklist() {
+    dialogInitial = MusicHub.songPlaylists.playlistsOf(dialogSong.uri);
+    songChecklist.setPlaylists(MusicHub.songPlaylists.choices(), dialogInitial);
+    applySongSearch();
+    updateSongSubmit();
+  }
+
+  function openSongDialog(song, error) {
+    dialogRun += 1;
+    dialogSong = song;
+    els.songName.textContent = song.name + ' \u2014 ' + (player ? player.vinyl.album.artist : '');
+    els.songSearch.value = '';
+    fillSongChecklist();
+    if (error) {
+      MusicHub.notice.flash(els.songError, error);
+    } else {
+      MusicHub.notice.hide(els.songError);
+    }
+    if (!els.songDialog.open) {
+      els.songDialog.showModal();
+    }
+  }
+
+  function submitSongDialog() {
+    var diff = songDiff();
+    var song = dialogSong;
+    if (!song || saveBusy || !(diff.add.length || diff.remove.length)) {
+      return;
+    }
+    var wasSaved = MusicHub.songPlaylists.isSaved(song.uri);
+    setSaveBusy(true);
+    els.songSubmit.disabled = true;
+    els.songSubmit.textContent = 'Saving\u2026';
+    MusicHub.notice.hide(els.songError);
+    MusicHub.songPlaylists.change(song.uri, diff.add, diff.remove).then(function (result) {
+      setSaveBusy(false);
+      if (saveSong && saveSong.uri === song.uri) {
+        paintSave(!wasSaved);
+      }
+      if (result.failed.length) {
+        // Stays open, ticked as things now are, to try the rest again.
+        if (dialogSong === song) {
+          fillSongChecklist();
+          MusicHub.notice.flash(els.songError, failureText(result));
+        }
+        return;
+      }
+      if (dialogSong === song) {
+        els.songDialog.close();
+      }
+    });
+  }
+
+  function initSongPlaylists() {
+    els.song = document.getElementById('player-song');
+    els.save = document.getElementById('player-save');
+    els.songDialog = document.getElementById('song-playlists-dialog');
+    els.songName = document.getElementById('song-playlists-song');
+    els.songSearch = document.getElementById('song-playlists-search');
+    els.songSearchClear = document.getElementById('song-playlists-search-clear');
+    els.songMessage = document.getElementById('song-playlists-message');
+    els.songError = document.getElementById('song-playlists-error');
+    els.songSubmit = document.getElementById('song-playlists-submit');
+
+    songChecklist = MusicHub.playlistPicker.createChecklist(document.getElementById('song-playlists-list'), {
+      onToggle: updateSongSubmit,
+    });
+    els.save.addEventListener('click', onSaveClick);
+    els.save.addEventListener('animationend', function (event) {
+      if (event.target === els.save) {
+        els.save.classList.remove('player__save--pop');
+      }
+    });
+    els.songSearch.addEventListener('input', applySongSearch);
+    // Enter in the search only searches - it doesn't save.
+    els.songSearch.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+      }
+    });
+    els.songSearchClear.addEventListener('click', function () {
+      els.songSearch.value = '';
+      applySongSearch();
+      els.songSearch.focus();
+    });
+    document.getElementById('song-playlists-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      submitSongDialog();
+    });
+    document.getElementById('song-playlists-cancel').addEventListener('click', function () {
+      els.songDialog.close();
+    });
+    els.songDialog.addEventListener('close', function () {
+      dialogSong = null;
+    });
+
+    // New playlists fetched in Settings (another tab).
+    document.addEventListener(MusicHub.playlists.CHANGE_EVENT, function () {
+      if (dialogSong && !saveBusy) {
+        fillSongChecklist();
+      }
+    });
+  }
+
   function closePlayer() {
     playRun += 1;
     window.clearTimeout(pollTimer);
@@ -913,6 +1187,12 @@ window.MusicHub = window.MusicHub || {};
       playerParts = null;
     }
     player = null;
+    saveSong = null;
+    // Which playlists the songs went on is only kept while the album plays.
+    MusicHub.songPlaylists.forget();
+    if (els.songDialog.open) {
+      els.songDialog.close();
+    }
     els.player.hidden = true;
     els.view.hidden = false;
   }
@@ -925,6 +1205,7 @@ window.MusicHub = window.MusicHub || {};
     els.player = document.getElementById('player');
     els.deck = document.getElementById('player-deck');
     els.back = document.getElementById('player-back');
+    els.discogs = document.getElementById('player-discogs');
     els.title = document.getElementById('player-title');
     els.artist = document.getElementById('player-artist');
     els.status = document.getElementById('player-status');
@@ -963,6 +1244,7 @@ window.MusicHub = window.MusicHub || {};
     });
 
     els.back.addEventListener('click', closePlayer);
+    initSongPlaylists();
     els.search.addEventListener('input', function () {
       setQuery(els.search.value);
     });

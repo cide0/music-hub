@@ -81,7 +81,14 @@ public/js/           notice.js, storage.js, google.js, sync.js, navbar.js, auth.
                      MusicHub.followedArtists.list(); wallet.js = coins,
                      Store items, coin animation),
                      spotify.js (shared Spotify API helpers),
-                     playlist-picker.js (shared playlist dropdown),
+                     playlists.js (the stored editable Spotify playlists;
+                     fetched only by Settings' refresh button - pages read
+                     MusicHub.playlists.list()),
+                     playlist-picker.js (shared playlist dropdown +
+                     multi-select checklist), song-playlists.js (which
+                     playlists each song went on from the Collection's
+                     record player - the + / heart; Liked Songs included;
+                     in memory only, forgotten on "Back to collection"),
                      vinyl.js (Discogs format -> CSS-drawn record),
                      vinyl-catalog.js (the Store's mystery vinyls + the
                      wheel exclusives), sfx.js (synthesised sounds),
