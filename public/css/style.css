@@ -5450,7 +5450,9 @@ button.turntable__power:focus-visible {
   top: var(--transport-y);
   left: var(--transport-x);
   width: var(--progress-width);
-  height: max(4px, calc(3.4% / var(--plinth-grow, 1)));
+  /* At least 7px: the fill sits 1px inside the 1px border, so the Store's
+     little preview, at a 4px minimum, had no room left for it at all. */
+  height: max(7px, calc(3.4% / var(--plinth-grow, 1)));
   translate: -50% -50%;
   border: 1px solid color-mix(in srgb, var(--color-black) 60%, var(--color-purple-950));
   border-radius: var(--radius-pill);

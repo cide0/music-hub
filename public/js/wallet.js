@@ -609,19 +609,35 @@ window.MusicHub = window.MusicHub || {};
       return function () {};
     }
     if (!lifted) {
-      var rect = chip.getBoundingClientRect();
       var node = chip.cloneNode(true);
       node.removeAttribute('href');
       node.removeAttribute('title');
       node.setAttribute('aria-hidden', 'true');
       node.querySelector('[data-coin-target]').removeAttribute('data-coin-target');
       node.classList.add('coin-balance--lifted');
-      node.style.left = rect.left + 'px';
-      node.style.top = rect.top + 'px';
-      node.style.width = rect.width + 'px';
-      node.style.height = rect.height + 'px';
-      node.style.setProperty('--lifted-coin', coinTarget.getBoundingClientRect().width + 'px');
+      // Kept right over the real one every frame until it's gone: the
+      // number counting up widens the real balance - and on phones, where
+      // it sits in the right-hand group, moves it and its coin leftwards -
+      // so a copy measured once came apart from it. Its size comes unscaled
+      // (offsetWidth): both hop as a coin lands (bump), each by itself, so
+      // a size taken mid-hop would have the copy hop twice over.
+      var follow = function () {
+        var rect = chip.getBoundingClientRect();
+        var width = chip.offsetWidth;
+        var height = chip.offsetHeight;
+        var scale = width ? rect.width / width : 1;
+        node.style.left = (rect.left + rect.width / 2 - width / 2) + 'px';
+        node.style.top = (rect.top + rect.height / 2 - height / 2) + 'px';
+        node.style.width = width + 'px';
+        node.style.height = height + 'px';
+        node.style.setProperty('--lifted-coin', (coinTarget.getBoundingClientRect().width / scale) + 'px');
+        if (node.isConnected) {
+          window.requestAnimationFrame(follow);
+        }
+      };
+      follow();
       layer.appendChild(node);
+      window.requestAnimationFrame(follow);
       node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
       lifted = { node: node, users: 0 };
     }
@@ -842,6 +858,18 @@ window.MusicHub = window.MusicHub || {};
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, sky.canvas.width, sky.canvas.height);
     var landing = [];
+    // Each shower's goal follows its balance's coin, measured once a frame.
+    sky.coins.forEach(function (coin) {
+      if (coin.to.node && coin.to.at !== now) {
+        coin.to.at = now;
+        var rect = coin.to.node.getBoundingClientRect();
+        // Gone from view meanwhile: they fly on to where it was.
+        if (rect.width > 0 && rect.height > 0) {
+          coin.to.x = rect.left + rect.width / 2;
+          coin.to.y = rect.top + rect.height / 2;
+        }
+      }
+    });
     sky.coins = sky.coins.filter(function (coin) {
       var elapsed = now - coin.start;
       if (elapsed >= coin.duration) {
@@ -964,7 +992,11 @@ window.MusicHub = window.MusicHub || {};
       spill(count);
     }
 
+    // Shared by this shower's coins, and kept on the balance's coin as it
+    // moves (drawCoins): counting up widens the balance, and on phones that
+    // moves its coin leftwards.
     var goal = centreOf(to);
+    goal.node = to;
     var letGo = layer ? liftBalance(layer, to) : function () {};
     // After the lifted balance, so the coins fly in over it.
     var sky = skyIn(layer || document.body);
