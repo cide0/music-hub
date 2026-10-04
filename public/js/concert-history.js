@@ -990,6 +990,50 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /*
+   * On a touch screen a finger on an image's Drive embed goes to Drive's
+   * viewer in it, which pans the image instead of scrolling the page. So
+   * there a transparent cover lies over each image (style.css shows it
+   * only where nothing can hover): a swipe on it scrolls the page, and a
+   * tap opens the image large in the viewer, to zoom and pan. Under the
+   * heart and the X, which stay usable. Videos don't need it - their
+   * embed scrolls the page as it is.
+   */
+  function addTouchCover(wrapper, embedSrc) {
+    var cover = button('media-item__cover', '', function () {
+      openViewer(embedSrc);
+    });
+    cover.setAttribute('aria-label', 'Open image');
+    // A hint in the corner that it opens: two arrows pointing apart.
+    var hint = document.createElementNS(SVG_NS, 'svg');
+    hint.setAttribute('viewBox', '0 0 24 24');
+    hint.setAttribute('fill', 'none');
+    hint.setAttribute('stroke', 'currentColor');
+    hint.setAttribute('stroke-width', '2');
+    hint.setAttribute('stroke-linecap', 'round');
+    hint.setAttribute('stroke-linejoin', 'round');
+    hint.setAttribute('aria-hidden', 'true');
+    hint.setAttribute('class', 'media-item__cover-hint');
+    ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'].forEach(function (d) {
+      var path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', d);
+      hint.appendChild(path);
+    });
+    cover.appendChild(hint);
+    wrapper.appendChild(cover);
+  }
+
+  /** The viewer, with the image's own embed - taken out again on close. */
+  function openViewer(embedSrc) {
+    var frame = document.createElement('iframe');
+    frame.src = embedSrc;
+    frame.setAttribute('allowfullscreen', '');
+    frame.title = 'Image from Google Drive';
+    els.viewerFrame.textContent = '';
+    els.viewerFrame.appendChild(frame);
+    els.viewer.showModal();
+  }
+
   function buildMediaItem(kind, item) {
     var wrapper = el('div', 'media-item');
 
@@ -1001,6 +1045,9 @@ window.MusicHub = window.MusicHub || {};
     frame.setAttribute('allowfullscreen', '');
     frame.title = kind === 'images' ? 'Image from Google Drive' : 'Video from Google Drive';
     wrapper.appendChild(frame);
+    if (kind === 'images') {
+      addTouchCover(wrapper, item.embedSrc);
+    }
 
     var heart = button('icon-button media-item__favorite', '', function () {
       var favorite = toggleFavorite(data, currentView.artistId, currentView.concertId, kind, item.id);
@@ -1171,6 +1218,9 @@ window.MusicHub = window.MusicHub || {};
     frame.setAttribute('allowfullscreen', '');
     frame.title = entry.kind === 'images' ? 'Image from Google Drive' : 'Video from Google Drive';
     wrapper.appendChild(frame);
+    if (entry.kind === 'images') {
+      addTouchCover(wrapper, entry.item.embedSrc);
+    }
 
     var heart = button('icon-button media-item__favorite', '', function () {
       toggleFavorite(data, group.artistId, group.concertId, entry.kind, entry.item.id);
@@ -1723,6 +1773,11 @@ window.MusicHub = window.MusicHub || {};
     els.concertError = document.getElementById('concert-name-error');
     els.concertSubmit = document.getElementById('concert-submit');
     els.mediaDialog = document.getElementById('media-dialog');
+    els.viewer = document.getElementById('media-viewer');
+    els.viewerFrame = document.getElementById('media-viewer-frame');
+    els.viewer.addEventListener('close', function () {
+      els.viewerFrame.textContent = '';
+    });
     els.confirmDialog = document.getElementById('confirm-dialog');
     els.confirmTitle = document.getElementById('confirm-dialog-title');
     els.confirmText = document.getElementById('confirm-dialog-text');

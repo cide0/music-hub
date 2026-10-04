@@ -11,6 +11,7 @@ window.MusicHub = window.MusicHub || {};
   'use strict';
 
   var NO_HOVER = window.matchMedia && window.matchMedia('(hover: none)').matches;
+  var REDUCED_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   var els = {};
   // Draws each card's record as it scrolls into view on touch screens.
@@ -164,6 +165,10 @@ window.MusicHub = window.MusicHub || {};
       }
     }
 
+    // For the touch screens' spotlight (spotlightWhenCentred).
+    card.playRecord = play;
+    card.stopRecord = stop;
+
     card.addEventListener('pointerenter', function (event) {
       if (event.pointerType !== 'touch') {
         play();
@@ -210,6 +215,36 @@ window.MusicHub = window.MusicHub || {};
     recordObserver.observe(card);
   }
 
+  /*
+   * Touch screens' stand-in for hovering: as the page scrolls, the cards
+   * crossing the middle of the screen (a thin band there, SPOTLIGHT_MARGIN
+   * in from top and bottom - one row at a time, the next taking over as it
+   * comes through) play as a hovered one does - sleeve aside, record out
+   * and spinning - and stop again as they move on. Not with reduced motion:
+   * cards jumping out and back while scrolling would be the very motion
+   * that's unwanted, so the record just peeks out (style.css).
+   */
+  var SPOTLIGHT_MARGIN = '-48% 0px -48% 0px';
+  var spotlightObserver = null;
+
+  function spotlightWhenCentred(card) {
+    if (!('IntersectionObserver' in window) || REDUCED_MOTION) {
+      return;
+    }
+    if (!spotlightObserver) {
+      spotlightObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.playRecord();
+          } else {
+            entry.target.stopRecord();
+          }
+        });
+      }, { rootMargin: SPOTLIGHT_MARGIN });
+    }
+    spotlightObserver.observe(card);
+  }
+
   /** A record only the Daily Spin hands out (vinyl-catalog.js). */
   function isExclusive(vinyl) {
     return MusicHub.vinylCatalog.exclusives.some(function (exclusive) {
@@ -254,10 +289,10 @@ window.MusicHub = window.MusicHub || {};
       node.appendChild(glitter);
     }
 
+    bindRecord(node, cover, vinyl);
     if (NO_HOVER) {
       drawRecordWhenVisible(node, cover, vinyl);
-    } else {
-      bindRecord(node, cover, vinyl);
+      spotlightWhenCentred(node);
     }
 
     var body = el('div', 'release-card__body');

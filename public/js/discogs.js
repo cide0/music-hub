@@ -391,6 +391,7 @@ window.MusicHub = window.MusicHub || {};
   // Touch screens never hover, so there every card shows a sliver of its
   // record - drawn once the card comes near the screen, not all at once.
   var NO_HOVER = window.matchMedia && window.matchMedia('(hover: none)').matches;
+  var REDUCED_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var recordObserver = null;
 
   function drawRecordWhenVisible(card, cover, release) {
@@ -412,6 +413,36 @@ window.MusicHub = window.MusicHub || {};
       addRecord(card, cover, release);
     };
     recordObserver.observe(card);
+  }
+
+  /*
+   * Touch screens' stand-in for hovering: as the page scrolls, the cards
+   * crossing the middle of the screen (a thin band there, SPOTLIGHT_MARGIN
+   * in from top and bottom - one row at a time, the next taking over as it
+   * comes through) play as a hovered one does - sleeve aside, record out
+   * and spinning - and stop again as they move on. Not with reduced motion:
+   * cards jumping out and back while scrolling would be the very motion
+   * that's unwanted, so the record just peeks out (style.css).
+   */
+  var SPOTLIGHT_MARGIN = '-48% 0px -48% 0px';
+  var spotlightObserver = null;
+
+  function spotlightWhenCentred(card) {
+    if (!('IntersectionObserver' in window) || REDUCED_MOTION) {
+      return;
+    }
+    if (!spotlightObserver) {
+      spotlightObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.playRecord();
+          } else {
+            entry.target.stopRecord();
+          }
+        });
+      }, { rootMargin: SPOTLIGHT_MARGIN });
+    }
+    spotlightObserver.observe(card);
   }
 
   /**
@@ -476,6 +507,10 @@ window.MusicHub = window.MusicHub || {};
       }
     }
 
+    // For the touch screens' spotlight (spotlightWhenCentred).
+    card.playRecord = play;
+    card.stopRecord = stop;
+
     card.addEventListener('pointerenter', function (event) {
       if (event.pointerType !== 'touch') {
         play();
@@ -526,10 +561,10 @@ window.MusicHub = window.MusicHub || {};
     cover.appendChild(sleeve);
     card.appendChild(cover);
 
+    bindRecord(card, cover, release);
     if (NO_HOVER) {
       drawRecordWhenVisible(card, cover, release);
-    } else {
-      bindRecord(card, cover, release);
+      spotlightWhenCentred(card);
     }
 
     var body = el('div', 'release-card__body');

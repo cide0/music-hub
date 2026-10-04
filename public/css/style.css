@@ -740,6 +740,18 @@ button[aria-disabled='true'] {
   margin: 0.5rem 0 0;
 }
 
+/* "Last generated: <date> · <n> artists" - on phones the date and the
+   count on a line each, the dot between them gone. */
+@media (max-width: 900px) {
+  #last-generated > span {
+    display: block;
+  }
+
+  #last-generated .last-generated__separator {
+    display: none;
+  }
+}
+
 /* A short-lived note over the graph, e.g. "the graph is already up to date" -
    plain text, as it sits inside the controls' panel already. It fades like
    every other message (notice.js). */
@@ -790,6 +802,78 @@ button[aria-disabled='true'] {
 
 .graph-overlay__switch {
   margin-bottom: 0.75rem;
+}
+
+/* The right-hand controls' menu (followed-artists-graph.js). On desktop
+   it isn't there: no button, and its contents laid out straight in the
+   panel. On phones the panel would always sit over the graph, so only a
+   round hamburger button is left in the corner, and the controls drop
+   down under it as a card - scrolling within it when they don't fit. */
+.graph-menu-toggle {
+  display: none;
+}
+
+.graph-overlay__menu {
+  display: contents;
+}
+
+@media (max-width: 900px) {
+  .graph-overlay--right {
+    align-items: flex-end;
+    padding: 0.5rem 0.75rem;
+    background-color: transparent;
+  }
+
+  .graph-menu-toggle {
+    display: inline-flex;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    background-color: var(--color-surface);
+    color: var(--color-text-soft);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-black) 50%, transparent);
+  }
+
+  .graph-menu-toggle[aria-expanded='true'] {
+    background-color: var(--color-surface-raised);
+    color: var(--color-text);
+  }
+
+  .graph-menu-toggle svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .graph-overlay__menu {
+    display: none;
+  }
+
+  .graph-overlay--open .graph-overlay__menu {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: min(300px, calc(100vw - 1.5rem));
+    max-height: calc(100dvh - var(--graph-top, 64px) - 5rem);
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background-color: var(--color-surface);
+    box-shadow: 0 16px 32px color-mix(in srgb, var(--color-black) 60%, transparent);
+  }
+
+  /* The whole card scrolls instead, so the genres don't need their own
+     scrolling box inside it. */
+  .graph-overlay--right .graph-overlay__menu .legend--genres {
+    flex: none;
+    max-width: none;
+    overflow: visible;
+  }
 }
 
 /* Type-ahead over the artists in the graph. */
@@ -1149,7 +1233,8 @@ button[aria-disabled='true'] {
     padding: 0.5rem 1rem;
   }
 
-  .navbar__brand span {
+  /* No logo on mobile: the hamburger, then the actions. */
+  .navbar__brand {
     display: none;
   }
 
@@ -1234,8 +1319,9 @@ button[aria-disabled='true'] {
   }
 }
 
-/* Phones: the icon circles a little smaller and closer together, so the
-   bar stays one row with the Daily Spin's wheel in it as well. */
+/* Phones: every button the hamburger's size - a 44px circle (the coins a
+   44px-tall pill), its icon 20px - a little closer together, so the bar
+   stays one row with the Daily Spin's wheel in it as well. */
 @media (max-width: 900px) {
   .navbar__actions {
     gap: 0.25rem;
@@ -1244,12 +1330,23 @@ button[aria-disabled='true'] {
   .is-logged-in .navbar__actions .navbar__settings,
   .navbar__actions .navbar__refresh,
   .navbar__actions .navbar__wheel {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
   }
 
+  .navbar__actions .navbar__refresh svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* The avatar a little bigger, filling the 44px circle as it fills the pill. */
   .navbar__user {
-    padding: calc(0.125rem - 2px);
+    padding: calc(0.25rem - 2px);
+  }
+
+  .navbar__avatar {
+    width: 36px;
+    height: 36px;
   }
 }
 
@@ -1260,12 +1357,8 @@ button[aria-disabled='true'] {
 }
 
 /* The narrowest phones: a little tighter, so the bar stays one row with
-   the refresh button and the wheel in it - the logo makes way. */
+   the refresh button and the wheel in it. */
 @media (max-width: 359px) {
-  .navbar__brand {
-    display: none;
-  }
-
   .navbar__bar {
     gap: 0.375rem;
     padding-inline: 0.75rem;
@@ -1277,9 +1370,21 @@ button[aria-disabled='true'] {
 
   .is-logged-in .navbar__actions .navbar__settings,
   .navbar__actions .navbar__refresh,
-  .navbar__actions .navbar__wheel {
+  .navbar__actions .navbar__wheel,
+  .navbar__toggle {
     width: 36px;
     height: 36px;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .navbar__user {
+    padding: calc(0.125rem - 2px);
+  }
+
+  .navbar__avatar {
+    width: 32px;
+    height: 32px;
   }
 }
 
@@ -2433,6 +2538,58 @@ textarea.text-input {
   width: 100%;
   height: 320px;
   border: 0;
+}
+
+/* The touch screens' cover over an image's embed (concert-history.js
+   addTouchCover): not there with a mouse, nor on videos. Painted over the embed but
+   under the heart and the X (positioned after it, no z-index), with an
+   "opens" hint in the bottom-right corner, round like those buttons. */
+.media-item__cover {
+  display: none;
+}
+
+@media (hover: none) {
+  .media-item__cover {
+    position: absolute;
+    inset: 0;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-soft);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .media-item__cover-hint {
+    position: absolute;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    width: 32px;
+    height: 32px;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    background-color: var(--color-surface);
+  }
+}
+
+/* The viewer: the image as big as the screen allows, the X above it, clear
+   of Drive's own controls in the embed's top corner. */
+.media-viewer {
+  width: min(1000px, calc(100vw - 1rem));
+  max-width: none;
+  max-height: none;
+  padding: 3.75rem 0.5rem 0.5rem;
+}
+
+.media-viewer__frame iframe {
+  display: block;
+  width: 100%;
+  height: calc(100dvh - 7rem);
+  border: 0;
+  border-radius: calc(var(--radius-card) - 0.25rem);
+  background-color: var(--color-black);
 }
 
 /* Everything that belongs at the right-hand end of a toolbar, kept together
@@ -4506,16 +4663,18 @@ textarea.text-input {
 
 /* Touch screens have no hover: every card shows a sliver of its record
    instead (drawn as the card scrolls into view), so the variant is still
-   there to see. */
+   there to see - and the cards crossing the middle of the screen play as
+   a hovered one does (spotlightWhenCentred in discogs.js / collection.js),
+   gliding on from the sliver and back to it. */
 @media (hover: none) {
-  .release-card__sleeve {
+  .release-card:not(.release-card--playing) .release-card__sleeve {
     transform: translateX(-12%);
     box-shadow: 8px 0 16px color-mix(in srgb, var(--color-black) 55%, transparent);
   }
 
   /* Only a card's record - not the turntable's, which would land off
      the platter. */
-  .release-card .vinyl {
+  .release-card:not(.release-card--playing) .vinyl {
     transform: translateX(22%);
   }
 }
@@ -6400,9 +6559,18 @@ button.turntable__power:focus-visible {
   height: 22px;
 }
 
+/* On phones, as tall as the hamburger beside it - like every button
+   there (see the navbar's phone sizes). */
 @media (max-width: 900px) {
   .navbar__coins {
     display: inline-flex;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 359px) {
+  .navbar__coins {
+    min-height: 36px;
   }
 }
 

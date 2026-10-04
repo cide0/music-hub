@@ -15,6 +15,7 @@ export const tabs = [
   { label: 'Release List', href: 'https://spotifyreleaselist.netlify.app/', external: true },
   { label: 'Listening Stats', href: 'https://stats.fm/user/cide?range=lifetime', external: true },
   { label: 'Song Downloader', href: 'https://spotmate.online/en1', external: true },
+  { label: 'Playlist Deduper', href: 'https://spotify-dedup.com/', external: true },
 ];
 
 // Every internal page renders from a view of the same name. A tab can carry

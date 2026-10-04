@@ -72,64 +72,76 @@
         </div>
 
         <div class="graph-overlay graph-overlay--right" id="overlay-right" hidden>
-          <div class="graph-search">
-            <label class="visually-hidden" for="graph-search-input">Search artist</label>
-            <div class="input-clear">
-              <input type="text" id="graph-search-input" class="text-input" placeholder="Search artist" autocomplete="off" />
-              <button type="button" class="input-clear__button" id="graph-search-clear" aria-label="Clear search" hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          <!-- On phones the controls fold away behind this button, so they
+               don't sit over the graph (style.css); on desktop it's hidden
+               and the menu is laid out as if it weren't there. -->
+          <button type="button" class="icon-button graph-menu-toggle" id="graph-menu-toggle"
+            aria-controls="graph-menu" aria-expanded="false" aria-label="Graph options" title="Graph options">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+
+          <div class="graph-overlay__menu" id="graph-menu">
+            <div class="graph-search">
+              <label class="visually-hidden" for="graph-search-input">Search artist</label>
+              <div class="input-clear">
+                <input type="text" id="graph-search-input" class="text-input" placeholder="Search artist" autocomplete="off" />
+                <button type="button" class="input-clear__button" id="graph-search-clear" aria-label="Clear search" hidden>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              <ul class="picker graph-search__results" id="graph-search-results" hidden></ul>
+            </div>
+
+            <label class="switch graph-overlay__switch">
+              <input type="checkbox" id="genres-toggle" />
+              <span class="switch__track"><span class="switch__thumb"></span></span>
+              <span class="switch__label">Show genres</span>
+            </label>
+
+            <label class="switch graph-overlay__switch">
+              <input type="checkbox" id="concerts-toggle" />
+              <span class="switch__track"><span class="switch__thumb"></span></span>
+              <span class="switch__label">Only artists with concerts</span>
+            </label>
+
+            <label class="switch">
+              <input type="checkbox" id="recommend-toggle" />
+              <span class="switch__track"><span class="switch__thumb"></span></span>
+              <span class="switch__label">Recommended artists</span>
+            </label>
+
+            <div class="graph-stepper" id="recommend-stepper" hidden>
+              <button type="button" class="icon-button graph-stepper__button" id="recommend-prev" aria-label="Previous recommended artist">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <span class="graph-stepper__label" id="recommend-position">–</span>
+              <button type="button" class="icon-button graph-stepper__button" id="recommend-next" aria-label="Next recommended artist">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
             </div>
-            <ul class="picker graph-search__results" id="graph-search-results" hidden></ul>
-          </div>
-
-          <label class="switch graph-overlay__switch">
-            <input type="checkbox" id="genres-toggle" />
-            <span class="switch__track"><span class="switch__thumb"></span></span>
-            <span class="switch__label">Show genres</span>
-          </label>
-
-          <label class="switch graph-overlay__switch">
-            <input type="checkbox" id="concerts-toggle" />
-            <span class="switch__track"><span class="switch__thumb"></span></span>
-            <span class="switch__label">Only artists with concerts</span>
-          </label>
-
-          <label class="switch">
-            <input type="checkbox" id="recommend-toggle" />
-            <span class="switch__track"><span class="switch__thumb"></span></span>
-            <span class="switch__label">Recommended artists</span>
-          </label>
-
-          <div class="graph-stepper" id="recommend-stepper" hidden>
-            <button type="button" class="icon-button graph-stepper__button" id="recommend-prev" aria-label="Previous recommended artist">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
+            <!-- Followed the artist in the stepper on Spotify: it joins the graph,
+                 with its connections paying out (followed-artists-graph.js). -->
+            <button type="button" class="button button--primary graph-followed-button" id="recommend-followed" hidden>
+              Followed
             </button>
-            <span class="graph-stepper__label" id="recommend-position">–</span>
-            <button type="button" class="icon-button graph-stepper__button" id="recommend-next" aria-label="Next recommended artist">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
+
+            <ul class="legend" id="graph-legend" hidden>
+              <li class="legend__item"><span class="legend__line"></span>Similarity</li>
+              <li class="legend__item" data-legend-recommended hidden><span class="legend__line legend__line--dashed"></span>Similarity recommended</li>
+              <li class="legend__item" data-legend-recommended hidden><span class="legend__dot legend__dot--recommended"></span>Recommended</li>
+              <li class="legend__item"><span class="legend__dot legend__dot--badge">3</span>Concerts</li>
+            </ul>
+
+            <ul class="legend legend--genres" id="genre-legend" hidden></ul>
           </div>
-          <!-- Followed the artist in the stepper on Spotify: it joins the graph,
-               with its connections paying out (followed-artists-graph.js). -->
-          <button type="button" class="button button--primary graph-followed-button" id="recommend-followed" hidden>
-            Followed
-          </button>
-
-          <ul class="legend" id="graph-legend" hidden>
-            <li class="legend__item"><span class="legend__line"></span>Similarity</li>
-            <li class="legend__item" data-legend-recommended hidden><span class="legend__line legend__line--dashed"></span>Similarity recommended</li>
-            <li class="legend__item" data-legend-recommended hidden><span class="legend__dot legend__dot--recommended"></span>Recommended</li>
-            <li class="legend__item"><span class="legend__dot legend__dot--badge">3</span>Concerts</li>
-          </ul>
-
-          <ul class="legend legend--genres" id="genre-legend" hidden></ul>
         </div>
 
         <div class="notice" id="graph-failed-notice" hidden>

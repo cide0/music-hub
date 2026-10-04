@@ -579,12 +579,22 @@ window.MusicHub = window.MusicHub || {};
     els.clear.hidden = !hasGraph;
 
     if (graph.lastGeneratedAt) {
-      els.lastGenerated.textContent = 'Last generated: '
+      // Two parts, so phones can put each on a line of its own (style.css).
+      var when = document.createElement('span');
+      when.textContent = 'Last generated: '
         + new Intl.DateTimeFormat('de-DE', {
           day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        }).format(new Date(graph.lastGeneratedAt))
-        // Followed artists only - recommendations are kept out of graph.artists.
-        + ' · ' + graph.artists.length + (graph.artists.length === 1 ? ' artist' : ' artists');
+        }).format(new Date(graph.lastGeneratedAt));
+      var separator = document.createElement('span');
+      separator.className = 'last-generated__separator';
+      separator.textContent = ' · ';
+      var count = document.createElement('span');
+      // Followed artists only - recommendations are kept out of graph.artists.
+      count.textContent = graph.artists.length + (graph.artists.length === 1 ? ' artist' : ' artists');
+      els.lastGenerated.textContent = '';
+      els.lastGenerated.appendChild(when);
+      els.lastGenerated.appendChild(separator);
+      els.lastGenerated.appendChild(count);
       els.lastGenerated.hidden = false;
     } else {
       els.lastGenerated.hidden = true;
@@ -1612,6 +1622,44 @@ window.MusicHub = window.MusicHub || {};
     centerOn(node);
   }
 
+  /* --------------------------------------------- the phone's controls menu */
+
+  /**
+   * On phones the right-hand controls fold away behind a hamburger button
+   * (style.css), so they don't always sit over the graph. Opened, they drop
+   * down under it; a tap anywhere else, Escape, or picking an artist from
+   * the search closes them again. On desktop the button isn't shown and
+   * none of this changes anything.
+   */
+  function setMenuOpen(open) {
+    els.overlayRight.classList.toggle('graph-overlay--open', open);
+    els.menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function menuOpen() {
+    return els.overlayRight.classList.contains('graph-overlay--open');
+  }
+
+  function initMenu() {
+    els.menuToggle.addEventListener('click', function () {
+      setMenuOpen(!menuOpen());
+    });
+    // The path as it was when tapped: a control that redraws itself (a
+    // search result, a genre) is gone from the page by now, but was inside.
+    document.addEventListener('click', function (event) {
+      if (menuOpen() && event.composedPath().indexOf(els.overlayRight) === -1) {
+        setMenuOpen(false);
+      }
+    });
+    document.addEventListener('keydown', function (event) {
+      // Escape in the search closes its results first.
+      if (event.key === 'Escape' && menuOpen() && event.target !== els.searchInput) {
+        setMenuOpen(false);
+        els.menuToggle.focus();
+      }
+    });
+  }
+
   function renderSearchResults() {
     var query = normalizeArtistName(els.searchInput.value);
     if (!view || !query) {
@@ -1676,6 +1724,8 @@ window.MusicHub = window.MusicHub || {};
         els.searchInput.value = '';
         els.searchClear.hidden = true;
         closeSearchResults();
+        // On a phone, out of the way of the artist it brings up.
+        setMenuOpen(false);
         focusNode(node);
       });
 
@@ -2661,8 +2711,15 @@ window.MusicHub = window.MusicHub || {};
 
     // Nodes can be dragged around and stay where they are dropped; a
     // double-click hands one back to the simulation. clickDistance keeps a
-    // real drag from also counting as a click on the dot.
+    // real drag from also counting as a click on the dot. With the mouse
+    // only: on a touch screen a finger landing on a node while panning or
+    // pinching moved it by accident, so a touch there goes to the zoom
+    // instead - it pans and zooms from anywhere, and a tap still picks the
+    // artist. d3's own filter otherwise (no Ctrl-click, main button only).
     group.call(window.d3.drag()
+      .filter(function (event) {
+        return event.type !== 'touchstart' && !event.ctrlKey && !event.button;
+      })
       .clickDistance(4)
       .on('start', function (event, d) {
         stopLayoutTween();
@@ -2897,6 +2954,7 @@ window.MusicHub = window.MusicHub || {};
     els.failedNotice = document.getElementById('graph-failed-notice');
     els.overlayLeft = document.getElementById('overlay-left');
     els.overlayRight = document.getElementById('overlay-right');
+    els.menuToggle = document.getElementById('graph-menu-toggle');
     els.canvas = document.getElementById('graph-canvas');
     els.legend = document.getElementById('graph-legend');
     els.svg = document.getElementById('graph-svg');
@@ -2912,6 +2970,7 @@ window.MusicHub = window.MusicHub || {};
     els.stepperLabel = document.getElementById('recommend-position');
     els.followedButton = document.getElementById('recommend-followed');
     els.followedButton.addEventListener('click', followCurrentRecommendation);
+    initMenu();
 
     graph = load();
 
