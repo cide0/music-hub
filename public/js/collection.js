@@ -811,6 +811,7 @@ window.MusicHub = window.MusicHub || {};
       glow: MusicHub.vinyl.glowColors(spec).glow,
       powerButton: true,
       trackButtons: true,
+      fromEdge: true,
     });
     playerParts.power.addEventListener('click', togglePower);
     playerParts.prev.addEventListener('click', function () {

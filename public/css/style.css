@@ -5192,13 +5192,16 @@ textarea.text-input {
     0 10px 30px color-mix(in srgb, var(--color-black) 60%, transparent);
 }
 
-/* The platter, and the record on it, share one square on the left. */
+/* The platter, and the record on it, share one square on the left,
+   nearly as tall as the plinth: 2.5% of its height clear above and below,
+   and as much to its left (1.75% of the width, 1.45 times the height). */
 .turntable__platter,
-.turntable__record {
+.turntable__record,
+.turntable__cap {
   position: absolute;
-  top: calc(6% / var(--plinth-grow, 1));
-  left: 4%;
-  height: calc(88% / var(--plinth-grow, 1));
+  top: calc(2.5% / var(--plinth-grow, 1));
+  left: 1.75%;
+  height: calc(95% / var(--plinth-grow, 1));
   aspect-ratio: 1;
 }
 
@@ -5214,7 +5217,54 @@ textarea.text-input {
 }
 
 .turntable__record .vinyl {
-  inset: 5%;
+  inset: 4%;
+  /* The disc's own shadow, here round the record instead - the disc is
+     masked (below), and a mask would cut it off. */
+  border-radius: 50%;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-black) 55%, transparent);
+}
+
+/* The spindle: a metal pin in the middle of the platter, under the
+   record. The record's hole is cut right through it (the label's painted
+   hole is 4.08% of the record's radius across, the mask a touch wider),
+   so the spindle shows through it - and through it as the record drops
+   over it (turntable.js play). */
+.turntable__record :is(.vinyl__disc, .vinyl__holo) {
+  -webkit-mask-image: radial-gradient(circle closest-side, transparent 4.2%, var(--color-black) 4.45%);
+  mask-image: radial-gradient(circle closest-side, transparent 4.2%, var(--color-black) 4.45%);
+}
+
+.turntable__spindle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* Just inside the hole (about 3.9% of the platter across), with a thin
+     even ring of shadow all round - lit and shadowed the same on every
+     side, so it reads as centred in it. */
+  width: 3.4%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, var(--color-text), var(--vinyl-silver) 45%, var(--vinyl-grey) 100%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-black) 60%, transparent);
+}
+
+/* The spindle again, over the landed record, with the hole round it - one
+   drawing, so always centred on each other. The record turns on a layer
+   of its own, which the browser puts on whole pixels; the spindle under
+   it, drawn where it falls between them, seemed a pixel off in the hole,
+   and moved when the drop ended. Measured to the platter's edge
+   (closest-side): the spindle 3.4% across, the hole 4.3% of the record's
+   radius (92% of the platter's), drawn a touch wider to cover its edge. */
+.turntable__cap {
+  pointer-events: none;
+  background: radial-gradient(circle closest-side,
+    var(--color-text) 0,
+    var(--vinyl-silver) 1.5%,
+    var(--vinyl-grey) 3.2%,
+    color-mix(in srgb, var(--color-black) 60%, var(--color-purple-950)) 3.45%,
+    color-mix(in srgb, var(--color-black) 60%, var(--color-purple-950)) 4.1%,
+    transparent 4.3%);
 }
 
 /* A pulsing glow behind the record in --rarity, its still reflection
@@ -5264,7 +5314,7 @@ textarea.text-input {
 }
 
 .turntable__record .vinyl__disc {
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-black) 55%, transparent);
+  box-shadow: none;
 }
 
 .turntable__glint {
@@ -5288,12 +5338,13 @@ textarea.text-input {
     transparent);
   mix-blend-mode: screen;
   translate: -120% 0;
-  animation: turntable-glint 2.4s ease-in-out infinite;
+  animation: turntable-glint 5.2s ease-in-out infinite;
 }
 
+/* One sweep of about 1.3s, then a pause until the next. */
 @keyframes turntable-glint {
   0% { translate: -120% 0; }
-  55%, 100% { translate: 220% 0; }
+  25%, 100% { translate: 220% 0; }
 }
 
 /* No motion: a steady glow and no sweep. */
@@ -5334,6 +5385,11 @@ textarea.text-input {
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--color-text) 12%, transparent),
     0 2px 5px color-mix(in srgb, var(--color-black) 60%, transparent);
+  /* Always on a layer of its own, like its light (.turntable__power-on):
+     one drawn there only while it's pressed or lit snaps to the pixel
+     grid then and not otherwise, so the small symbol jumped by a fraction
+     of a pixel as the press and the light came and went. */
+  will-change: transform;
 }
 
 /* On the Collection's player it's a real button (turntable.js setPower):
@@ -5374,6 +5430,7 @@ button.turntable__power:focus-visible {
     0 0 8px var(--color-purple-300),
     inset 0 0 6px var(--color-purple-300);
   opacity: 0;
+  will-change: opacity;
 }
 
 .turntable__power-icon--on {
@@ -5437,11 +5494,11 @@ button.turntable__power:focus-visible {
    buttons while the turntable is on (its window's filter, so the light
    follows the fill), and goes dark with them when it's off. */
 .turntable__plinth {
-  /* The record's centre across the plinth (left 4%, 88% of the plinth's
-     height wide, at 1.45 times as wide as tall), and halfway down the
-     strip under it. */
-  --transport-x: calc(4% + 88% / 1.45 / 2);
-  --transport-y: calc((94% / var(--plinth-grow, 1) + 100%) / 2);
+  /* The record's centre across the plinth (left 1.75%, 95% of the
+     plinth's height wide, at 1.45 times as wide as tall), and halfway
+     down the strip under it. */
+  --transport-x: calc(1.75% + 95% / 1.45 / 2);
+  --transport-y: calc((97.5% / var(--plinth-grow, 1) + 100%) / 2);
   --progress-width: 36%;
 }
 
@@ -5525,38 +5582,136 @@ button.turntable__power:focus-visible {
 }
 
 /* Pivots at the top right: turned a few degrees it rests beside the
-   platter, ARM_PLAY_DEG (turntable.js) puts the needle on the record. */
+   platter, ARM_PLAY_DEG (turntable.js) puts the needle on the record's
+   edge at its bottom right. Its pivot, length and the headshell's angle
+   are worked out together, so from the edge in to the label the
+   headshell lies along the groove under it (within a couple of degrees)
+   rather than across it. Its pivot is also --pivot-x / --pivot-y, where
+   the mount (.turntable__mount) sits. */
 .turntable__arm {
   position: absolute;
-  top: calc(8% / var(--plinth-grow, 1));
-  right: 10%;
+  top: calc(12% / var(--plinth-grow, 1));
+  right: 16%;
   width: 8%;
-  height: calc(80% / var(--plinth-grow, 1));
+  height: calc(86% / var(--plinth-grow, 1));
   transform-origin: 50% 7%;
   /* ARM_REST_DEG in turntable.js. */
-  rotate: 9deg;
+  rotate: 6deg;
 }
 
-.turntable__pivot {
+.turntable__plinth {
+  /* The arm's pivot (.turntable__arm: its top plus 7% of its height, and
+     its centre across), where the mount sits. */
+  --pivot-x: calc(100% - 16% - 8% / 2);
+  --pivot-y: calc((12% + 86% * 0.07) / var(--plinth-grow, 1));
+}
+
+/* The arm's mount, fixed to the plinth under the pivot - it doesn't turn
+   with the arm, so its light stays put: a dark plate sunk into the plinth,
+   with a metal collar round the bearing. 1.8 times the arm's width
+   across (8% of the plinth's). */
+.turntable__mount {
   position: absolute;
-  top: 7%;
-  left: 50%;
-  width: 150%;
+  top: var(--pivot-y);
+  left: var(--pivot-x);
+  width: calc(8% * 1.8);
   aspect-ratio: 1;
   translate: -50% -50%;
   border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, var(--vinyl-silver), var(--vinyl-grey) 70%);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--color-black) 60%, transparent);
+  background:
+    radial-gradient(circle closest-side,
+      color-mix(in srgb, var(--color-black) 70%, var(--color-purple-950)) 0 52%,
+      var(--vinyl-grey) 54%,
+      var(--vinyl-silver) 60%,
+      var(--vinyl-grey) 66%,
+      color-mix(in srgb, var(--color-black) 40%, var(--color-purple-950)) 69% 100%);
+  box-shadow:
+    inset 0 2px 3px color-mix(in srgb, var(--color-black) 70%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-text) 10%, transparent),
+    0 1px 0 color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+
+/* The bearing the arm turns on, over the rod: a round metal cap, lit evenly
+   all round (it turns with the arm), its rim and a small centre screw
+   darker. */
+.turntable__bearing {
+  position: absolute;
+  top: 7%;
+  left: 50%;
+  width: 90%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side,
+    var(--vinyl-grey) 0 14%,
+    var(--vinyl-silver) 20%,
+    color-mix(in srgb, var(--vinyl-silver) 60%, var(--color-text)) 50%,
+    var(--vinyl-silver) 72%,
+    var(--vinyl-grey) 90%,
+    color-mix(in srgb, var(--vinyl-grey) 60%, var(--color-black)) 100%);
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--color-black) 65%, transparent);
+}
+
+/* Behind the pivot, on the rod: the counterweight, a short metal
+   cylinder with ridged ends, its scale marked down one side (below). */
+.turntable__counterweight {
+  position: absolute;
+  top: -11%;
+  left: 50%;
+  width: 70%;
+  height: 8%;
+  translate: -50% 0;
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--color-black) 35%, transparent) 0 8%,
+      transparent 8% 92%,
+      color-mix(in srgb, var(--color-black) 35%, transparent) 92%),
+    linear-gradient(90deg, var(--vinyl-grey), var(--vinyl-silver) 40%, var(--vinyl-grey));
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--color-black) 60%, transparent);
+}
+
+/* The counterweight's scale, between its ridged ends: short marks down
+   its left side and, every other one, longer ones reaching further in. */
+.turntable__counterweight::before,
+.turntable__counterweight::after {
+  content: '';
+  position: absolute;
+  top: 16%;
+  bottom: 16%;
+  left: 10%;
+  /* A 1px mark in each tile, --mark-at down it - clear of the tiles'
+     edges, so none is cut to a sliver at either end. */
+  background: linear-gradient(180deg,
+    transparent calc(var(--mark-at) - 0.5px),
+    color-mix(in srgb, var(--color-black) 55%, transparent) calc(var(--mark-at) - 0.5px) calc(var(--mark-at) + 0.5px),
+    transparent calc(var(--mark-at) + 0.5px)) 0 0 / 100% var(--mark-step) repeat-y;
+}
+
+/* Eight short marks, each in the middle of its eighth... */
+.turntable__counterweight::before {
+  --mark-step: 12.5%;
+  --mark-at: 50%;
+  width: 22%;
+}
+
+/* ... and a long one over every other, a quarter of the way down each
+   quarter. */
+.turntable__counterweight::after {
+  --mark-step: 25%;
+  --mark-at: 25%;
+  width: 42%;
 }
 
 .turntable__rod {
   position: absolute;
-  top: 7%;
+  /* From inside the counterweight, through the bearing. */
+  top: -6%;
   /* Ends just inside the headshell's top, so the two read as one piece. */
   bottom: 18%;
   left: 50%;
-  /* Grows with the turntable, from 3px on the small ones. */
-  width: max(3px, 9%);
+  /* Grows with the turntable, from 3.5px on the small ones. */
+  width: max(3.5px, 11%);
   translate: -50% 0;
   border-radius: 2px;
   background: linear-gradient(90deg, var(--vinyl-grey), var(--vinyl-silver), var(--vinyl-grey));
@@ -5573,12 +5728,80 @@ button.turntable__power:focus-visible {
   height: 17%;
   transform-origin: 50% 0;
   translate: -50% 0;
-  rotate: 18deg;
-  border-radius: 3px;
-  background-color: var(--color-purple-100);
+  /* Part of the arm's geometry (.turntable__arm). */
+  rotate: 24deg;
+  border-radius: 3px 3px 22% 22% / 3px 3px 9% 9%;
+  /* Lit from its edges in, like a bent plate catching the light. */
+  background: linear-gradient(90deg,
+    var(--color-purple-300),
+    var(--color-purple-100) 25%,
+    var(--color-purple-50) 50%,
+    var(--color-purple-100) 75%,
+    var(--color-purple-300));
   box-shadow:
     0 0 6px var(--color-purple-300),
     0 0 12px var(--color-purple-300);
+}
+
+/* The collar where the rod goes into the headshell. */
+.turntable__head::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 40%;
+  height: 9%;
+  translate: -50% 25%;
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(90deg, var(--vinyl-grey), var(--vinyl-silver) 45%, var(--vinyl-grey));
+}
+
+/* The finger lift: a small curled tab out to the side, away from the
+   record's middle, lit like the headshell. */
+.turntable__lift {
+  position: absolute;
+  top: 16%;
+  left: 92%;
+  width: 85%;
+  height: 7%;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(180deg, var(--color-purple-50), var(--color-purple-200));
+  box-shadow: 0 0 5px var(--color-purple-300);
+  rotate: -14deg;
+  transform-origin: 0 50%;
+}
+
+/* The cartridge under the headshell's front: a dark body with a lighter
+   top edge, its two mounting screws, and a lit band across its front. */
+.turntable__cartridge {
+  position: absolute;
+  top: 36%;
+  right: 14%;
+  bottom: 9%;
+  left: 14%;
+  border-radius: 2px 2px 3px 3px;
+  background:
+    radial-gradient(circle at 30% 14%, var(--vinyl-silver) 0 4%, var(--vinyl-grey) 6.5%, transparent 8%),
+    radial-gradient(circle at 70% 14%, var(--vinyl-silver) 0 4%, var(--vinyl-grey) 6.5%, transparent 8%),
+    linear-gradient(180deg, transparent 0 72%, var(--color-purple-300) 72% 80%, transparent 80%),
+    linear-gradient(90deg, var(--color-purple-950), var(--color-purple-900) 50%, var(--color-purple-950));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-text) 25%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-black) 60%, transparent);
+}
+
+/* The stylus: a bright point at the headshell's tip, where it meets the
+   groove. */
+.turntable__stylus {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 16%;
+  aspect-ratio: 1;
+  translate: -50% 50%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--color-text), var(--vinyl-silver) 60%, var(--vinyl-grey));
+  box-shadow: 0 0 3px var(--color-purple-200);
 }
 
 /* ---- Vinyl player styles (the Store): the Collection's record player
@@ -5755,6 +5978,22 @@ button.turntable__power:focus-visible {
   animation: name-border-turn 2.4s linear infinite;
 }
 
+/* The arm's mount in gold: a dark gold plate, its collar polished gold,
+   glowing faintly like the platter - flat, without the plain one's
+   shadow inside its top edge. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__mount {
+  background:
+    radial-gradient(circle closest-side,
+      color-mix(in srgb, var(--rarity-gold-deep) 16%, var(--color-black)) 0 52%,
+      var(--rarity-gold-deep) 54%,
+      var(--rarity-gold-bright) 60%,
+      var(--rarity-gold-deep) 66%,
+      color-mix(in srgb, var(--rarity-gold-deep) 30%, var(--color-black)) 69% 100%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--rarity-gold) 45%, transparent),
+    0 0 10px color-mix(in srgb, var(--rarity-gold-bright) 22%, transparent);
+}
+
 /* The progress groove cut into the gold plate, ringed in gold like the
    buttons, and filled with polished gold glowing gold - the Gold Navbar's
    band of light running through it while it's on. */
@@ -5795,14 +6034,37 @@ button.turntable__power:focus-visible {
 
 /* The headshell in polished gold, glowing gold. */
 :is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__head {
-  background: linear-gradient(160deg,
-    var(--rarity-gold-shine),
-    var(--rarity-gold-bright) 30%,
-    var(--rarity-gold) 60%,
+  background: linear-gradient(90deg,
+    var(--rarity-gold-deep),
+    var(--rarity-gold) 25%,
+    var(--rarity-gold-shine) 50%,
+    var(--rarity-gold-bright) 70%,
     var(--rarity-gold-deep));
   box-shadow:
     0 0 6px var(--rarity-gold-bright),
     0 0 12px color-mix(in srgb, var(--rarity-gold) 70%, transparent);
+}
+
+/* Its finger lift polished gold, the cartridge black and gold with gold
+   screws, and the stylus glinting gold. */
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__lift {
+  background: linear-gradient(180deg, var(--rarity-gold-shine), var(--rarity-gold));
+  box-shadow: 0 0 5px color-mix(in srgb, var(--rarity-gold-bright) 70%, transparent);
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__cartridge {
+  background:
+    radial-gradient(circle at 30% 14%, var(--rarity-gold-shine) 0 4%, var(--rarity-gold-deep) 6.5%, transparent 8%),
+    radial-gradient(circle at 70% 14%, var(--rarity-gold-shine) 0 4%, var(--rarity-gold-deep) 6.5%, transparent 8%),
+    linear-gradient(180deg, transparent 0 72%, var(--rarity-gold-bright) 72% 80%, transparent 80%),
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--rarity-gold-deep) 16%, var(--color-black)),
+      color-mix(in srgb, var(--rarity-gold-deep) 35%, var(--color-black)) 50%,
+      color-mix(in srgb, var(--rarity-gold-deep) 16%, var(--color-black)));
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable__stylus {
+  box-shadow: 0 0 3px var(--rarity-gold-bright);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5845,7 +6107,7 @@ button.turntable__power:focus-visible {
 
 /* ARM_PLAY_DEG in turntable.js. */
 .player-preview .turntable__arm {
-  rotate: 35deg;
+  rotate: 28.5deg;
 }
 
 /* The flourish when the reel stops: a screen-wide flash of light and a burst
@@ -7994,12 +8256,16 @@ button.turntable__power:focus-visible {
    --plinth-grow times that tall, for the progress groove under the
    record - its album below. */
 .player {
-  --reel-cover: min(52vh, 440px, calc((100vw - 2rem) / 1.45 - 3rem));
+  --reel-cover: min(56vh, 470px, calc((100vw - 2rem) / 1.45 - 3rem));
   --plinth-grow: 1.16;
+  --player-gap: 1.25rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
+  gap: var(--player-gap);
+  /* The buttons as far below the navbar as the turntable is below them:
+     the page's own 1.5rem at the top (.page), less the difference. */
+  margin-top: calc(var(--player-gap) - 1.5rem);
 }
 
 /* "Back to collection" on the left, the Discogs link at the far right. */
@@ -8089,6 +8355,7 @@ button.turntable__power:focus-visible {
   margin: 0.25rem 0 0;
   color: var(--color-text-soft);
   font-size: 1.0625rem;
+  overflow-wrap: anywhere;
 }
 
 /* The track Spotify is on, as big as the artist. While it plays a wave
@@ -8202,9 +8469,13 @@ button.turntable__power:focus-visible {
   100% { transform: scale(1.9); opacity: 0; }
 }
 
+/* Kept whole on one line where it fits; a word longer than the line
+   itself ("TheShadowsOfThingsThatMayBe") wraps between its letters
+   instead of running past the + into the turntable. */
 .player__track-word {
-  display: inline-block;
-  white-space: nowrap;
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .player__track-letter {
@@ -8259,6 +8530,13 @@ button.turntable__power:focus-visible {
   display: none;
 }
 
+/* Room beside the turntable for what's playing: about 10rem either side. */
+@media (min-width: 1001px) {
+  .player {
+    --reel-cover: min(56vh, 470px, calc((100vw - 22rem) / 1.45 - 1.5rem));
+  }
+}
+
 /* No room beside the turntable: a row of its own at the top of the deck,
    the turntable below it. */
 @media (max-width: 1000px) {
@@ -8289,6 +8567,11 @@ button.turntable__power:focus-visible {
     overflow: hidden;
     white-space: nowrap;
     mask-image: linear-gradient(to right, var(--color-black) calc(100% - 2rem), transparent);
+  }
+
+  .player__track-word {
+    flex-wrap: nowrap;
+    max-width: none;
   }
 }
 

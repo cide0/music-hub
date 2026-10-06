@@ -21,11 +21,15 @@ window.MusicHub = window.MusicHub || {};
   };
   // The tonearm's angle resting beside the platter, and on the record.
   // ARM_REST_DEG is also the arm's resting rotate in style.css.
-  var ARM_REST_DEG = 9;
-  var ARM_PLAY_DEG = 35;
+  var ARM_REST_DEG = 6;
+  var ARM_PLAY_DEG = 28.5;
+  // Built with `options.fromEdge`, the needle starts nearer the record's
+  // rim instead (97% of the way out, to ARM_PLAY_DEG's 93%).
+  var ARM_EDGE_DEG = 27;
   // As the album plays, the needle works its way in from the record's
-  // edge (ARM_PLAY_DEG) to ARM_END_DEG, just short of the label.
-  var ARM_END_DEG = 50;
+  // edge (ARM_PLAY_DEG, or ARM_EDGE_DEG) to ARM_END_DEG, just short of the
+  // label.
+  var ARM_END_DEG = 46;
   // Following the album there, a small correction still slides over
   // rather than jumping; a skip with the track buttons lifts the needle
   // and carries it over at least this slowly.
@@ -136,6 +140,7 @@ window.MusicHub = window.MusicHub || {};
    * while they can be used (the page disables them otherwise), either side
    * of the song's progress groove under the record (setProgress) - on a
    * plinth taller at the bottom to hold them (--plinth-grow, style.css).
+   * `options.fromEdge`: the needle starts nearer the record's rim.
    */
   function build(vinyl, options) {
     var o = options || {};
@@ -145,7 +150,10 @@ window.MusicHub = window.MusicHub || {};
     }
     var plinth = el('div', 'turntable__plinth');
 
-    plinth.appendChild(el('div', 'turntable__platter'));
+    // The platter, with the spindle the record's hole drops over.
+    var platter = el('div', 'turntable__platter');
+    platter.appendChild(el('span', 'turntable__spindle'));
+    plinth.appendChild(platter);
 
     // A round power button: the symbol dim while off, lit and glowing on.
     var power = el(o.powerButton ? 'button' : 'span', 'turntable__power');
@@ -182,17 +190,30 @@ window.MusicHub = window.MusicHub || {};
     vinyl.appendChild(el('span', 'turntable__glint'));
     record.appendChild(vinyl);
     plinth.appendChild(record);
+    // Over the landed record, the spindle and the hole round it drawn as
+    // one, so they're always centred on each other (style.css).
+    var cap = el('span', 'turntable__cap');
+    plinth.appendChild(cap);
 
+    // The arm's mount, fixed to the plinth; the arm turns on its bearing,
+    // the counterweight on the rod behind it.
+    plinth.appendChild(el('span', 'turntable__mount'));
     var arm = el('div', 'turntable__arm');
-    arm.appendChild(el('span', 'turntable__pivot'));
     arm.appendChild(el('span', 'turntable__rod'));
+    arm.appendChild(el('span', 'turntable__counterweight'));
+    arm.appendChild(el('span', 'turntable__bearing'));
+    // The headshell: its finger lift, the cartridge and the stylus at its
+    // tip - the needle's point, at the headshell's bottom centre.
     var head = el('span', 'turntable__head');
+    head.appendChild(el('span', 'turntable__lift'));
+    head.appendChild(el('span', 'turntable__cartridge'));
+    head.appendChild(el('span', 'turntable__stylus'));
     arm.appendChild(head);
     plinth.appendChild(arm);
 
     root.appendChild(plinth);
     return {
-      root: root, record: record, disc: record.querySelector('.vinyl__disc'),
+      root: root, record: record, disc: record.querySelector('.vinyl__disc'), cap: cap,
       arm: arm, head: head, power: power, powerOn: powerOn, prev: prev, next: next,
       progressBar: progress && progress.bar, progressFill: progress && progress.fill,
       // How far through its song the record is (setProgress).
@@ -201,8 +222,10 @@ window.MusicHub = window.MusicHub || {};
       // replaced, not piled up, each time it's switched.
       on: false,
       anims: {},
-      // How far through the album it is (setNeedle), and when the arm's
-      // current swing is over (performance.now() time).
+      // Where on the record the needle starts, how far through the album
+      // it is (setNeedle), and when the arm's current swing is over
+      // (performance.now() time).
+      startDeg: o.fromEdge ? ARM_EDGE_DEG : ARM_PLAY_DEG,
       needle: null,
       armFreeAt: 0,
       needleTimer: 0,
@@ -236,10 +259,10 @@ window.MusicHub = window.MusicHub || {};
   function needleDeg(parts, time) {
     var needle = parts.needle;
     if (!needle) {
-      return ARM_PLAY_DEG;
+      return parts.startDeg;
     }
     var fraction = needle.fraction + needle.perMs * (time - needle.at);
-    return ARM_PLAY_DEG + (ARM_END_DEG - ARM_PLAY_DEG) * Math.min(1, Math.max(0, fraction));
+    return parts.startDeg + (ARM_END_DEG - parts.startDeg) * Math.min(1, Math.max(0, fraction));
   }
 
   /**
@@ -259,7 +282,7 @@ window.MusicHub = window.MusicHub || {};
     var needle = parts.needle;
     if (needle && needle.perMs > 0 && toDeg < ARM_END_DEG) {
       // Composited over the swing once it starts, where the swing ends.
-      var degPerMs = (ARM_END_DEG - ARM_PLAY_DEG) * needle.perMs;
+      var degPerMs = (ARM_END_DEG - parts.startDeg) * needle.perMs;
       animations.push(parts.arm.animate([{ rotate: toDeg + 'deg' }, { rotate: ARM_END_DEG + 'deg' }], {
         delay: delay + duration, duration: (ARM_END_DEG - toDeg) / degPerMs, easing: 'linear', fill: 'forwards',
       }));
@@ -284,7 +307,7 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
     lift = lift && !still;
-    var fromDeg = current(parts.arm, 'rotate', ARM_PLAY_DEG);
+    var fromDeg = current(parts.arm, 'rotate', parts.startDeg);
     var duration = still ? 0 : Math.max(lift ? ARM_SKIP_MS : ARM_GLIDE_MS, swingMs(fromDeg, needleDeg(parts, now)));
     // Lifted, it moves once the needle is up.
     var delay = lift ? TIMING.lower : 0;
@@ -394,13 +417,21 @@ window.MusicHub = window.MusicHub || {};
   function play(parts, options) {
     var o = options || {};
 
-    // Dropped in from above, with a small bounce as it lands.
+    // Lowered from above straight down over the spindle - its hole
+    // closing in on it as it falls, the spindle showing through it - and
+    // settling flat on the platter with a small give. Landed at 60% of
+    // the way through (playSounds).
     parts.record.animate([
-      { transform: 'translateY(-75%) scale(1.12)', opacity: 0, easing: 'cubic-bezier(0.55, 0, 1, 0.45)' },
-      { offset: 0.6, transform: 'translateY(0) scale(0.98)', opacity: 1, easing: 'ease-out' },
-      { offset: 0.8, transform: 'translateY(-2%) scale(1.01)', easing: 'ease-in' },
+      { transform: 'translateY(-14%) scale(1.3)', opacity: 0, easing: 'linear' },
+      { offset: 0.15, transform: 'translateY(-11.2%) scale(1.24)', opacity: 1, easing: 'cubic-bezier(0.45, 0, 0.9, 0.6)' },
+      { offset: 0.6, transform: 'none', easing: 'ease-out' },
+      { offset: 0.8, transform: 'scale(1.012)', easing: 'ease-in-out' },
       { transform: 'none', opacity: 1 },
     ], { duration: TIMING.drop, fill: 'backwards' });
+    // Until it lands only the spindle under it shows, through its hole.
+    parts.cap.animate([{ opacity: 0 }, { opacity: 1 }], {
+      delay: TIMING.drop * 0.6, duration: 120, fill: 'backwards',
+    });
 
     // A short start-up to 33 1/3 rpm, then a steady speed. The start-up's
     // easing ends at twice its average speed, so it covers half the ground

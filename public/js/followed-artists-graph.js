@@ -588,17 +588,39 @@ window.MusicHub = window.MusicHub || {};
       var separator = document.createElement('span');
       separator.className = 'last-generated__separator';
       separator.textContent = ' · ';
-      var count = document.createElement('span');
-      // Followed artists only - recommendations are kept out of graph.artists.
-      count.textContent = graph.artists.length + (graph.artists.length === 1 ? ' artist' : ' artists');
+      els.artistCount = document.createElement('span');
       els.lastGenerated.textContent = '';
       els.lastGenerated.appendChild(when);
       els.lastGenerated.appendChild(separator);
-      els.lastGenerated.appendChild(count);
+      els.lastGenerated.appendChild(els.artistCount);
       els.lastGenerated.hidden = false;
+      renderArtistCount();
     } else {
       els.lastGenerated.hidden = true;
     }
+  }
+
+  /**
+   * How many artists the graph has, after "Last generated" - followed ones
+   * only, recommendations are kept out of graph.artists. With "only artists
+   * with concerts" on, how many of them have concert folders in Concert
+   * History: "3 of 12 artists".
+   */
+  function renderArtistCount() {
+    if (!els.artistCount) {
+      return;
+    }
+    var total = graph.artists.length;
+    var noun = total === 1 ? ' artist' : ' artists';
+    if (!concertsOnly) {
+      els.artistCount.textContent = total + noun;
+      return;
+    }
+    var counts = concertCounts(MusicHub.storage.read(HISTORY_KEY, null));
+    var withConcerts = graph.artists.filter(function (artist) {
+      return counts[artist.spotifyArtistId] > 0;
+    }).length;
+    els.artistCount.textContent = withConcerts + ' of ' + total + noun;
   }
 
   /* -------------------------------------------------------------- fetching */
@@ -2672,6 +2694,7 @@ window.MusicHub = window.MusicHub || {};
    * over there show up here without rebuilding the graph.
    */
   function refreshConcertBadges() {
+    renderArtistCount();
     if (!view || !selection) {
       return;
     }
@@ -2870,6 +2893,8 @@ window.MusicHub = window.MusicHub || {};
    * visible to be drawn.
    */
   function applyVisibility() {
+    // The concerts filter, switched either way, changes the count too.
+    renderArtistCount();
     if (!selection) {
       return 0;
     }

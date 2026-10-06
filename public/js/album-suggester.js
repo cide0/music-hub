@@ -1073,6 +1073,10 @@ window.MusicHub = window.MusicHub || {};
     fade: 450,
   });
   var REDUCED_SETUP_MS = 500;
+  // The needle set down a little way in from the record's edge, as if a
+  // quarter of the way through the album (the Collection's starts at the
+  // edge).
+  var SETUP_NEEDLE_AT = 0.25;
   // Crackles per second of play, from the needle drop to the fade's end.
   var CRACKLES_PER_S = 30;
 
@@ -1144,6 +1148,7 @@ window.MusicHub = window.MusicHub || {};
   function playSetup() {
     var vinyl = MusicHub.vinyl.render(MusicHub.vinyl.describe('Vinyl, LP, Gold'), { imageUrl: labelCover() });
     var parts = MusicHub.turntable.build(vinyl, { rarity: rarestTier() });
+    MusicHub.turntable.setNeedle(parts, SETUP_NEEDLE_AT, 0);
     els.views.reel.appendChild(parts.root);
 
     if (reducedMotion()) {

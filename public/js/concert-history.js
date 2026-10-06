@@ -1378,28 +1378,52 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
-   * Reads the Gallery folder from Drive and merges it in - on every visit and
-   * on its refresh button. Needs the Google login with folder access and the followed
-   * artists (for the names); says so on the status line when one is missing.
+   * What a Drive sync needs: the Google login with folder access and the
+   * followed artists (for the names). The followed artists when it's all
+   * there; otherwise null, with what's missing on the status line.
    */
-  function syncDrive() {
+  function driveReady() {
     var google = MusicHub.google;
     if (!google || !google.isConnected()) {
       showDriveStatus(['Log in to Google in ', settingsLink(),
         ' to fill the Gallery from a folder in your Google Drive.']);
-      return;
+      return null;
     }
     if (!google.hasFolderAccess()) {
       showDriveStatus(['Log out of Google and in again in ', settingsLink(),
         ' to let the Gallery read its folder in your Google Drive.']);
-      return;
+      return null;
     }
     var followed = MusicHub.followedArtists.list();
     if (!followed) {
       showDriveStatus([MusicHub.followedArtists.MISSING_MESSAGE]);
+      return null;
+    }
+    return followed;
+  }
+
+  /**
+   * The Drive box without syncing - on every visit, and once the followed
+   * artists come in: the refresh button ready, or what's missing for it.
+   * Only that button (and "Show hidden") reads the folder.
+   */
+  function showDriveIdle() {
+    if (driveRunning || !driveReady()) {
       return;
     }
-    if (driveRunning) {
+    showDriveStatus(['Press refresh to fill the Gallery from its folder in your Google Drive.'],
+      { canSync: true });
+  }
+
+  /**
+   * Reads the Gallery folder from Drive and merges it in - on its refresh
+   * button, and when hidden Drive items are shown again. Says what's
+   * missing on the status line instead when it can't (driveReady).
+   */
+  function syncDrive() {
+    var google = MusicHub.google;
+    var followed = driveReady();
+    if (!followed || driveRunning) {
       return;
     }
 
@@ -1792,13 +1816,13 @@ window.MusicHub = window.MusicHub || {};
     });
     els.artistSearch.addEventListener('input', renderArtistPicker);
     // The navbar fetched a new list while the picker is open - and the
-    // Drive folder's names can be matched now, if they couldn't before.
+    // Drive box can offer its refresh button now, if it was waiting for one.
     document.addEventListener(MusicHub.followedArtists.CHANGE_EVENT, function () {
       if (!els.artistPanel.hidden) {
         followedArtists = MusicHub.followedArtists.list();
         renderArtistPicker();
       }
-      syncDrive();
+      showDriveIdle();
     });
     els.driveSync.addEventListener('click', syncDrive);
 
@@ -1865,7 +1889,7 @@ window.MusicHub = window.MusicHub || {};
     // The URL decides the starting level - including the graph page's
     // ?artist=<spotifyArtistId> deep link.
     go(resolveView(viewFromUrl()), 'replace');
-    syncDrive();
+    showDriveIdle();
   });
 
   // Exposed for tests.
