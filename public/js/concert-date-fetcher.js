@@ -981,6 +981,33 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /**
+   * A past concert the user went to (calendar or attending) is one the
+   * Setlists page offers - same test as its pastShows().
+   */
+  function isAwaitingSetlist(concert) {
+    return !!(concert.addedToCalendar || concert.attending)
+      && !isUpcoming(concert)
+      && Array.isArray(concert.artists) && concert.artists.length > 0;
+  }
+
+  /**
+   * Ticketmaster only lists what's still to come, so a full fetch would drop
+   * every past concert - including the ones still waiting on the Setlists
+   * page. Those stay until that page is done with them (setlist added to a
+   * playlist, or removed by hand).
+   */
+  function keepAwaitingSetlist(concerts, previous) {
+    var seen = {};
+    concerts.forEach(function (concert) {
+      seen[concert.id] = true;
+    });
+    var kept = (previous || []).filter(function (concert) {
+      return !seen[concert.id] && isAwaitingSetlist(concert);
+    });
+    return kept.length ? mergeConcerts(concerts, kept) : concerts;
+  }
+
   /* -------------------------------------------------------------- fetching */
 
   function fetchConcertsFor(artistName, signal) {
@@ -1042,7 +1069,8 @@ window.MusicHub = window.MusicHub || {};
   /**
    * Stores what a run turned up and reports it. `replace` is for a run that
    * covered every followed artist: its result is the whole truth, so concerts
-   * that have disappeared from Ticketmaster drop out. A partial run - one that
+   * that have disappeared from Ticketmaster drop out (all but the past ones
+   * still waiting on the Setlists page). A partial run - one that
    * was cancelled, or a retry of a few artists - is merged into the stored
    * list instead, and leaves "Last fetched" alone.
    *
@@ -1062,7 +1090,7 @@ window.MusicHub = window.MusicHub || {};
     }
 
     if (replace && !run.cancelled) {
-      state = { lastFetchedAt: new Date().toISOString(), concerts: concerts };
+      state = { lastFetchedAt: new Date().toISOString(), concerts: keepAwaitingSetlist(concerts, previous) };
     } else {
       state = { lastFetchedAt: state.lastFetchedAt, concerts: mergeConcerts(concerts, previous) };
     }
@@ -1259,6 +1287,7 @@ window.MusicHub = window.MusicHub || {};
     summarize: summarize,
     fetchSummaryMessage: fetchSummaryMessage,
     mergeConcerts: mergeConcerts,
+    keepAwaitingSetlist: keepAwaitingSetlist,
     applyPreviousState: applyPreviousState,
     filterConcerts: filterConcerts,
     searchConcerts: searchConcerts,
