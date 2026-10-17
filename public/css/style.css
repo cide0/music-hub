@@ -8227,6 +8227,31 @@ button.turntable__power:focus-visible {
   }
 }
 
+/* The album's name, with the user's rating (the album history's pill) on
+   the right of its first line. */
+.vinyl-card__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.vinyl-card__heading .release-card__title {
+  min-width: 0;
+}
+
+.vinyl-card__rating {
+  flex: none;
+  min-width: 3rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 .vinyl-card__foot {
   /* At the card's foot - remove on the left, play on the right - and clear
      of the text above however short it is. */

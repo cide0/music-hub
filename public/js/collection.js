@@ -62,9 +62,14 @@ window.MusicHub = window.MusicHub || {};
   // Bumped each time a new ask is scheduled, so an answer overtaken by one
   // (from before a pause, say) is ignored.
   var pollRun = 0;
-  // What the search box holds, as typed, and the date sort's direction.
+  // What the search box holds, as typed, and the sort: by date or by
+  // rating, one at a time.
   var query = '';
-  var sortDir = 'desc';
+  var sort = { key: 'date', dir: 'desc' };
+  // The Album Suggester's history, where each album's rating is kept.
+  var HISTORY_KEY = 'albumSuggesterHistory';
+  // Each album's rating by its Spotify id, read afresh on every render.
+  var ratings = {};
   // 'all' | 'exclusive': every vinyl, or only the Daily Spin's wheel exclusives.
   var activeFilter = 'all';
   // The vinyl the remove dialog is asking about.
@@ -257,6 +262,25 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /** A record only the Daily Spin hands out (vinyl-catalog.js). */
+  /** The album history's ratings (1-100) by Spotify album id. */
+  function loadRatings() {
+    var stored = MusicHub.storage.read(HISTORY_KEY, null);
+    var listened = stored && Array.isArray(stored.listened) ? stored.listened : [];
+    var byId = {};
+    listened.forEach(function (entry) {
+      if (entry && entry.spotifyAlbumId && typeof entry.rating === 'number') {
+        byId[entry.spotifyAlbumId] = entry.rating;
+      }
+    });
+    return byId;
+  }
+
+  /** The user's rating of the vinyl's album, or null if it has none. */
+  function ratingOf(vinyl) {
+    var id = vinyl.album && vinyl.album.id;
+    return id && typeof ratings[id] === 'number' ? ratings[id] : null;
+  }
+
   function isExclusive(vinyl) {
     return MusicHub.vinylCatalog.exclusives.some(function (exclusive) {
       return exclusive.format === vinyl.format;
@@ -308,7 +332,18 @@ window.MusicHub = window.MusicHub || {};
 
     var body = el('div', 'release-card__body');
     if (album) {
-      body.appendChild(el('h3', 'release-card__title', album.name));
+      // The album's name, with the user's rating from the album history
+      // on the right of the same line.
+      var heading = el('div', 'vinyl-card__heading');
+      heading.appendChild(el('h3', 'release-card__title', album.name));
+      var rated = ratingOf(vinyl);
+      if (rated !== null) {
+        var rating = el('span', 'vinyl-card__rating', String(rated));
+        rating.setAttribute('aria-label', 'Rated ' + rated + ' out of 100');
+        rating.title = 'Your rating';
+        heading.appendChild(rating);
+      }
+      body.appendChild(heading);
       body.appendChild(el('p', 'release-card__artist', album.artist));
     } else {
       body.appendChild(el('h3', 'release-card__title', vinyl.format));
@@ -364,11 +399,49 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  function byDate(a, b) {
+    return String(a.unboxedAt || '').localeCompare(String(b.unboxedAt || ''));
+  }
+
+  /** One sort at a time; unrated vinyls always go after rated ones. */
+  function sortVinyls(vinyls) {
+    var sign = sort.dir === 'asc' ? 1 : -1;
+    return vinyls.slice().sort(function (a, b) {
+      if (sort.key === 'rating') {
+        var aRating = ratingOf(a);
+        var bRating = ratingOf(b);
+        if ((aRating === null) !== (bRating === null)) {
+          return aRating === null ? 1 : -1;
+        }
+        if (aRating !== null && aRating !== bRating) {
+          return sign * (aRating - bRating);
+        }
+        // Ties (and the unrated) newest first.
+        return -byDate(a, b);
+      }
+      return sign * byDate(a, b);
+    });
+  }
+
+  var SORT_LABELS = {
+    date: { label: 'Date', desc: 'newest first', asc: 'oldest first' },
+    rating: { label: 'Rating', desc: 'highest first', asc: 'lowest first' },
+  };
+
   function renderSort() {
-    var newest = sortDir === 'desc';
-    els.sortDate.textContent = 'Date ' + (newest ? '\u2193' : '\u2191');
-    els.sortDate.title = 'Sort by date, ' + (newest ? 'oldest first' : 'newest first');
-    els.sortDate.setAttribute('aria-label', 'Sorted by date, ' + (newest ? 'newest first' : 'oldest first'));
+    Array.prototype.forEach.call(els.sort.querySelectorAll('[data-sort]'), function (button) {
+      var key = button.getAttribute('data-sort');
+      var active = key === sort.key;
+      var labels = SORT_LABELS[key];
+      button.classList.toggle('filter-button--active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      button.textContent = labels.label + (active ? (sort.dir === 'desc' ? ' \u2193' : ' \u2191') : '');
+      button.title = 'Sort by ' + labels.label.toLowerCase() + ', '
+        + (active ? labels[sort.dir === 'desc' ? 'asc' : 'desc'] : labels.desc);
+      button.setAttribute('aria-label', active
+        ? 'Sorted by ' + labels.label.toLowerCase() + ', ' + labels[sort.dir]
+        : 'Sort by ' + labels.label.toLowerCase());
+    });
   }
 
   /** "Exclusives" only with one to show - otherwise back to All. */
@@ -387,13 +460,11 @@ window.MusicHub = window.MusicHub || {};
 
   function render() {
     var all = MusicHub.wallet.vinyls();
+    ratings = loadRatings();
     renderFilters(all);
-    var shown = all.filter(function (vinyl) {
+    var shown = sortVinyls(all.filter(function (vinyl) {
       return (activeFilter !== 'exclusive' || isExclusive(vinyl)) && matchesQuery(vinyl);
-    }).sort(function (a, b) {
-      var order = String(b.unboxedAt || '').localeCompare(String(a.unboxedAt || ''));
-      return sortDir === 'desc' ? order : -order;
-    });
+    }));
     els.grid.textContent = '';
     els.empty.hidden = all.length > 0;
     els.toolbar.hidden = !all.length;
@@ -1271,7 +1342,7 @@ window.MusicHub = window.MusicHub || {};
     els.toolbar = document.getElementById('collection-toolbar');
     els.search = document.getElementById('collection-search');
     els.searchClear = document.getElementById('collection-search-clear');
-    els.sortDate = document.getElementById('collection-sort-date');
+    els.sort = document.getElementById('collection-sort');
     els.filters = document.getElementById('collection-filters');
     els.noMatch = document.getElementById('collection-no-match');
 
@@ -1313,8 +1384,15 @@ window.MusicHub = window.MusicHub || {};
       activeFilter = button.getAttribute('data-filter');
       render();
     });
-    els.sortDate.addEventListener('click', function () {
-      sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+    els.sort.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-sort]');
+      if (!button) {
+        return;
+      }
+      var key = button.getAttribute('data-sort');
+      sort = key === sort.key
+        ? { key: key, dir: sort.dir === 'desc' ? 'asc' : 'desc' }
+        : { key: key, dir: 'desc' };
       render();
     });
     render();

@@ -15,9 +15,9 @@
             <span class="toolbar__meta" id="collection-count"></span>
           </div>
 
-          <!-- Search on the left; the date sort and the filter tabs on the
-               right, the tabs at the far end where the other pages keep their
-               filters - once there's a vinyl. -->
+          <!-- Search on the left; the date / rating sort and the filter tabs
+               on the right, the tabs at the far end where the other pages keep
+               their filters - once there's a vinyl. -->
           <div class="toolbar" id="collection-toolbar" hidden>
             <div class="collection-search">
               <label class="visually-hidden" for="collection-search">Search your vinyls</label>
@@ -32,9 +32,10 @@
               </div>
             </div>
             <div class="toolbar__end">
-              <!-- One sort; clicking it flips the direction. -->
+              <!-- One sort at a time; clicking the active one flips its direction. -->
               <div class="filter-group" id="collection-sort" role="group" aria-label="Sort vinyls">
-                <button type="button" class="filter-button filter-button--active" id="collection-sort-date" aria-pressed="true">Date ↓</button>
+                <button type="button" class="filter-button filter-button--active" data-sort="date" aria-pressed="true">Date ↓</button>
+                <button type="button" class="filter-button" data-sort="rating" aria-pressed="false">Rating</button>
               </div>
               <div class="filter-group" id="collection-filters" role="group" aria-label="Filter vinyls">
                 <button type="button" class="filter-button filter-button--active" data-filter="all" aria-pressed="true">All</button>
