@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { eventMatchesArtist } from '../lib/artistMatch.js';
 import { citySearchNames, matchCity } from '../lib/cities.js';
+import { buildSearchUrl, collapseVariants, toShows } from '../lib/eventim.js';
 import { requireEnv } from '../lib/oauth.js';
 
 const router = Router();
@@ -701,6 +702,97 @@ router.get('/api/discogs/random-collection-item', async (req, res) => {
       return;
     }
     res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// Eventim's own website search API (undocumented). One request per artist, no
+// key. Requests are spaced out on one shared clock, like setlist.fm's.
+const EVENTIM_USER_AGENT = 'MusicHub/1.0 +https://music-hub-r9w6.onrender.com';
+const EVENTIM_REQUEST_INTERVAL_MS = 2000;
+const EVENTIM_TIMEOUT_MS = 15000;
+const EVENTIM_MAX_ARTIST_LENGTH = 200;
+
+let eventimNextSlotAt = 0;
+
+/** Waits for, and takes, the next free Eventim request slot. */
+async function waitForEventimSlot() {
+  const now = Date.now();
+  const startAt = Math.max(now, eventimNextSlotAt);
+  eventimNextSlotAt = startAt + EVENTIM_REQUEST_INTERVAL_MS;
+  if (startAt > now) {
+    await wait(startAt - now);
+  }
+}
+
+/**
+ * Proxies Eventim's search for one artist's upcoming shows, normalized by
+ * lib/eventim.js. Eventim saying no (403/429) is never retried.
+ */
+router.get('/api/eventim/concerts', async (req, res) => {
+  const artist = String(req.query.artist || '').trim();
+  if (!artist) {
+    res.status(400).json({ error: 'artist is required' });
+    return;
+  }
+  if (artist.length > EVENTIM_MAX_ARTIST_LENGTH) {
+    res.status(400).json({ error: `artist is at most ${EVENTIM_MAX_ARTIST_LENGTH} characters` });
+    return;
+  }
+
+  // Not req.on('close'): that fires once the request is read, not when the
+  // browser goes away.
+  let cancelled = false;
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      cancelled = true;
+    }
+  });
+
+  try {
+    await waitForEventimSlot();
+    if (cancelled) {
+      return;
+    }
+
+    let response;
+    try {
+      response = await fetch(buildSearchUrl(artist), {
+        headers: { 'User-Agent': EVENTIM_USER_AGENT, Accept: 'application/json' },
+        signal: AbortSignal.timeout(EVENTIM_TIMEOUT_MS),
+      });
+    } catch (err) {
+      res.status(504).json({ error: `Eventim did not answer: ${err.message}` });
+      return;
+    }
+
+    if (response.status === 403 || response.status === 429) {
+      res.status(429).json({ blocked: true, error: 'Eventim blocked the request' });
+      return;
+    }
+    if (!response.ok) {
+      res.status(502).json({ error: `Eventim error ${response.status}` });
+      return;
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (err) {
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+        res.status(504).json({ error: 'Eventim did not answer in time' });
+      } else {
+        res.status(502).json({ unexpected: true, error: 'Eventim answer was not JSON' });
+      }
+      return;
+    }
+    if (!data || !Array.isArray(data.products)) {
+      res.status(502).json({ unexpected: true, error: 'Eventim answer had no products list' });
+      return;
+    }
+
+    res.json({ artist, shows: collapseVariants(toShows(data.products, artist)) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
