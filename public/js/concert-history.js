@@ -739,6 +739,35 @@ window.MusicHub = window.MusicHub || {};
     return svg;
   }
 
+  /** The ✕ of a remove button - drawn, so it sits centred (the glyph doesn't). */
+  function xIcon() {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    [['18', '6', '6', '18'], ['6', '6', '18', '18']].forEach(function (points) {
+      var line = document.createElementNS(SVG_NS, 'line');
+      line.setAttribute('x1', points[0]);
+      line.setAttribute('y1', points[1]);
+      line.setAttribute('x2', points[2]);
+      line.setAttribute('y2', points[3]);
+      svg.appendChild(line);
+    });
+    return svg;
+  }
+
+  /** A round ✕ button; `label` names it for screen readers, the tooltip just says what it does. */
+  function removeButton(className, label, onClick) {
+    var node = button('icon-button ' + className, '', onClick);
+    node.appendChild(xIcon());
+    node.setAttribute('aria-label', label);
+    node.title = label.split(' ')[0];
+    return node;
+  }
+
   // Small hearts floating up in the burst, and how long it lasts overall
   // (the slowest heart's delay + duration, see .heart-burst in style.css).
   var BURST_HEARTS = 12;
@@ -916,7 +945,7 @@ window.MusicHub = window.MusicHub || {};
         count + (count === 1 ? ' concert' : ' concerts')));
 
       card.appendChild(open);
-      card.appendChild(button('icon-button folder-card__delete', '✕', function () {
+      card.appendChild(removeButton('folder-card__delete', 'Delete ' + artist.artistName, function () {
         confirmRemoval({
           title: 'Delete “' + artist.artistName + '”?',
           text: artist.driveFolderId
@@ -973,7 +1002,7 @@ window.MusicHub = window.MusicHub || {};
         tile.appendChild(rename);
       }
 
-      var remove = button('icon-button folder-card__delete', '✕', function () {
+      var remove = removeButton('folder-card__delete', 'Delete ' + concert.name, function () {
         confirmRemoval({
           title: 'Delete “' + concert.name + '”?',
           text: concert.driveFolderId
@@ -992,8 +1021,6 @@ window.MusicHub = window.MusicHub || {};
           render();
         });
       });
-      remove.title = 'Delete';
-      remove.setAttribute('aria-label', 'Delete ' + concert.name);
       tile.appendChild(remove);
 
       els.concertsList.appendChild(tile);
@@ -1084,12 +1111,24 @@ window.MusicHub = window.MusicHub || {};
     frame.style.transform = scale === 1 ? '' : 'scale(' + scale + ')';
   }
 
+  /*
+   * Fullscreen turns a phone on its side straight away, the way a video app
+   * does - a phone only lets a page lock the orientation while it's
+   * fullscreen, and lets go of the lock again when it leaves it. Where it
+   * can't be locked (a desktop, an iPhone) the screen just stays as it is.
+   */
   function toggleViewerFullscreen() {
     if (document.fullscreenElement) {
       document.exitFullscreen();
-    } else {
-      els.viewerStage.requestFullscreen().catch(function () {});
+      return;
     }
+    els.viewerStage.requestFullscreen()
+      .then(function () {
+        if (screen.orientation && screen.orientation.lock) {
+          return screen.orientation.lock('landscape');
+        }
+      })
+      .catch(function () {});
   }
 
   function buildMediaItem(kind, item) {
@@ -1117,7 +1156,7 @@ window.MusicHub = window.MusicHub || {};
     paintHeart(heart, item.favorite);
     wrapper.appendChild(heart);
 
-    wrapper.appendChild(button('icon-button media-item__delete', '✕', function () {
+    wrapper.appendChild(removeButton('media-item__delete', 'Remove', function () {
       var what = kind === 'images' ? 'image' : 'video';
       confirmRemoval({
         title: 'Remove this ' + what + '?',
@@ -1286,7 +1325,7 @@ window.MusicHub = window.MusicHub || {};
     paintHeart(heart, true);
     wrapper.appendChild(heart);
 
-    wrapper.appendChild(button('icon-button media-item__delete', '✕', function () {
+    wrapper.appendChild(removeButton('media-item__delete', 'Remove', function () {
       var what = entry.kind === 'images' ? 'image' : 'video';
       confirmRemoval({
         title: 'Remove this ' + what + '?',

@@ -2795,6 +2795,12 @@ textarea.text-input {
   background-color: var(--color-surface);
 }
 
+.media-item__delete svg,
+.folder-card__delete svg {
+  width: 14px;
+  height: 14px;
+}
+
 @media (max-width: 600px) {
   .folder-grid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
