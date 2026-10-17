@@ -101,6 +101,32 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * The arm's tube, S-shaped like a real one: straight through the
+   * bearing, bowed out away from the record, then bent back into the
+   * headshell, nearly in line with it. Drawn over the arm's whole box - 10
+   * units across, 74.14 down (the box is always 7.414 times as tall as
+   * it's wide, style.css) - from inside the counterweight (y -4.45) to just
+   * inside the headshell's top (5, 60.8), where the straight rod ended, so
+   * the headshell and the needle stay where they were. A dark edge, the
+   * metal and a bright line down its middle, for a round tube.
+   */
+  function armRod() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 10 74.14');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('class', 'turntable__rod');
+    svg.setAttribute('aria-hidden', 'true');
+    ['edge', 'metal', 'shine'].forEach(function (layer) {
+      var path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', 'M5 -4.45 L5 16 C5 24 8.2 27 8.2 36 C8.2 46 6.6 56 5 60.8');
+      path.setAttribute('class', 'turntable__rod-' + layer);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  /**
    * The song's progress: a groove cut into the plinth under the record, a
    * glowing fill running along it (setProgress). The fill slides in from
    * the left inside a rounded window (translate - composited, and its
@@ -199,7 +225,7 @@ window.MusicHub = window.MusicHub || {};
     // the counterweight on the rod behind it.
     plinth.appendChild(el('span', 'turntable__mount'));
     var arm = el('div', 'turntable__arm');
-    arm.appendChild(el('span', 'turntable__rod'));
+    arm.appendChild(armRod());
     arm.appendChild(el('span', 'turntable__counterweight'));
     arm.appendChild(el('span', 'turntable__bearing'));
     // The headshell: its finger lift, the cartridge and the stylus at its
