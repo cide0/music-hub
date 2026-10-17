@@ -259,11 +259,57 @@ window.MusicHub = window.MusicHub || {};
     return event.ticketmasterId || 'eventim:' + event.eventimId;
   }
 
+  /** The start time of a card's group: its first event that has one. */
+  function groupTime(group) {
+    var withTime = firstWith(group.events, 'localTime');
+    return withTime ? normalizeTime(withTime.localTime) : '';
+  }
+
+  /** Every name a group goes by: its artists, the acts its events bill and the events' names. */
+  function groupNames(group) {
+    var names = group.artists.slice();
+    group.events.forEach(function (event) {
+      names = names.concat(event.attractionNames || [], [event.eventName]);
+    });
+    return names;
+  }
+
+  /**
+   * Whether two groups are one concert although their venue names differ
+   * (Ticketmaster listing none, the shops spelling it differently): same
+   * day, same start time, same city, and an artist of one billed on the
+   * other, or the same event name.
+   */
+  function sameShow(a, b) {
+    var first = a.events[0];
+    var second = b.events[0];
+    if (!first.localDate || first.localDate !== second.localDate
+      || !sameText(first.city, second.city) || groupTime(a) !== groupTime(b)) {
+      return false;
+    }
+    var namesA = groupNames(a);
+    var namesB = groupNames(b);
+    return a.artists.some(function (name) {
+      return namesB.some(function (other) {
+        return sameText(name, other);
+      });
+    }) || b.artists.some(function (name) {
+      return namesA.some(function (other) {
+        return sameText(name, other);
+      });
+    }) || a.events.some(function (event) {
+      return b.events.some(function (other) {
+        return sameText(event.eventName, other.eventName);
+      });
+    });
+  }
+
   /**
    * Ticketmaster lists the same concert several times (standard ticket, VIP,
    * packages), and the same concert also turns up under several followed
    * artists. Collapse both: first per Ticketmaster event (or Eventim show),
-   * then per venue + city + day.
+   * then per venue + city + day, and last per day + time + city + artist,
+   * whatever the venue. The card keeps the id of its first group.
    */
   function buildConcerts(matches) {
     var byEvent = {};
@@ -294,8 +340,27 @@ window.MusicHub = window.MusicHub || {};
       });
     });
 
-    return order.map(function (id) {
+    var merged = [];
+    order.forEach(function (id) {
       var group = groups[id];
+      var into = null;
+      merged.some(function (other) {
+        if (sameShow(other, group)) {
+          into = other;
+        }
+        return !!into;
+      });
+      if (!into) {
+        merged.push(group);
+        return;
+      }
+      into.events = into.events.concat(group.events);
+      group.artists.forEach(function (name) {
+        addArtist(into.artists, name);
+      });
+    });
+
+    return merged.map(function (group) {
       // A Ticketmaster entry stays the representative wherever there is one,
       // so those cards keep their ids and Ticketmaster link.
       var ticketmasterEvents = group.events.filter(function (event) {
@@ -327,7 +392,7 @@ window.MusicHub = window.MusicHub || {};
       var withEventimUrl = firstWith(group.events, 'eventimUrl');
       var withEventimId = firstWith(group.events, 'eventimId');
       // Ticketmaster sometimes lists no venue name where Eventim has one.
-      var withEventimVenue = firstWith(group.events, 'eventimVenueName');
+      var withEventimVenue = firstWith(group.events, 'eventimVenueName') || firstWith(group.events, 'venueName');
       // "stored:" ids only stand in for cards saved without a real one.
       var ticketmasterId = main.ticketmasterId && String(main.ticketmasterId).indexOf('stored:') !== 0
         ? main.ticketmasterId
@@ -344,7 +409,8 @@ window.MusicHub = window.MusicHub || {};
         localTime: withTime ? withTime.localTime : null,
         dateTime: withTime ? withTime.dateTime : null,
         supportArtists: supportArtists,
-        venueName: main.venueName || (withEventimVenue && withEventimVenue.eventimVenueName) || null,
+        venueName: main.venueName
+          || (withEventimVenue && (withEventimVenue.eventimVenueName || withEventimVenue.venueName)) || null,
         city: main.city,
         ticketUrl: main.ticketUrl || null,
         eventimUrl: withEventimUrl ? withEventimUrl.eventimUrl : null,
@@ -623,6 +689,8 @@ window.MusicHub = window.MusicHub || {};
       var haystack = fold([]
         .concat(concert.artists || [], concert.supportArtists || [])
         .concat([concert.eventName, concert.venueName, concert.city, formatConcertDate(concert)])
+        // The shops it sells through, so "eventim" finds every Eventim card.
+        .concat([concert.ticketUrl ? 'Ticketmaster' : '', concert.eventimUrl ? 'Eventim' : ''])
         .filter(Boolean)
         .join(' '));
       return words.every(function (word) {
@@ -1018,7 +1086,45 @@ window.MusicHub = window.MusicHub || {};
     return event;
   }
 
-  function renderCard(concert, isNew) {
+  /**
+   * Eventim sends no pictures, so a card without one shows the Spotify
+   * picture of its headliner (its first artist who isn't support), or of
+   * any of its artists. Read at render time, so it follows Spotify's.
+   */
+  function artistImage(concert, followed) {
+    var support = concert.supportArtists || [];
+    var names = concert.artists.filter(function (name) {
+      return support.indexOf(name) === -1;
+    }).concat(support);
+    for (var i = 0; i < names.length; i++) {
+      for (var j = 0; j < followed.length; j++) {
+        if (followed[j].imageUrl && sameText(followed[j].name, names[i])) {
+          return followed[j].imageUrl;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * A Spotify artist picture is square, and cropping it to the card's wide
+   * frame cuts off the face. So the whole picture sits in the middle of the
+   * frame, over a blurred copy of itself that fills the sides.
+   */
+  function artistPhoto(url) {
+    var frame = el('div', 'concert-card__image concert-card__image--artist');
+    ['concert-card__backdrop', 'concert-card__photo'].forEach(function (className) {
+      var image = el('img', className);
+      image.src = url;
+      image.alt = '';
+      image.loading = 'lazy';
+      frame.appendChild(image);
+    });
+    frame.firstChild.setAttribute('aria-hidden', 'true');
+    return frame;
+  }
+
+  function renderCard(concert, isNew, followed) {
     var card = el('article', 'concert-card'
       + (isNew ? ' concert-card--new' : '')
       + (concert.attending ? ' concert-card--attending' : ''));
@@ -1029,12 +1135,15 @@ window.MusicHub = window.MusicHub || {};
       card.appendChild(el('span', 'concert-card__tag', 'New'));
     }
 
+    var photoUrl = concert.imageUrl ? null : artistImage(concert, followed);
     if (concert.imageUrl) {
       var image = el('img', 'concert-card__image');
       image.src = concert.imageUrl;
       image.alt = '';
       image.loading = 'lazy';
       card.appendChild(image);
+    } else if (photoUrl) {
+      card.appendChild(artistPhoto(photoUrl));
     }
 
     var body = el('div', 'concert-card__body');
@@ -1067,7 +1176,10 @@ window.MusicHub = window.MusicHub || {};
       ));
     }
 
+    // Two rows: the ticket shops, and below them the two buttons.
     var actions = el('div', 'concert-card__actions');
+    var shops = el('div', 'concert-card__shops');
+    var buttons = el('div', 'concert-card__buttons');
 
     var error = el('p', 'concert-card__error');
     error.hidden = true;
@@ -1157,11 +1269,15 @@ window.MusicHub = window.MusicHub || {};
       pill.rel = 'noopener noreferrer';
       pill.setAttribute('aria-label', shop.label + ' tickets for ' + concert.artists.join(', ')
         + (where ? ' at ' + where : ''));
-      actions.appendChild(pill);
+      shops.appendChild(pill);
     });
 
-    actions.appendChild(calendarButton);
-    actions.appendChild(attendingButton);
+    if (shops.childNodes.length) {
+      actions.appendChild(shops);
+    }
+    buttons.appendChild(calendarButton);
+    buttons.appendChild(attendingButton);
+    actions.appendChild(buttons);
     body.appendChild(actions);
     body.appendChild(error);
     card.appendChild(body);
@@ -1222,8 +1338,9 @@ window.MusicHub = window.MusicHub || {};
       setMessage(emptyFilterMessage());
     } else {
       setMessage('');
+      var followed = MusicHub.followedArtists.list() || [];
       visible.forEach(function (concert) {
-        els.list.appendChild(renderCard(concert, isMarkedNew(concert)));
+        els.list.appendChild(renderCard(concert, isMarkedNew(concert), followed));
       });
     }
 

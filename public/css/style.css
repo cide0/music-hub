@@ -1870,6 +1870,32 @@ button[aria-disabled='true'] {
   background-color: var(--color-surface-raised);
 }
 
+/* A square Spotify artist picture (cards without a shop image): shown whole
+   in the middle, over a blurred, darkened copy filling the frame. */
+.concert-card__image--artist {
+  position: relative;
+  overflow: hidden;
+}
+
+.concert-card__backdrop,
+.concert-card__photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.concert-card__backdrop {
+  object-fit: cover;
+  filter: blur(18px) brightness(0.55);
+  /* Scaled up so the blur's soft edges stay outside the frame. */
+  transform: scale(1.2);
+}
+
+.concert-card__photo {
+  object-fit: contain;
+}
+
 .concert-card__body {
   display: flex;
   flex: 1;
@@ -1907,10 +1933,23 @@ button[aria-disabled='true'] {
   position: relative;
   z-index: 1;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.5rem;
   margin-top: auto;
   padding-top: 0.75rem;
+}
+
+.concert-card__shops,
+.concert-card__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* "Add to calendar" on the left, "I'm attending" on the right - also when a
+   narrow card wraps them onto two lines. */
+.concert-card__buttons .toggle-button {
+  margin-left: auto;
 }
 
 .concert-card__actions .button {
@@ -1919,20 +1958,28 @@ button[aria-disabled='true'] {
   font-size: 0.9375rem;
 }
 
-/* One small pill link per ticket shop the card has. They wrap with the
-   buttons on narrow screens and keep a touch-sized height. */
+/* One small pill link per ticket shop the card has, in their own row above
+   the buttons. They wrap on narrow screens. 28px to look at, but the ::before
+   reaches 6px above and below, so the tap target is still 40px tall. */
 .concert-card__ticket {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
-  padding: 0.25rem 0.875rem;
+  min-height: 28px;
+  padding: 0.125rem 0.625rem;
   border: 1px solid var(--color-purple-300);
   border-radius: 999px;
   background-color: var(--color-surface-raised);
   color: var(--color-text-soft);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   text-decoration: none;
   transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.concert-card__ticket::before {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
 }
 
 .concert-card__ticket:hover {
