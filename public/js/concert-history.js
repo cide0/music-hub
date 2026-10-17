@@ -1012,29 +1012,37 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  function mediaTitle(kind) {
+    return kind === 'images' ? 'Image from Google Drive' : 'Video from Google Drive';
+  }
+
   /*
    * On a touch screen a finger on an image's Drive embed goes to Drive's
-   * viewer in it, which pans the image instead of scrolling the page. So
-   * there a transparent cover lies over each image (style.css shows it
-   * only where nothing can hover): a swipe on it scrolls the page, and a
-   * tap opens the image large in the viewer, to zoom and pan. Under the
-   * heart and the X, which stay usable. Videos don't need it - their
-   * embed scrolls the page as it is.
+   * viewer in it, which pans the image instead of scrolling the page. And a
+   * video's player is cramped at card size: its controls stay up after a
+   * tap and cover most of the picture, under the heart and the X. So there
+   * a transparent cover lies over each item (style.css shows it only where
+   * nothing can hover): a swipe on it scrolls the page, and a tap opens the
+   * item large in the viewer - an image to zoom and pan, a video to play
+   * with its controls below the picture. Under the heart and the X, which
+   * stay usable.
    */
-  function addTouchCover(wrapper, embedSrc) {
+  function addTouchCover(wrapper, kind, embedSrc) {
     var cover = button('media-item__cover', '', function () {
-      openViewer(embedSrc);
+      openViewer(kind, embedSrc);
     });
-    cover.setAttribute('aria-label', 'Open image');
+    cover.setAttribute('aria-label', kind === 'images' ? 'Open image' : 'Play video');
     wrapper.appendChild(cover);
   }
 
-  /** The viewer, with the image's own embed - taken out again on close. */
-  function openViewer(embedSrc) {
+  /** The viewer, with the item's own embed - taken out again on close. */
+  function openViewer(kind, embedSrc) {
     var frame = document.createElement('iframe');
     frame.src = embedSrc;
+    frame.allow = 'autoplay';
     frame.setAttribute('allowfullscreen', '');
-    frame.title = 'Image from Google Drive';
+    frame.title = mediaTitle(kind);
+    els.viewer.setAttribute('aria-label', frame.title);
     els.viewerFrame.textContent = '';
     els.viewerFrame.appendChild(frame);
     els.viewer.showModal();
@@ -1049,11 +1057,9 @@ window.MusicHub = window.MusicHub || {};
     frame.loading = 'lazy';
     frame.allow = 'autoplay';
     frame.setAttribute('allowfullscreen', '');
-    frame.title = kind === 'images' ? 'Image from Google Drive' : 'Video from Google Drive';
+    frame.title = mediaTitle(kind);
     wrapper.appendChild(frame);
-    if (kind === 'images') {
-      addTouchCover(wrapper, item.embedSrc);
-    }
+    addTouchCover(wrapper, kind, item.embedSrc);
 
     var heart = button('icon-button media-item__favorite', '', function () {
       var favorite = toggleFavorite(data, currentView.artistId, currentView.concertId, kind, item.id);
@@ -1222,11 +1228,9 @@ window.MusicHub = window.MusicHub || {};
     frame.loading = 'lazy';
     frame.allow = 'autoplay';
     frame.setAttribute('allowfullscreen', '');
-    frame.title = entry.kind === 'images' ? 'Image from Google Drive' : 'Video from Google Drive';
+    frame.title = mediaTitle(entry.kind);
     wrapper.appendChild(frame);
-    if (entry.kind === 'images') {
-      addTouchCover(wrapper, entry.item.embedSrc);
-    }
+    addTouchCover(wrapper, entry.kind, entry.item.embedSrc);
 
     var heart = button('icon-button media-item__favorite', '', function () {
       toggleFavorite(data, group.artistId, group.concertId, entry.kind, entry.item.id);

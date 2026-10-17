@@ -2546,9 +2546,10 @@ textarea.text-input {
   border: 0;
 }
 
-/* The touch screens' cover over an image's embed (concert-history.js
-   addTouchCover): not there with a mouse, nor on videos. Painted over the
-   embed but under the heart and the X (positioned after it, no z-index). */
+/* The touch screens' cover over an image's or video's embed
+   (concert-history.js addTouchCover): not there with a mouse. Painted over
+   the embed but under the heart and the X (positioned after it, no
+   z-index). */
 .media-item__cover {
   display: none;
 }
@@ -2566,8 +2567,8 @@ textarea.text-input {
   }
 }
 
-/* The viewer: the image as big as the screen allows, the X above it, clear
-   of Drive's own controls in the embed's top corner. */
+/* The viewer: the image or video as big as the screen allows, the X above
+   it, clear of Drive's own controls in the embed's top corner. */
 .media-viewer {
   width: min(1000px, calc(100vw - 1rem));
   max-width: none;
