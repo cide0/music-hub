@@ -11,6 +11,9 @@ window.MusicHub = window.MusicHub || {};
   var STORAGE_KEY = 'concertDateFetcher';
   // ~4.5 requests/second, safely under Ticketmaster's limit of 5.
   var REQUEST_DELAY_MS = 220;
+  // Eventim needs no delay here: the server already paces it 2 s apart.
+  // This many "blocked" answers in a row pause it for the rest of the run.
+  var EVENTIM_BLOCKED_LIMIT = 3;
   var TIMEZONE = 'Europe/Berlin';
   var DEFAULT_DURATION_HOURS = 3;
   // Coins for going to a concert: paid the first time it's marked as
@@ -31,7 +34,8 @@ window.MusicHub = window.MusicHub || {};
   var countdownTarget = null;
   // Estimated time left, shown in the progress bar.
   var eta = null;
-  // Artists whose lookup failed in the last run, for the notice's Retry.
+  // Lookups that failed in the last run ({ name, source, reason,
+  // usedFallback }), for the notice's Retry.
   var lastFailed = [];
 
   function delay(ms) {
@@ -237,21 +241,27 @@ window.MusicHub = window.MusicHub || {};
     return null;
   }
 
+  /** Which shop entry a match is: its Ticketmaster id, else its Eventim one. */
+  function eventKey(event) {
+    return event.ticketmasterId || 'eventim:' + event.eventimId;
+  }
+
   /**
    * Ticketmaster lists the same concert several times (standard ticket, VIP,
    * packages), and the same concert also turns up under several followed
-   * artists. Collapse both: first per Ticketmaster event, then per
-   * venue + city + day.
+   * artists. Collapse both: first per Ticketmaster event (or Eventim show),
+   * then per venue + city + day.
    */
   function buildConcerts(matches) {
     var byEvent = {};
     matches.forEach(function (match) {
-      var existing = byEvent[match.event.ticketmasterId];
+      var key = eventKey(match.event);
+      var existing = byEvent[key];
       if (existing) {
         addArtist(existing.artists, match.artistName);
         return;
       }
-      byEvent[match.event.ticketmasterId] = { event: match.event, artists: [match.artistName] };
+      byEvent[key] = { event: match.event, artists: [match.artistName] };
     });
 
     var groups = {};
@@ -273,7 +283,12 @@ window.MusicHub = window.MusicHub || {};
 
     return order.map(function (id) {
       var group = groups[id];
-      var main = pickRepresentative(group.events, group.artists);
+      // A Ticketmaster entry stays the representative wherever there is one,
+      // so those cards keep their ids and Ticketmaster link.
+      var ticketmasterEvents = group.events.filter(function (event) {
+        return !!event.ticketmasterId;
+      });
+      var main = pickRepresentative(ticketmasterEvents.length ? ticketmasterEvents : group.events, group.artists);
 
       // Ticketmaster bills the acts in order, so the first attraction of a
       // listing is the headliner. A followed artist who shows up in the
@@ -296,9 +311,16 @@ window.MusicHub = window.MusicHub || {};
       });
       var withImage = main.imageUrl ? main : firstWith(group.events, 'imageUrl');
       var withTime = main.localTime ? main : firstWith(group.events, 'localTime');
+      var withEventimUrl = firstWith(group.events, 'eventimUrl');
+      var withEventimId = firstWith(group.events, 'eventimId');
+      // "stored:" ids only stand in for cards saved without a real one.
+      var ticketmasterId = main.ticketmasterId && String(main.ticketmasterId).indexOf('stored:') !== 0
+        ? main.ticketmasterId
+        : null;
 
       return {
         id: group.id,
+        ticketmasterId: ticketmasterId,
         artists: group.artists,
         eventName: main.eventName,
         imageUrl: withImage ? withImage.imageUrl : null,
@@ -309,10 +331,16 @@ window.MusicHub = window.MusicHub || {};
         supportArtists: supportArtists,
         venueName: main.venueName,
         city: main.city,
-        ticketUrl: main.ticketUrl,
+        ticketUrl: main.ticketUrl || null,
+        eventimUrl: withEventimUrl ? withEventimUrl.eventimUrl : null,
+        eventimId: withEventimId ? withEventimId.eventimId : null,
         // More than one Ticketmaster entry for the same show means extra
-        // ticket options (VIP, packages, ...).
-        hasMultipleTicketOptions: group.events.length > 1,
+        // ticket options (VIP, packages, ...), as does an Eventim show whose
+        // add-ons the server folded into it. An event rebuilt from a stored
+        // card brings that card's note along: it is a single entry now.
+        hasMultipleTicketOptions: ticketmasterEvents.length > 1 || group.events.some(function (event) {
+          return !!(event.eventimHasVariants || event.hasMultipleTicketOptions);
+        }),
         addedToCalendar: false,
         attending: false,
       };
@@ -636,15 +664,74 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
-  function showFailedArtists(names) {
-    lastFailed = names.slice();
+  var FAILURE_SOURCES = [
+    { id: 'ticketmaster', label: 'Ticketmaster' },
+    { id: 'eventim', label: 'Eventim' },
+  ];
 
-    if (!names.length) {
+  /** Every artist in a failed list once, in the order they failed. */
+  function failedNames(failed) {
+    var names = [];
+    failed.forEach(function (entry) {
+      addArtist(names, entry.name);
+    });
+    return names;
+  }
+
+  /**
+   * The failed notice's lines after its heading, kept separate from the DOM
+   * so it can be tested directly: one per source that had a failure, and the
+   * pause when Eventim stopped answering part-way through the run.
+   */
+  function failedNoticeLines(failed, paused) {
+    var lines = [];
+    FAILURE_SOURCES.forEach(function (source) {
+      var entries = failed.filter(function (entry) {
+        return entry.source === source.id;
+      });
+      if (!entries.length) {
+        return;
+      }
+      lines.push({
+        label: source.label,
+        text: entries.map(function (entry) {
+          return entry.name + (entry.usedFallback ? ' (showing last known dates)' : '');
+        }).join(', '),
+      });
+    });
+    if (paused && paused.remaining) {
+      lines.push({
+        label: null,
+        text: 'Eventim stopped answering after ' + paused.after + '; the remaining ' + paused.remaining
+          + (paused.remaining === 1 ? ' artist uses its' : ' artists use their') + ' last known Eventim dates.',
+      });
+    }
+    return lines;
+  }
+
+  function showFailedArtists(failed, paused) {
+    lastFailed = failed.slice();
+
+    var lines = failedNoticeLines(failed, paused);
+    if (!lines.length) {
       els.failedNotice.hidden = true;
       return;
     }
-    els.failedText.textContent = "Couldn't check concerts for: " + names.join(', ');
-    els.failedRetry.textContent = names.length === 1 ? 'Retry artist' : 'Retry ' + names.length + ' artists';
+
+    els.failedText.textContent = "Couldn't check every artist.";
+    lines.forEach(function (line) {
+      els.failedText.appendChild(document.createElement('br'));
+      if (line.label) {
+        els.failedText.appendChild(el('strong', null, line.label + ':'));
+        els.failedText.appendChild(document.createTextNode(' '));
+      }
+      els.failedText.appendChild(document.createTextNode(line.text));
+    });
+
+    // Retry covers the artists listed by name - both shops for each of them.
+    var count = failedNames(failed).length;
+    els.failedRetry.textContent = count === 1 ? 'Retry artist' : 'Retry ' + count + ' artists';
+    els.failedRetry.hidden = !count;
     els.failedNotice.hidden = false;
   }
 
@@ -847,9 +934,11 @@ window.MusicHub = window.MusicHub || {};
       card.style.setProperty('--foil-y', ((event.clientY - rect.top) / rect.height * 100) + '%');
     });
 
-    if (concert.ticketUrl) {
+    // Ticketmaster's page where there is one, else Eventim's.
+    var ticketLink = concert.ticketUrl || concert.eventimUrl;
+    if (ticketLink) {
       var cardLink = el('a', 'concert-card__link');
-      cardLink.href = concert.ticketUrl;
+      cardLink.href = ticketLink;
       cardLink.target = '_blank';
       cardLink.rel = 'noopener noreferrer';
       // The overlay has no text of its own, so spell the target out.
@@ -1010,12 +1099,134 @@ window.MusicHub = window.MusicHub || {};
 
   /* -------------------------------------------------------------- fetching */
 
-  function fetchConcertsFor(artistName, signal) {
-    return fetch('/api/concerts?artist=' + encodeURIComponent(artistName), { signal: signal }).then(function (response) {
-      if (!response.ok) {
-        throw new Error('request failed with ' + response.status);
+  /**
+   * Why a lookup failed, in the notice's words, from the proxy's answer. The
+   * Eventim route marks its 429 { blocked } and 502 { unexpected }; any other
+   * error status (Ticketmaster's own 429 too) is just "request failed".
+   */
+  function failureReason(status, body) {
+    if (status === 429 && body && body.blocked) {
+      return 'blocked';
+    }
+    if (status === 504) {
+      return 'no answer';
+    }
+    if (status === 502 && body && body.unexpected) {
+      return 'unexpected answer';
+    }
+    return 'request failed';
+  }
+
+  /** A proxy's JSON; a failure carries the notice's `reason`. */
+  function fetchJson(url, signal) {
+    return fetch(url, { signal: signal }).catch(function (err) {
+      // Never got through to the server at all.
+      err.reason = 'no answer';
+      throw err;
+    }).then(function (response) {
+      if (response.ok) {
+        return response.json();
       }
-      return response.json();
+      return response.json().catch(function () {
+        return null;
+      }).then(function (body) {
+        var err = new Error('request failed with ' + response.status);
+        err.reason = failureReason(response.status, body);
+        throw err;
+      });
+    });
+  }
+
+  function fetchConcertsFor(artistName, signal) {
+    return fetchJson('/api/concerts?artist=' + encodeURIComponent(artistName), signal);
+  }
+
+  function fetchEventimFor(artistName, signal) {
+    return fetchJson('/api/eventim/concerts?artist=' + encodeURIComponent(artistName), signal);
+  }
+
+  /**
+   * An Eventim show as a match's event. Without a Ticketmaster id it is an
+   * entry of its own; `eventimHasVariants` is the field buildConcerts reads.
+   */
+  function eventimEvent(show) {
+    var event = {};
+    Object.keys(show).forEach(function (key) {
+      event[key] = show[key];
+    });
+    event.ticketmasterId = null;
+    event.ticketUrl = null;
+    event.eventimHasVariants = !!show.hasVariants;
+    return event;
+  }
+
+  /**
+   * The artist's stored concerts still to come that one shop sold - what a
+   * failed lookup falls back to. Past ones are left to keepAwaitingSetlist.
+   */
+  function storedConcertsFor(previous, name, key) {
+    return (previous || []).filter(function (concert) {
+      return !!concert[key] && isUpcoming(concert)
+        && Array.isArray(concert.artists) && concert.artists.indexOf(name) !== -1;
+    });
+  }
+
+  /** A stored card's line-up, headliners first, so the support labels hold. */
+  function billing(concert) {
+    var support = concert.supportArtists || [];
+    return concert.artists.filter(function (name) {
+      return support.indexOf(name) === -1;
+    }).concat(support);
+  }
+
+  /**
+   * A failed Ticketmaster lookup: the artist's stored Ticketmaster concerts
+   * turned back into the events the proxy would have returned. A card saved
+   * before cards kept their Ticketmaster id stands in with its own id.
+   */
+  function ticketmasterFallback(previous, name) {
+    return storedConcertsFor(previous, name, 'ticketUrl').map(function (concert) {
+      return {
+        ticketmasterId: concert.ticketmasterId || 'stored:' + concert.id,
+        eventName: concert.eventName,
+        imageUrl: concert.imageUrl || null,
+        localDate: concert.localDate,
+        localTime: concert.localTime || null,
+        dateTime: concert.dateTime || null,
+        venueName: concert.venueName,
+        city: concert.city,
+        ticketUrl: concert.ticketUrl,
+        attractionNames: billing(concert),
+        hasMultipleTicketOptions: !!concert.hasMultipleTicketOptions,
+      };
+    });
+  }
+
+  /**
+   * A failed (or paused) Eventim lookup: the artist's stored Eventim concerts
+   * turned back into the shows the route would have returned.
+   */
+  function eventimFallback(previous, name) {
+    return storedConcertsFor(previous, name, 'eventimId').map(function (concert) {
+      return eventimEvent({
+        eventimId: concert.eventimId,
+        eventimUrl: concert.eventimUrl || null,
+        eventName: concert.eventName,
+        localDate: concert.localDate,
+        localTime: concert.localTime || null,
+        dateTime: concert.dateTime || null,
+        venueName: concert.venueName,
+        city: concert.city,
+        imageUrl: null,
+        attractionNames: billing(concert),
+        hasVariants: !!concert.hasMultipleTicketOptions,
+      });
+    });
+  }
+
+  function pushEvents(matches, name, events) {
+    events.forEach(function (event) {
+      matches.push({ artistName: name, event: event });
     });
   }
 
@@ -1028,37 +1239,97 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
-   * Walks a list of artist names, one Ticketmaster lookup at a time with a
-   * small delay in between so the rate limit is never hit. A single failed
-   * lookup is collected rather than fatal.
+   * One artist's Ticketmaster lookup. If it fails, the artist's stored
+   * Ticketmaster dates stand in for it.
    */
-  function checkArtists(names, run, matches, failed) {
+  function checkTicketmaster(name, run, matches, failed, previous) {
+    return fetchConcertsFor(name, run.controller.signal).then(function (data) {
+      pushEvents(matches, name, data.events || []);
+    }).catch(function (err) {
+      if (run.cancelled) {
+        return;
+      }
+      console.warn('Ticketmaster lookup failed for ' + name, err);
+      var stored = ticketmasterFallback(previous, name);
+      pushEvents(matches, name, stored);
+      failed.push({
+        name: name, source: 'ticketmaster', reason: err.reason || 'request failed', usedFallback: stored.length > 0,
+      });
+    });
+  }
+
+  /**
+   * One artist's Eventim lookup, each show an entry of its own. If it fails,
+   * the artist's stored Eventim dates stand in for it, and a third "blocked"
+   * in a row pauses Eventim for the rest of the run.
+   */
+  function checkEventim(name, run, matches, failed, previous) {
+    return fetchEventimFor(name, run.controller.signal).then(function (data) {
+      run.eventimBlocked = 0;
+      pushEvents(matches, name, (data.shows || []).map(eventimEvent));
+    }).catch(function (err) {
+      if (run.cancelled) {
+        return;
+      }
+      console.warn('Eventim lookup failed for ' + name, err);
+      var reason = err.reason || 'request failed';
+      run.eventimBlocked = reason === 'blocked' ? run.eventimBlocked + 1 : 0;
+      if (run.eventimBlocked >= EVENTIM_BLOCKED_LIMIT) {
+        run.eventimPaused = { after: name, remaining: 0 };
+      }
+      var stored = eventimFallback(previous, name);
+      pushEvents(matches, name, stored);
+      failed.push({ name: name, source: 'eventim', reason: reason, usedFallback: stored.length > 0 });
+    });
+  }
+
+  /**
+   * Walks a list of artist names one at a time: Ticketmaster first, with a
+   * small delay after it so its rate limit is never hit, then Eventim. A
+   * failed lookup on either shop is collected rather than fatal and never
+   * skips the other one; `previous` (the stored list) is what it falls back
+   * to. Progress only moves once both are done - the two take very
+   * different times, and a half step would make the time estimate jump.
+   */
+  function checkArtists(names, run, matches, failed, previous) {
     var chain = Promise.resolve();
+    run.eventimBlocked = 0;
+    run.eventimPaused = null;
 
     names.forEach(function (name, index) {
       chain = chain.then(function () {
         if (run.cancelled) {
           return null;
         }
-        var label = 'Checking concerts for ' + name + ' (' + (index + 1) + '/' + names.length + ')';
-        setStatus(label, (index / names.length) * 100);
+        var position = ' (' + (index + 1) + '/' + names.length + ')';
+        var progress = (index / names.length) * 100;
+        var label = 'Checking Ticketmaster for ' + name + position;
+        setStatus(label, progress);
 
-        return fetchConcertsFor(name, run.controller.signal).then(function (data) {
-          (data.events || []).forEach(function (event) {
-            matches.push({ artistName: name, event: event });
-          });
-        }).catch(function (err) {
+        return checkTicketmaster(name, run, matches, failed, previous).then(function () {
           if (run.cancelled) {
-            return;
+            return null;
           }
-          console.warn('Ticketmaster lookup failed for ' + name, err);
-          failed.push(name);
+          return delay(REQUEST_DELAY_MS);
         }).then(function () {
           if (run.cancelled) {
             return null;
           }
+          // Paused: Eventim isn't asked again this run, the stored dates
+          // stand in, and the notice counts the artist instead of naming it.
+          if (run.eventimPaused) {
+            pushEvents(matches, name, eventimFallback(previous, name));
+            run.eventimPaused.remaining += 1;
+            return null;
+          }
+          label = 'Checking Eventim for ' + name + position;
+          setStatus(label, progress);
+          return checkEventim(name, run, matches, failed, previous);
+        }).then(function () {
+          if (run.cancelled) {
+            return;
+          }
           setStatus(label, ((index + 1) / names.length) * 100);
-          return delay(REQUEST_DELAY_MS);
         });
       });
     });
@@ -1103,7 +1374,7 @@ window.MusicHub = window.MusicHub || {};
 
     saveState();
     render();
-    showFailedArtists(failed);
+    showFailedArtists(failed, run.eventimPaused);
     showToast(fetchSummaryMessage(concerts, newIds, run.cancelled));
   }
 
@@ -1168,7 +1439,7 @@ window.MusicHub = window.MusicHub || {};
       var names = artists.map(function (artist) {
         return artist.name;
       });
-      return checkArtists(names, run, matches, failed).then(function () {
+      return checkArtists(names, run, matches, failed, previous).then(function () {
         return names;
       });
     }).then(function (names) {
@@ -1190,20 +1461,21 @@ window.MusicHub = window.MusicHub || {};
   /**
    * Second go at the artists whose lookup failed, from the notice. Only those
    * are checked, so the result is merged into the stored list rather than
-   * replacing it.
+   * replacing it - on both shops, whichever one failed: the fresh entry wins
+   * that merge, so a one-shop retry would lose the other shop's dates.
    */
   function retryFailedArtists() {
     if (activeRun || !lastFailed.length) {
       return Promise.resolve();
     }
 
-    var names = lastFailed.slice();
+    var names = failedNames(lastFailed);
     var run = startRun();
     var previous = state.concerts;
     var failed = [];
     var matches = [];
 
-    return checkArtists(names, run, matches, failed).then(function () {
+    return checkArtists(names, run, matches, failed, previous).then(function () {
       storeRunResult(previous, matches, failed, run, false);
     }).catch(function (err) {
       if (!run.cancelled) {
@@ -1294,6 +1566,11 @@ window.MusicHub = window.MusicHub || {};
     clearStoredData: clearStoredData,
     pickRepresentative: pickRepresentative,
     buildConcerts: buildConcerts,
+    eventimEvent: eventimEvent,
+    ticketmasterFallback: ticketmasterFallback,
+    eventimFallback: eventimFallback,
+    failureReason: failureReason,
+    failedNoticeLines: failedNoticeLines,
     buildCalendarEvent: buildCalendarEvent,
     concertId: concertId,
     isUpcoming: isUpcoming,
