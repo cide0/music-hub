@@ -168,7 +168,7 @@ Visual style takes cues from the Spotify app/web UI — rounded buttons and cont
 Scope of the first implementation step:
 
 1. Create a `CLAUDE.md` file at the repo root with the essential context and rules for this repo, so Claude Code doesn't have to rediscover them each session:
-   - **Project summary:** Node.js/Express web app with Spotify integration at its core, plus Ticketmaster (concert search), Google Calendar and Google Drive (event/media embeds), Last.fm (artist similarity data), and setlist.fm (setlist search); plain HTML/CSS/JS frontend (multi-page, EJS-templated), Dockerized, deployed on Render.com (Free Plan — no database).
+   - **Project summary:** Node.js/Express web app with Spotify integration at its core, plus Ticketmaster and Eventim (concert search), Google Calendar and Google Drive (event/media embeds), Last.fm (artist similarity data), and setlist.fm (setlist search); plain HTML/CSS/JS frontend (multi-page, EJS-templated), Dockerized, deployed on Render.com (Free Plan — no database).
    - **Module system:** ES Modules.
    - **Rules:**
      - Never commit `.env` or any secret values — only `.env.example` with placeholders.
@@ -293,14 +293,15 @@ Route: `/concert-date-fetcher` (also the app's default landing page, via the `/`
 
 **Flow, triggered by a "Fetch concert dates" button:**
 
-1. Call the Spotify Web API directly from the frontend (using the stored access token) to get all artists the user follows: `GET https://api.spotify.com/v1/me/following?type=artist&limit=50`, paginating via the response's `cursors.after` until all followed artists are collected. If the user follows no artists at all, skip Ticketmaster entirely and show "You don't follow any artists on Spotify yet."
+1. Call the Spotify Web API directly from the frontend (using the stored access token) to get all artists the user follows: `GET https://api.spotify.com/v1/me/following?type=artist&limit=50`, paginating via the response's `cursors.after` until all followed artists are collected. If the user follows no artists at all, skip both shops entirely and show "You don't follow any artists on Spotify yet."
 2. For each followed artist, call a backend endpoint — `GET /api/concerts?artist=<name>` — that proxies the Ticketmaster Discovery API server-side (the Ticketmaster API key stays server-side, same reasoning as the Spotify client secret): `GET https://app.ticketmaster.com/discovery/v2/events.json?keyword=<name>&countryCode=DE&sort=date,asc&size=50&apikey=<TICKETMASTER_API_KEY>`. City filtering happens after the response comes back (matching each event's `_embedded.venue.city.name` against the allowed city list) rather than one Ticketmaster call per city — one call per artist instead of one per artist × city. These calls are made sequentially with a small fixed delay between each (e.g. \~220ms, capping the rate at roughly 4–4.5 requests/second) to stay safely under Ticketmaster's 5-requests-per-second limit, the same throttling approach used for Last.fm on Followed Artists Graph. If a given artist's lookup fails (rate limit, network error), skip it and record its name in a "failed artists" list, continuing with the rest rather than aborting the whole fetch.
-3. While the fetch is running, the "Fetch concert dates" button is disabled and shows a "Fetching…" state, preventing a second fetch from starting concurrently. The frontend loops through the followed artists sequentially, awaiting each backend call in turn, updating the status bar after each one completes (e.g. "Checking concerts for \<Artist> (12/47)…").
-4. Deduplicate: Ticketmaster sometimes lists the same concert several times as separate events (e.g. standard ticket, VIP ticket, VIP + hotel package), and the same real-world concert can also turn up under more than one followed artist (a co-headline tour, a support act). Before rendering, group results by venue name + city + date (same day) — **not** by artist — and keep only one item per group. If a group's matches came from more than one followed artist, merge their names into that single item's artist list. Record whether a group had more than one Ticketmaster match (i.e. multiple ticket options existed).
+   - **Eventim as a second source:** right after each artist's Ticketmaster call, the page calls `GET /api/eventim/concerts?artist=<name>` (proxying Eventim's own website search API; no key needed). The server spaces these calls 2 s apart, so a fetch takes about 2 s per artist. Real-world deviations from the original idea: the API ignores paging, so there is one request per artist and at most 50 products can be read, and the request uses `sort=Recommendation` (the artist's own shows come first; `DateAsc` filled the 50 with namesakes). A show both shops sell is merged into one card carrying both ticket links. A failed lookup on either shop keeps that shop's last known dates for the artist; after 3 "blocked" answers in a row Eventim is paused for the rest of the run.
+3. While the fetch is running, the "Fetch concert dates" button is disabled and shows a "Fetching…" state, preventing a second fetch from starting concurrently. The frontend loops through the followed artists sequentially, awaiting each backend call in turn, updating the status bar after each one completes (e.g. "Checking Ticketmaster for \<Artist> (12/47)…", then "Checking Eventim for \<Artist> (12/47)…").
+4. Deduplicate: Ticketmaster sometimes lists the same concert several times as separate events (e.g. standard ticket, VIP ticket, VIP + hotel package), and the same real-world concert can also turn up under more than one followed artist (a co-headline tour, a support act). Before rendering, group results by venue name + city + date (same day) — **not** by artist — and keep only one item per group. If a group's matches came from more than one followed artist, merge their names into that single item's artist list. Record whether a group had more than one Ticketmaster match, or an Eventim show with VIP/package variants (i.e. multiple ticket options existed). Eventim shows that Ticketmaster already has are folded into the Ticketmaster entry (same city and day, matching venue or shared artist), keeping the card's id stable.
 5. Compare the deduplicated, sorted list against the previously stored list in `localStorage`, using the same venue + city + date key: any item not present in the previous list is flagged "new". If there is no previous stored list at all (the very first fetch ever), every item is flagged "new" — nothing was known before, so the whole result set counts as newly found. When an item did already exist, carry forward its stored `addedToCalendar` and attending flags onto the freshly fetched version, so neither "Add to calendar" state nor the "I'm attending" toggle is lost across re-fetches.
 6. Sort the list ascending by date and render one item per concert. Every item always gets a rounded, plain grayish border as its base style; items flagged "new" additionally get an accent-colored border (`#7407B0`) on top, to highlight what changed since the last fetch. If the deduplicated list ends up empty, show "No upcoming concerts found in the selected cities." instead of a blank area. Re-enable the "Fetch concert dates" button once rendering is done.
 7. Save the full result (plus a "last fetched" timestamp) to `localStorage`, overwriting any previous fetch. The "new" flags are stored too (their ids, as `lastFound`), so they stay marked across reloads until the next fetch replaces them — like the Discogs page's finds. A cancelled fetch that found nothing new leaves them; a retry of the failed artists adds its finds to them, since it completes the same fetch. The **New** filter is disabled while none of the upcoming concerts is marked.
-8. Once the fetch finishes, if the "failed artists" list from step 2 isn't empty, show a small dismissible notice/popup listing the artists whose Ticketmaster lookup failed (e.g. "Couldn't check concerts for: Artist A, Artist B"), so the user knows the result set might be incomplete. No popup appears if nothing failed.
+8. Once the fetch finishes, if the "failed artists" list from step 2 isn't empty, show a small dismissible notice, grouped by source: one line per shop with a bold label ("Ticketmaster:", "Eventim:"), each entry reading "Artist (reason)" - reasons are "request failed", "no answer", "unexpected answer" or "blocked" - plus "(showing last known dates)" when the artist's earlier dates from that shop stay on screen. A source with more than 10 failures shows the first 10 and an "and N more" button that expands the rest; a source with no failures has no line. "Retry" checks both shops again for every artist listed by name. When Eventim was paused, its line reads "Eventim stopped answering after Artist X; the remaining N artists use their last known Eventim dates" instead of listing them, and Retry skips those. No notice appears if nothing failed.
 
 **Allowed cities** (must match `_embedded.venue.city.name`): Berlin, Hamburg, München, Köln, Frankfurt am Main, Düsseldorf, Stuttgart, Leipzig, Dortmund, Essen, Bremen, Hannover, Nürnberg, Offenbach am Main.
 
@@ -308,14 +309,14 @@ Route: `/concert-date-fetcher` (also the app's default landing page, via the `/`
 
 - Artist name(s) — a merged list when the concert matches more than one followed artist (e.g. co-headline tour, support act)
 - Event/tour name
-- Event image (from Ticketmaster's `images` array)
+- Event image (from Ticketmaster's `images` array; Eventim-only cards have none)
 - Date & time
 - Venue name & city
-- A ticket link (the Ticketmaster event URL, opens in a new tab)
+- Ticket links: the whole card opens the Ticketmaster event page (the Eventim page on an Eventim-only card) in a new tab, and small "Ticketmaster" / "Eventim" pills in the action row link to each shop the card has (new tab, `aria-label` like "Eventim tickets for Sido at Festhalle Frankfurt"; they wrap on narrow screens)
 - An **"Add to calendar"** button (see Google Calendar integration below)
 - An **"I'm attending"** toggle, independent of "Add to calendar" — it only sets a flag on the stored concert (`attending: true`/`false`), with no Google Calendar API call at all. This is for when the user already has the show in their calendar some other way (added manually, imported elsewhere) and just wants to mark it as one they're going to inside Music Hub, without creating a duplicate calendar entry.
 - **Coins for going:** the first time a concert is marked as attended — with the toggle, or by adding it to the calendar — 1,000 coins fly out of the middle of its card into the wallet, as coins do anywhere. Only ever once per concert (its venue + city + date key): switching attending off and on again, updating the concert list, or even clearing this page's saved data pays nothing more — the paid concerts are remembered in the wallet's own `store` data (`rewarded`, e.g. `"concert:<key>"`), not with the concert list.
-- A small info note, shown only when the dedup step collapsed more than one match for that concert — e.g. "Multiple ticket options available (VIP, packages, etc.) — check Ticketmaster for details"
+- A small info note, shown only when the dedup step collapsed more than one match for that concert — e.g. "Multiple ticket options available (VIP, packages, etc.) — check the ticket shop for details"
 - Card styling: rounded corners and a plain grayish border on every item; items newly found by the current fetch (which on the very first fetch is all of them) additionally get an accent-colored (`#7407B0`) border instead of the plain gray one
 
 **Status bar:** visible only while fetching; a short progress line updated as each followed artist is checked (frontend-driven, no SSE, per the chosen approach).
@@ -336,7 +337,10 @@ Stored under a `concertDateFetcher` key:
       date: "2026-11-05T20:00:00+01:00",
       venueName: "...",
       city: "Berlin",
-      ticketUrl: "...",
+      ticketUrl: "...",          // Ticketmaster; null on an Eventim-only card
+      ticketmasterId: "...",     // null on an Eventim-only card
+      eventimUrl: "...",         // null when Eventim doesn't list the show
+      eventimId: "...",
       hasMultipleTicketOptions: false,
       addedToCalendar: false,
       attending: false
@@ -350,7 +354,8 @@ Stored under a `concertDateFetcher` key:
 - If Google isn't connected yet, clicking it starts the `/auth/google` flow first.
 - Otherwise (refreshing the access token first if it's expired), it calls the Google Calendar API directly from the frontend: `POST https://www.googleapis.com/calendar/v3/calendars/primary/events` with `Authorization: Bearer <googleAccessToken>`.
 - Event title (`summary`): `"<Artist> – <City>"` — the artist name(s) plus the location (city), no venue name. If the item has multiple merged artists, join them (e.g. `"Artist A, Artist B – City"`).
-- Event time: uses the concert's exact start date/time if Ticketmaster provided one, defaulting to a 3-hour duration; falls back to an all-day event if only a date (no time) is available. All events use the `Europe/Berlin` timezone, since every allowed city is in Germany.
+- Event description: the event name followed by every ticket link the card has (Ticketmaster, Eventim).
+- Event time: uses the concert's exact start date/time if a shop provided one, defaulting to a 3-hour duration; falls back to an all-day event if only a date (no time) is available. All events use the `Europe/Berlin` timezone, since every allowed city is in Germany.
 - On success, the concert's stored record gets both `addedToCalendar: true` and `attending: true` (persisted in `localStorage` — adding it to the calendar obviously means the user is going, so the "I'm attending" toggle flips on too), and the button switches to a disabled/muted "Added" state — this persists across reloads and re-fetches. On failure, an inline error message; the button stays clickable so the user can retry.
 
 Google's tokens follow the same shape as Spotify's, stored separately under a `googleAuth` key, plus the scopes the user actually granted (the login asks for `calendar.events`, `drive.appdata` for the Google Drive sync and `drive.metadata.readonly` for the Gallery's Drive folder; the consent screen lets the user untick one):
@@ -367,6 +372,7 @@ Google's tokens follow the same shape as Spotify's, stored separately under a `g
 **Backend endpoints needed:**
 
 - `GET /api/concerts?artist=<name>` — proxies the Ticketmaster Discovery API call above and returns the filtered/parsed event list as JSON.
+- `GET /api/eventim/concerts?artist=<name>` — proxies Eventim's website search API (`sort=Recommendation`, `top=50`, one request per artist) and returns `{ artist, shows }` with the shows in the allowed cities; paced 2 s apart, no key.
 - `GET /auth/google` / `GET /auth/google/callback` — Google OAuth authorization and token exchange.
 - `POST /api/google/refresh` — silent Google access-token refresh.
 

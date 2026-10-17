@@ -2,8 +2,8 @@
 
 ## Project summary
 
-Node.js/Express web app with Spotify integration at its core, plus Ticketmaster
-(concert search), Google Calendar and Google Drive (event/media embeds, the
+Node.js/Express web app with Spotify integration at its core, plus Ticketmaster and
+Eventim (concert search; Eventim needs no key), Google Calendar and Google Drive (event/media embeds, the
 Gallery's Concerts folder, and the sync of the app data between browsers), Last.fm
 (artist similarity data), setlist.fm (setlist search) and Discogs (collection /
 new releases). The frontend is plain HTML/CSS/JS — multi-page, EJS-templated,
@@ -58,11 +58,13 @@ server.js            Express app (static files, EJS views, routers)
 config/navigation.js Navbar tabs + page routes (single source of truth)
 lib/oauth.js         Signed-state helpers + the token callback page (both flows)
 lib/cities.js        Allowed cities for Concert Date Fetcher + name matching
+lib/eventim.js       Eventim search request + normalizing/variant collapsing (no network code)
 routes/auth.js       Spotify: /login, /callback, POST /api/spotify/refresh
 routes/google.js     Google: /auth/google(/callback), POST /api/google/refresh
                      (scopes: calendar.events, drive.appdata,
                      drive.metadata.readonly)
 routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
+                     GET /api/eventim/concerts (Eventim, no key, 2 s pacing),
                      GET /api/similar-artists (Last.fm),
                      GET /api/discogs/releases + /random-collection-item
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
@@ -105,7 +107,8 @@ public/js/           notice.js, storage.js, google.js, sync.js, navbar.js, auth.
 
 Each third-party API gets a proxy route here, called sequentially from the
 frontend with a small fixed delay (~220ms for Ticketmaster/Last.fm) to stay
-under the provider's rate limit; a single failed lookup is collected into a
+under the provider's rate limit (Eventim has no key; its route spaces requests
+2 s apart itself and the page calls it once per artist); a single failed lookup is collected into a
 "failed artists" notice rather than aborting the run.
 
 ## Auth

@@ -1,7 +1,9 @@
 /*
  * Concert Date Fetcher: walks the user's followed Spotify artists, asks the
- * backend's Ticketmaster proxy about each one, deduplicates the results into
- * one item per real-world concert and keeps everything in localStorage.
+ * backend's Ticketmaster and Eventim proxies about each one in turn, merges
+ * the two shops' shows and deduplicates the results into one item per
+ * real-world concert (with a ticket link per shop) and keeps everything in
+ * localStorage.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -844,6 +846,10 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
+  // A source with more failures than this lists the first ones and folds the
+  // rest into an "and N more" button.
+  var FAILED_SHOWN_LIMIT = 10;
+
   var FAILURE_SOURCES = [
     { id: 'ticketmaster', label: 'Ticketmaster' },
     { id: 'eventim', label: 'Eventim' },
@@ -860,7 +866,8 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * The failed notice's lines after its heading, kept separate from the DOM
-   * so it can be tested directly: one per source that had a failure, and the
+   * so it can be tested directly: one per source that had a failure ("Name
+   * (reason)" each, the first ten in `text` and the rest in `more`), and the
    * pause when Eventim stopped answering part-way through the run.
    */
   function failedNoticeLines(failed, paused) {
@@ -872,21 +879,39 @@ window.MusicHub = window.MusicHub || {};
       if (!entries.length) {
         return;
       }
+      var texts = entries.map(function (entry) {
+        return entry.name + ' (' + (entry.reason || 'request failed') + ')'
+          + (entry.usedFallback ? ' (showing last known dates)' : '');
+      });
       lines.push({
         label: source.label,
-        text: entries.map(function (entry) {
-          return entry.name + (entry.usedFallback ? ' (showing last known dates)' : '');
-        }).join(', '),
+        text: texts.slice(0, FAILED_SHOWN_LIMIT).join(', '),
+        more: texts.slice(FAILED_SHOWN_LIMIT).join(', '),
+        moreCount: Math.max(0, texts.length - FAILED_SHOWN_LIMIT),
       });
     });
     if (paused && paused.remaining) {
       lines.push({
         label: null,
+        more: '',
+        moreCount: 0,
         text: 'Eventim stopped answering after ' + paused.after + '; the remaining ' + paused.remaining
           + (paused.remaining === 1 ? ' artist uses its' : ' artists use their') + ' last known Eventim dates.',
       });
     }
     return lines;
+  }
+
+  /** " and N more" as a real button; a tap swaps it for the rest of the list. */
+  function appendMoreFailed(line) {
+    var button = el('button', 'notice__more', 'and ' + line.moreCount + ' more');
+    button.type = 'button';
+    button.addEventListener('click', function () {
+      var rest = document.createTextNode(line.more);
+      button.replaceWith(rest);
+    });
+    els.failedText.appendChild(document.createTextNode(', '));
+    els.failedText.appendChild(button);
   }
 
   function showFailedArtists(failed, paused) {
@@ -906,6 +931,9 @@ window.MusicHub = window.MusicHub || {};
         els.failedText.appendChild(document.createTextNode(' '));
       }
       els.failedText.appendChild(document.createTextNode(line.text));
+      if (line.moreCount) {
+        appendMoreFailed(line);
+      }
     });
 
     // Retry covers the artists listed by name - both shops for each of them.
@@ -948,7 +976,7 @@ window.MusicHub = window.MusicHub || {};
     if (concert.venueName) {
       event.location = concert.venueName + ', ' + concert.city;
     }
-    var description = [concert.eventName, concert.ticketUrl].filter(Boolean).join('\n');
+    var description = [concert.eventName, concert.ticketUrl, concert.eventimUrl].filter(Boolean).join('\n');
     if (description) {
       event.description = description;
     }
@@ -1015,7 +1043,7 @@ window.MusicHub = window.MusicHub || {};
       body.appendChild(el(
         'p',
         'concert-card__note',
-        'Multiple ticket options available (VIP, packages, etc.) — check Ticketmaster for details',
+        'Multiple ticket options available (VIP, packages, etc.) — check the ticket shop for details',
       ));
     }
 
@@ -1093,6 +1121,23 @@ window.MusicHub = window.MusicHub || {};
       if (activeFilter === 'attending') {
         render();
       }
+    });
+
+    var where = [concert.venueName, concert.city].filter(Boolean).join(' ');
+    [
+      { label: 'Ticketmaster', url: concert.ticketUrl },
+      { label: 'Eventim', url: concert.eventimUrl },
+    ].forEach(function (shop) {
+      if (!shop.url) {
+        return;
+      }
+      var pill = el('a', 'concert-card__ticket', shop.label);
+      pill.href = shop.url;
+      pill.target = '_blank';
+      pill.rel = 'noopener';
+      pill.setAttribute('aria-label', shop.label + ' tickets for ' + concert.artists.join(', ')
+        + (where ? ' at ' + where : ''));
+      actions.appendChild(pill);
     });
 
     actions.appendChild(calendarButton);
