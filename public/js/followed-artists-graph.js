@@ -1007,6 +1007,19 @@ window.MusicHub = window.MusicHub || {};
     document.documentElement.style.setProperty('--graph-top', top + 'px');
   }
 
+  /**
+   * Matches the drawing area to the canvas's new size, one unit per pixel as
+   * drawGraph sets it up, so the graph stays where it is on screen.
+   */
+  function fitViewBox() {
+    fitCanvas();
+    var width = els.canvas.clientWidth;
+    var height = els.canvas.clientHeight;
+    if (width && height) {
+      els.svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+    }
+  }
+
   /** With no graph there is nothing to frame, explain or control. */
   /**
    * Before there is a graph the progress bar belongs in the page flow, full
@@ -3098,13 +3111,21 @@ window.MusicHub = window.MusicHub || {};
       }
     });
 
+    // A phone's keyboard (opened by the search) and its address bar change
+    // only the height: that keeps the graph as it is, just on a taller or
+    // shorter canvas, rather than building it again from scratch.
+    var lastWidth = window.innerWidth;
     window.addEventListener('resize', function () {
+      var widthChanged = window.innerWidth !== lastWidth;
+      lastWidth = window.innerWidth;
       // Not in the middle of a welcome: it would lose the nodes it's on.
-      if (graph.artists.length && !celebrating) {
+      if (graph.artists.length && !celebrating && widthChanged) {
         render();
       } else if (!graphVisible) {
         // The navbar may wrap to a new height: keep the button centred below it.
         fitCanvas();
+      } else {
+        fitViewBox();
       }
     });
 
