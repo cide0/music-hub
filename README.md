@@ -6,7 +6,7 @@
 
 **Music Hub** is my personal music dashboard built around Spotify. It brings together everything I like to do with music in one place: finding upcoming concerts of the artists I follow, exploring how these artists are connected, turning setlists into playlists, keeping a gallery of the concerts I went to and checking for new vinyl releases.
 
-Besides Spotify, it uses the Ticketmaster, Last.fm, setlist.fm, Discogs, Google Calendar and Google Drive APIs.
+Besides Spotify, it uses the Ticketmaster, Eventim, Last.fm, setlist.fm, Discogs, Google Calendar and Google Drive APIs.
 
 There is no database, so everything the app saves is stored in your browser. On the live app this data is also synced between all your browsers via your own Google Drive.
 
@@ -14,8 +14,9 @@ There is no database, so everything the app saves is stored in your browser. On 
 
 ### Pages
 
-- **Concerts:** Fetches the upcoming concerts of all artists you follow on Spotify in a set list of German cities.
-  - Duplicate events (e.g. VIP tickets or co-headline tours) are merged into one item.
+- **Concerts:** Fetches the upcoming concerts of all artists you follow on Spotify in a set list of German cities, from both Ticketmaster and Eventim.
+  - Duplicate events (e.g. VIP tickets, co-headline tours or the same show listed by both shops) are merged into one item, with a ticket link for each shop.
+  - If a lookup fails, the concerts already saved for that artist are kept and the artist is listed in a notice (grouped by shop) with a retry button.
   - Concerts that weren't there during the last fetch are highlighted as new.
   - Every concert can be added to your Google Calendar with one click or simply be marked as attended.
 - **Artist Graph:** Shows all artists you follow on Spotify as a graph, where similar artists (based on Last.fm data) are connected to each other.
@@ -25,9 +26,10 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Click on an artist to open them in the Spotify app.
 - **Setlists:** Searches setlist.fm for the latest setlist of an artist in a city and adds the songs to one of your Spotify playlists.
   - Songs are matched with Spotify tracks automatically, the ones that couldn't be matched can be picked by hand or skipped.
-  - Past concerts you marked as attended on the Concerts page are listed as shortcuts.
+  - Past concerts you marked as attended on the Concerts page are listed as shortcuts until their setlist has been added to a playlist.
 - **Gallery:** A gallery of the concerts you went to, sorted into artist and concert folders, with your images and videos from Google Drive.
-  - Fills itself from a "Concerts" folder in your Google Drive (or any other folder set in Settings).
+  - Fills itself from a "Concerts" folder in your Google Drive (or any other folder set in Settings) when you press its refresh button.
+  - The artist folders can be searched by name.
   - Images and videos can also be added by pasting Google Drive links.
 - **Discogs:** Checks Discogs for new vinyl releases of all artists you follow on Spotify.
   - A "Pick of the Day" suggests a random record from your own Discogs collection on every page load.
@@ -37,6 +39,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Listened albums can be added to your album history, with your own rating.
 - **Store:** Spend the coins you earn around the app on username styles, a golden record player, Mystery Vinyls or extra spins on the Wheel of Fortune.
 - **Collection:** Your collection of unboxed vinyls. Press **Play** on any of them to put it on the record player and start the album on your Spotify.
+  - Shows the rating you gave each album on the Albums page, and can be sorted by date or rating.
   - Add the song that's currently playing to your playlists right from the record player.
   - Playlists can be set to rotate, so they only keep your newest songs.
 - **Settings:** Export and import your data, manage the Google login and Drive sync, set your Gallery folder, Spotify playlists and Discogs username, and turn the sound effects on or off.
@@ -68,6 +71,7 @@ Also, starting an album from the record player needs a Spotify Premium account (
 
 3. Get API keys for the other services:
    - Ticketmaster: https://developer.ticketmaster.com/
+   - Eventim needs no API key.
    - setlist.fm: https://www.setlist.fm/settings/api
    - Last.fm: https://www.last.fm/api/account/create
    - Discogs: Create a personal access token at https://www.discogs.com/settings/developers

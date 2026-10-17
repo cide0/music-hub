@@ -41,6 +41,10 @@ database**, and the service sleeps/restarts, so no server-side state survives).
   hamburger menu, comfortable touch targets).
 - Use the Makefile targets (`make install`, `make up`, `make down`, `make list`, …)
   for Docker/dependency workflows rather than raw `docker`/`npm` commands.
+- Keep `README.md` up to date: when a change adds or changes a user-visible
+  feature, a third-party service, a setup step, an env variable or a make
+  target, update the README in the same change. Small polish (styling,
+  animations, bug fixes) doesn't need a README entry.
 - Every vinyl pattern or finish `public/js/vinyl.js` can draw also gets a family
   in `public/js/vinyl-catalog.js` (name, weight, format texts), so the Store's
   Mystery Vinyl can unbox it too. Check the new formats with
