@@ -41,6 +41,11 @@ database**, and the service sleeps/restarts, so no server-side state survives).
   hamburger menu, comfortable touch targets).
 - Use the Makefile targets (`make install`, `make up`, `make down`, `make list`, …)
   for Docker/dependency workflows rather than raw `docker`/`npm` commands.
+- When adding or changing a feature, check it in the browser with the Claude
+  in Chrome extension when it's available. Open the app at
+  `http://127.0.0.1:8080/`, not `localhost`: the logins live in
+  `localStorage`, which is per origin, so only `127.0.0.1` has the Spotify
+  login and the features behind it.
 - Keep `README.md` up to date: when a change adds or changes a user-visible
   feature, a third-party service, a setup step, an env variable or a make
   target, update the README in the same change. Small polish (styling,
