@@ -14,7 +14,7 @@ There is no database, so everything the app saves is stored in your browser. On 
 
 ### Pages
 
-- **Concerts:** Fetches the upcoming concerts of all artists you follow on Spotify in a set list of German cities, from both Ticketmaster and Eventim.
+- **Concerts:** Fetches the upcoming concerts of all artists you follow on Spotify in your cities. By default that's 14 large German cities; in Settings you can switch any of them off and add your own, in any EU country Ticketmaster sells concerts in (Austria, Belgium, Czechia, Denmark, Estonia, Finland, France, Greece, Ireland, Italy, Luxembourg, the Netherlands, Poland, Portugal, Spain, Sweden), Switzerland or the UK. Cities in Germany are looked up on both Ticketmaster and Eventim, cities in other countries on Ticketmaster only. Each extra country makes fetching take a little longer, as every artist is looked up on Ticketmaster once per country.
   - Duplicate events (e.g. VIP tickets, co-headline tours or the same show listed by both shops) are merged into one item, with a ticket link for each shop.
   - If a lookup fails, the concerts already saved for that artist are kept and the artist is listed in a notice (grouped by shop) with a retry button.
   - Concerts that weren't there during the last fetch are highlighted as new.
@@ -42,7 +42,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Shows the rating you gave each album on the Albums page (click it to edit it), and can be sorted by date or rating.
   - Add the song that's currently playing to your playlists right from the record player.
   - Playlists can be set to rotate, so they only keep your newest songs.
-- **Settings:** Export and import your data, manage the Google login and Drive sync, set your Gallery folder, Spotify playlists and Discogs username, and turn the sound effects on or off.
+- **Settings:** Export and import your data, choose the Concerts page's cities, manage the Google login and Drive sync, set your Gallery folder, Spotify playlists and Discogs username, and turn the sound effects on or off.
 - **External tools:** The navbar also links to some other Spotify tools I like to use (including my own [Spotify Video Matcher](https://github.com/cide0/spotify-video-matcher)).
 
 ### Coins & Wheel of Fortune

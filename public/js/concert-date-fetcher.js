@@ -16,11 +16,17 @@ window.MusicHub = window.MusicHub || {};
   // Eventim needs no delay here: the server already paces it 2 s apart.
   // This many "blocked" answers in a row pause it for the rest of the run.
   var EVENTIM_BLOCKED_LIMIT = 3;
+  // The one country Eventim (eventim.de) is searched for; the cities abroad
+  // are looked up on Ticketmaster alone.
+  var EVENTIM_COUNTRY = 'DE';
+  // "Today" and the "Last fetched" time; a concert's own date and time are
+  // shown in its country's time zone (concertTimeZone).
   var TIMEZONE = 'Europe/Berlin';
   var DEFAULT_DURATION_HOURS = 3;
   // Coins for going to a concert: paid the first time it's marked as
   // attended, and never again for that concert (wallet.js earnOnce).
   var ATTEND_COINS = 1000;
+  var NO_CITIES_MESSAGE = 'Every city is switched off - switch on at least one in Settings, under Concerts.';
 
   var els = {};
   var state = null;
@@ -112,8 +118,13 @@ window.MusicHub = window.MusicHub || {};
     return parts.slice(0, 3).join(':');
   }
 
+  /** Concerts stored before there was a choice of countries are all in Germany. */
+  function concertTimeZone(concert) {
+    return MusicHub.concertCities.timeZone(concert.country);
+  }
+
   function formatConcertDate(concert) {
-    var options = { timeZone: TIMEZONE, weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' };
+    var options = { timeZone: concertTimeZone(concert), weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' };
     if (concert.localTime) {
       options.hour = '2-digit';
       options.minute = '2-digit';
@@ -275,16 +286,29 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * A group of nothing but Ticketmaster add-on listings (VIP, premium
+   * packages, ...). Ticketmaster sells some of those as events of their own
+   * at the venue's lounge ("Ziggo Dome Club"), a minute after the show.
+   */
+  function isAddOnGroup(group) {
+    return group.events.every(function (event) {
+      return !!event.ticketmasterId && isSpecialTicket(event);
+    });
+  }
+
+  /**
    * Whether two groups are one concert although their venue names differ
    * (Ticketmaster listing none, the shops spelling it differently): same
    * day, same start time, same city, and an artist of one billed on the
-   * other, or the same event name.
+   * other, or the same event name. An add-on group needs no same start
+   * time: it belongs to its artist's show that day in that city.
    */
   function sameShow(a, b) {
     var first = a.events[0];
     var second = b.events[0];
+    var addOn = isAddOnGroup(a) || isAddOnGroup(b);
     if (!first.localDate || first.localDate !== second.localDate
-      || !sameText(first.city, second.city) || groupTime(a) !== groupTime(b)) {
+      || !sameText(first.city, second.city) || (!addOn && groupTime(a) !== groupTime(b))) {
       return false;
     }
     var namesA = groupNames(a);
@@ -309,7 +333,9 @@ window.MusicHub = window.MusicHub || {};
    * packages), and the same concert also turns up under several followed
    * artists. Collapse both: first per Ticketmaster event (or Eventim show),
    * then per venue + city + day, and last per day + time + city + artist,
-   * whatever the venue. The card keeps the id of its first group.
+   * whatever the venue (an add-on group whatever the time too). The card
+   * keeps the id of its first group - unless that one is only add-ons, when
+   * the show's own group lends its id.
    */
   function buildConcerts(matches) {
     var byEvent = {};
@@ -353,6 +379,9 @@ window.MusicHub = window.MusicHub || {};
       if (!into) {
         merged.push(group);
         return;
+      }
+      if (isAddOnGroup(into) && !isAddOnGroup(group)) {
+        into.id = group.id;
       }
       into.events = into.events.concat(group.events);
       group.artists.forEach(function (name) {
@@ -412,6 +441,7 @@ window.MusicHub = window.MusicHub || {};
         venueName: main.venueName
           || (withEventimVenue && (withEventimVenue.eventimVenueName || withEventimVenue.venueName)) || null,
         city: main.city,
+        country: main.country || MusicHub.concertCities.DEFAULT_COUNTRY,
         ticketUrl: main.ticketUrl || null,
         eventimUrl: withEventimUrl ? withEventimUrl.eventimUrl : null,
         eventimId: withEventimId ? withEventimId.eventimId : null,
@@ -962,7 +992,7 @@ window.MusicHub = window.MusicHub || {};
         return;
       }
       var texts = entries.map(function (entry) {
-        return entry.name + ' (' + (entry.reason || 'request failed') + ')'
+        return entry.name + ' (' + [entry.country, entry.reason || 'request failed'].filter(Boolean).join(', ') + ')'
           + (entry.usedFallback ? ' (showing last known dates)' : '');
       });
       lines.push({
@@ -1073,8 +1103,8 @@ window.MusicHub = window.MusicHub || {};
       var start = concert.localDate + 'T' + normalizeTime(concert.localTime);
       var parts = start.split(/[-T:]/).map(Number);
       var end = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3] + DEFAULT_DURATION_HOURS, parts[4], parts[5]));
-      event.start = { dateTime: start, timeZone: TIMEZONE };
-      event.end = { dateTime: end.toISOString().slice(0, 19), timeZone: TIMEZONE };
+      event.start = { dateTime: start, timeZone: concertTimeZone(concert) };
+      event.end = { dateTime: end.toISOString().slice(0, 19), timeZone: concertTimeZone(concert) };
     } else {
       // Only a date, no time: an all-day event.
       var day = new Date(concert.localDate + 'T00:00:00Z');
@@ -1588,6 +1618,24 @@ window.MusicHub = window.MusicHub || {};
     return kept.length ? mergeConcerts(concerts, kept) : concerts;
   }
 
+  /**
+   * A full fetch only looks in the cities switched on in Settings, so the
+   * concerts still to come in any other city (one switched off since, or a
+   * city of the user's that's been removed) are kept as they are rather
+   * than dropped as gone.
+   */
+  function keepOtherCities(concerts, previous, cities) {
+    var seen = {};
+    concerts.forEach(function (concert) {
+      seen[concert.id] = true;
+    });
+    var kept = (previous || []).filter(function (concert) {
+      return !seen[concert.id] && isUpcoming(concert)
+        && !MusicHub.concertCities.match(concert.city, countryOf(concert), cities);
+    });
+    return kept.length ? mergeConcerts(concerts, kept) : concerts;
+  }
+
   /* -------------------------------------------------------------- fetching */
 
   /**
@@ -1629,12 +1677,30 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  function fetchConcertsFor(artistName, signal) {
-    return fetchJson('/api/concerts?artist=' + encodeURIComponent(artistName), signal);
+  function fetchConcertsFor(artistName, country, signal) {
+    return fetchJson('/api/concerts?artist=' + encodeURIComponent(artistName)
+      + '&country=' + encodeURIComponent(country), signal);
   }
 
   function fetchEventimFor(artistName, signal) {
     return fetchJson('/api/eventim/concerts?artist=' + encodeURIComponent(artistName), signal);
+  }
+
+  /**
+   * A shop's events of one country that are in the run's cities, each with
+   * the city named as on that list (the shops spell some differently).
+   */
+  function inRunCities(events, run, country) {
+    var kept = [];
+    (events || []).forEach(function (event) {
+      var city = MusicHub.concertCities.match(event.city, country, run.cities);
+      if (city) {
+        event.city = city;
+        event.country = country;
+        kept.push(event);
+      }
+    });
+    return kept;
   }
 
   /**
@@ -1652,13 +1718,19 @@ window.MusicHub = window.MusicHub || {};
     return event;
   }
 
+  /** A stored concert's country - Germany for one stored before there was a choice. */
+  function countryOf(concert) {
+    return concert.country || MusicHub.concertCities.DEFAULT_COUNTRY;
+  }
+
   /**
-   * The artist's stored concerts still to come that one shop sold - what a
-   * failed lookup falls back to. Past ones are left to keepAwaitingSetlist.
+   * The artist's stored concerts still to come in one country that one shop
+   * sold - what a failed lookup falls back to. Past ones are left to
+   * keepAwaitingSetlist.
    */
-  function storedConcertsFor(previous, name, key) {
+  function storedConcertsFor(previous, name, key, country) {
     return (previous || []).filter(function (concert) {
-      return !!concert[key] && isUpcoming(concert)
+      return !!concert[key] && isUpcoming(concert) && countryOf(concert) === country
         && Array.isArray(concert.artists) && concert.artists.indexOf(name) !== -1;
     });
   }
@@ -1684,8 +1756,9 @@ window.MusicHub = window.MusicHub || {};
    * turned back into the events the proxy would have returned. A card saved
    * before cards kept their Ticketmaster id stands in with its own id.
    */
-  function ticketmasterFallback(previous, name) {
-    return storedConcertsFor(previous, name, 'ticketUrl').map(function (concert) {
+  function ticketmasterFallback(previous, name, country) {
+    country = country || MusicHub.concertCities.DEFAULT_COUNTRY;
+    return storedConcertsFor(previous, name, 'ticketUrl', country).map(function (concert) {
       return {
         ticketmasterId: concert.ticketmasterId || 'stored:' + concert.id,
         eventName: concert.eventName,
@@ -1695,6 +1768,7 @@ window.MusicHub = window.MusicHub || {};
         dateTime: concert.dateTime || null,
         venueName: concert.venueName,
         city: concert.city,
+        country: country,
         ticketUrl: concert.ticketUrl,
         attractionNames: billing(concert),
         hasMultipleTicketOptions: !!concert.hasMultipleTicketOptions,
@@ -1706,8 +1780,9 @@ window.MusicHub = window.MusicHub || {};
    * A failed (or paused) Eventim lookup: the artist's stored Eventim concerts
    * turned back into the shows the route would have returned.
    */
-  function eventimFallback(previous, name) {
-    return storedConcertsFor(previous, name, 'eventimId').map(function (concert) {
+  function eventimFallback(previous, name, country) {
+    country = country || MusicHub.concertCities.DEFAULT_COUNTRY;
+    return storedConcertsFor(previous, name, 'eventimId', country).map(function (concert) {
       return eventimEvent({
         eventimId: concert.eventimId,
         eventimUrl: concert.eventimUrl || null,
@@ -1717,6 +1792,7 @@ window.MusicHub = window.MusicHub || {};
         dateTime: concert.dateTime || null,
         venueName: concert.venueName,
         city: concert.city,
+        country: country,
         imageUrl: null,
         attractionNames: billing(concert),
         hasVariants: !!concert.hasMultipleTicketOptions,
@@ -1733,34 +1809,48 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
-   * One artist's Ticketmaster lookup. If it fails, the artist's stored
-   * Ticketmaster dates stand in for it.
+   * The failed notice's entry for one lookup. It names the country only
+   * when the run looked in more than one (and never for Eventim, which is
+   * Germany only).
    */
-  function checkTicketmaster(name, run, matches, failed, previous) {
-    return fetchConcertsFor(name, run.controller.signal).then(function (data) {
-      addTicketmasterEvents(matches, name, data.events || []);
+  function failure(name, source, run, country, reason, stored) {
+    return {
+      name: name,
+      source: source,
+      country: country && run.countries.length > 1 ? MusicHub.concertCities.countryName(country) : null,
+      reason: reason,
+      usedFallback: stored.length > 0,
+    };
+  }
+
+  /**
+   * One artist's Ticketmaster lookup in one country. If it fails, the
+   * artist's stored Ticketmaster dates there stand in for it.
+   */
+  function checkTicketmaster(name, country, run, matches, failed, previous) {
+    return fetchConcertsFor(name, country, run.controller.signal).then(function (data) {
+      addTicketmasterEvents(matches, name, inRunCities(data.events, run, country));
     }).catch(function (err) {
       if (run.cancelled) {
         return;
       }
-      console.warn('Ticketmaster lookup failed for ' + name, err);
-      var stored = ticketmasterFallback(previous, name);
+      console.warn('Ticketmaster lookup failed for ' + name + ' in ' + country, err);
+      var stored = ticketmasterFallback(previous, name, country);
       addTicketmasterEvents(matches, name, stored);
-      failed.push({
-        name: name, source: 'ticketmaster', reason: err.reason || 'request failed', usedFallback: stored.length > 0,
-      });
+      failed.push(failure(name, 'ticketmaster', run, country, err.reason || 'request failed', stored));
     });
   }
 
   /**
-   * One artist's Eventim lookup, merged into the run's matches. If it fails,
-   * the artist's stored Eventim dates stand in for it, and a third "blocked"
-   * in a row pauses Eventim for the rest of the run.
+   * One artist's Eventim lookup (eventim.de, so Germany only), merged into
+   * the run's matches. If it fails, the artist's stored Eventim dates stand
+   * in for it, and a third "blocked" in a row pauses Eventim for the rest of
+   * the run.
    */
   function checkEventim(name, run, matches, failed, previous) {
     return fetchEventimFor(name, run.controller.signal).then(function (data) {
       run.eventimBlocked = 0;
-      addEventimShows(matches, name, (data.shows || []).map(eventimEvent));
+      addEventimShows(matches, name, inRunCities((data.shows || []).map(eventimEvent), run, EVENTIM_COUNTRY));
     }).catch(function (err) {
       if (run.cancelled) {
         return;
@@ -1771,61 +1861,77 @@ window.MusicHub = window.MusicHub || {};
       if (run.eventimBlocked >= EVENTIM_BLOCKED_LIMIT) {
         run.eventimPaused = { after: name, remaining: 0 };
       }
-      var stored = eventimFallback(previous, name);
+      var stored = eventimFallback(previous, name, EVENTIM_COUNTRY);
       addEventimShows(matches, name, stored);
-      failed.push({ name: name, source: 'eventim', reason: reason, usedFallback: stored.length > 0 });
+      failed.push(failure(name, 'eventim', run, null, reason, stored));
     });
   }
 
   /**
-   * Walks a list of artist names one at a time: Ticketmaster first, with a
-   * small delay after it so its rate limit is never hit, then Eventim, whose
-   * shows are merged into what Ticketmaster found before the next artist. A
+   * Walks a list of artist names one at a time: Ticketmaster first, once for
+   * each of the run's countries, with a small delay after each so its rate
+   * limit is never hit, then - when a city in Germany is switched on -
+   * Eventim, whose shows are merged into what Ticketmaster found before the
+   * next artist. The cities abroad are looked up on Ticketmaster only. A
    * failed lookup on either shop is collected rather than fatal and never
    * skips the other one; `previous` (the stored list) is what it falls back
-   * to. Progress only moves once both are done - the two take very
-   * different times, and a half step would make the time estimate jump.
+   * to. Progress only moves once the artist is done - the lookups take
+   * very different times, and a part step would make the time estimate
+   * jump.
    */
   function checkArtists(names, run, matches, failed, previous) {
     var chain = Promise.resolve();
+    var countries = run.countries;
+    var withEventim = countries.indexOf(EVENTIM_COUNTRY) !== -1;
     run.eventimBlocked = 0;
     run.eventimPaused = null;
 
     names.forEach(function (name, index) {
-      chain = chain.then(function () {
-        if (run.cancelled) {
-          return null;
-        }
-        var position = ' (' + (index + 1) + '/' + names.length + ')';
-        var progress = (index / names.length) * 100;
-        var label = 'Checking Ticketmaster for ' + name + position;
-        setStatus(label, progress);
+      var position = ' (' + (index + 1) + '/' + names.length + ')';
+      var progress = (index / names.length) * 100;
+      var label = '';
 
-        return checkTicketmaster(name, run, matches, failed, previous).then(function () {
+      countries.forEach(function (country) {
+        // The country only says something when there is more than one.
+        var where = countries.length > 1 ? ' ' + MusicHub.concertCities.countryName(country) : '';
+        chain = chain.then(function () {
           if (run.cancelled) {
             return null;
           }
-          return delay(REQUEST_DELAY_MS);
-        }).then(function () {
+          label = 'Checking Ticketmaster' + where + ' for ' + name + position;
+          setStatus(label, progress);
+          return checkTicketmaster(name, country, run, matches, failed, previous).then(function () {
+            if (run.cancelled) {
+              return null;
+            }
+            return delay(REQUEST_DELAY_MS);
+          });
+        });
+      });
+
+      if (withEventim) {
+        chain = chain.then(function () {
           if (run.cancelled) {
             return null;
           }
           // Paused: Eventim isn't asked again this run, the stored dates
           // stand in, and the notice counts the artist instead of naming it.
           if (run.eventimPaused) {
-            addEventimShows(matches, name, eventimFallback(previous, name));
+            addEventimShows(matches, name, eventimFallback(previous, name, EVENTIM_COUNTRY));
             run.eventimPaused.remaining += 1;
             return null;
           }
           label = 'Checking Eventim for ' + name + position;
           setStatus(label, progress);
           return checkEventim(name, run, matches, failed, previous);
-        }).then(function () {
-          if (run.cancelled) {
-            return;
-          }
-          setStatus(label, ((index + 1) / names.length) * 100);
         });
+      }
+
+      chain = chain.then(function () {
+        if (run.cancelled) {
+          return;
+        }
+        setStatus(label, ((index + 1) / names.length) * 100);
       });
     });
 
@@ -1856,7 +1962,10 @@ window.MusicHub = window.MusicHub || {};
     }
 
     if (replace && !run.cancelled) {
-      state = { lastFetchedAt: new Date().toISOString(), concerts: keepAwaitingSetlist(concerts, previous) };
+      state = {
+        lastFetchedAt: new Date().toISOString(),
+        concerts: keepOtherCities(keepAwaitingSetlist(concerts, previous), previous, run.cities),
+      };
     } else {
       state = { lastFetchedAt: state.lastFetchedAt, concerts: mergeConcerts(concerts, previous) };
     }
@@ -1880,7 +1989,14 @@ window.MusicHub = window.MusicHub || {};
     // page loaded, and comparing against a stale in-memory copy would hide
     // concerts that are genuinely new.
     state = loadState();
-    activeRun = { cancelled: false, controller: new AbortController() };
+    // The cities (and so the countries) as Settings has them now; a change
+    // there during the run counts from the next one.
+    activeRun = {
+      cancelled: false,
+      controller: new AbortController(),
+      cities: MusicHub.concertCities.enabled(),
+      countries: MusicHub.concertCities.enabledCountries(),
+    };
 
     els.fetchButton.disabled = true;
     setRefreshBusy(els.fetchButton, true, 'Fetching concert dates…');
@@ -1913,6 +2029,10 @@ window.MusicHub = window.MusicHub || {};
     var followed = MusicHub.followedArtists.list();
     if (!followed) {
       showToast(MusicHub.followedArtists.MISSING_MESSAGE);
+      return Promise.resolve();
+    }
+    if (!MusicHub.concertCities.enabled().length) {
+      showToast(NO_CITIES_MESSAGE);
       return Promise.resolve();
     }
 
@@ -1961,6 +2081,10 @@ window.MusicHub = window.MusicHub || {};
    */
   function retryFailedArtists() {
     if (activeRun || !lastFailed.length) {
+      return Promise.resolve();
+    }
+    if (!MusicHub.concertCities.enabled().length) {
+      showToast(NO_CITIES_MESSAGE);
       return Promise.resolve();
     }
 

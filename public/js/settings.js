@@ -1,5 +1,5 @@
 /*
- * Settings: the sound switches, the Google login state, the Google Drive sync, the Gallery's
+ * Settings: the sound switches, the Concerts page's cities, the Google login state, the Google Drive sync, the Gallery's
  * Drive folder, the Spotify playlists' refresh, the Setlists page's default playlist,
  * the Collection record player's playlists (and which of them are rotation playlists),
  * the Discogs username, and the Export / Import / Clear data controls. Every choice made here is saved
@@ -638,6 +638,172 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /* ------------------------------------------------------ concert cities */
+
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  /** The remove button's X, as in the Concerts page's search field. */
+  function crossIcon() {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    [['18', '6', '6', '18'], ['6', '6', '18', '18']].forEach(function (points) {
+      var line = document.createElementNS(SVG_NS, 'line');
+      line.setAttribute('x1', points[0]);
+      line.setAttribute('y1', points[1]);
+      line.setAttribute('x2', points[2]);
+      line.setAttribute('y2', points[3]);
+      svg.appendChild(line);
+    });
+    return svg;
+  }
+
+  /**
+   * The Concerts page's cities (concert-cities.js), one switch each, grouped
+   * by country: the default German ones can only be switched off, the
+   * user's own can also be removed. Below them, the form adding one.
+   */
+  function initConcertCities() {
+    var groups = document.getElementById('concert-cities');
+    var message = document.getElementById('concert-cities-message');
+    var form = document.getElementById('concert-city-form');
+    var nameInput = document.getElementById('concert-city-name');
+    var countryPicker = MusicHub.playlistPicker.create(document.getElementById('concert-city-country'), {
+      // Just the country's name, where a playlist has its cover and songs.
+      summary: function (country) {
+        var summary = document.createElement('span');
+        summary.className = 'playlist-option__summary';
+        var name = document.createElement('span');
+        name.className = 'playlist-option__name';
+        name.textContent = country.name;
+        summary.appendChild(name);
+        return summary;
+      },
+    });
+    var error = document.getElementById('concert-city-error');
+    var saved = document.getElementById('concert-city-saved');
+    var cities = MusicHub.concertCities;
+
+    function confirmSaved(text) {
+      MusicHub.notice.hide(error);
+      MusicHub.notice.flash(saved, text);
+    }
+
+    function cityRow(city) {
+      var item = document.createElement('li');
+      item.className = 'city-list__item';
+
+      var toggle = document.createElement('label');
+      toggle.className = 'switch';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = city.on;
+      var track = document.createElement('span');
+      track.className = 'switch__track';
+      var thumb = document.createElement('span');
+      thumb.className = 'switch__thumb';
+      track.appendChild(thumb);
+      var text = document.createElement('span');
+      text.className = 'switch__label';
+      text.textContent = city.name;
+      toggle.appendChild(input);
+      toggle.appendChild(track);
+      toggle.appendChild(text);
+      item.appendChild(toggle);
+
+      input.addEventListener('change', function () {
+        cities.setOn(city.name, input.checked);
+        renderMessage();
+        confirmSaved('Saved — ' + city.name + (input.checked ? ' is switched on.' : ' is switched off.'));
+      });
+
+      if (city.custom) {
+        var removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'icon-button city-list__remove';
+        removeButton.setAttribute('aria-label', 'Remove ' + city.name);
+        removeButton.title = 'Remove ' + city.name;
+        removeButton.appendChild(crossIcon());
+        removeButton.addEventListener('click', function () {
+          cities.remove(city.name, city.country);
+          render();
+          // Its row is gone, so the focus goes to where the next city is added.
+          nameInput.focus();
+          confirmSaved('Saved — ' + city.name + ' is off the list.');
+        });
+        item.appendChild(removeButton);
+      }
+      return item;
+    }
+
+    function renderMessage() {
+      if (cities.enabled().length) {
+        MusicHub.notice.hide(message);
+      } else {
+        MusicHub.notice.flash(message, 'Every city is switched off, so the Concerts page has nowhere to look '
+          + 'for concerts — switch on at least one.');
+      }
+    }
+
+    function render() {
+      var all = cities.all();
+      groups.textContent = '';
+      cities.COUNTRIES.forEach(function (country) {
+        var inCountry = all.filter(function (city) {
+          return city.country === country.code;
+        });
+        if (!inCountry.length) {
+          return;
+        }
+        var group = document.createElement('div');
+        group.className = 'city-group';
+        group.setAttribute('role', 'group');
+        var title = document.createElement('h3');
+        title.className = 'city-group__title';
+        title.id = 'city-group-' + country.code;
+        title.textContent = country.name;
+        group.setAttribute('aria-labelledby', title.id);
+        var list = document.createElement('ul');
+        list.className = 'city-list';
+        inCountry.forEach(function (city) {
+          list.appendChild(cityRow(city));
+        });
+        group.appendChild(title);
+        group.appendChild(list);
+        groups.appendChild(group);
+      });
+      renderMessage();
+    }
+
+    countryPicker.setPlaylists(cities.COUNTRIES.map(function (country) {
+      return { id: country.code, name: country.name };
+    }));
+    countryPicker.select(cities.DEFAULT_COUNTRY);
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var country = countryPicker.selected();
+      var result = cities.add(nameInput.value, country ? country.id : null);
+      if (result.error) {
+        MusicHub.notice.hide(saved);
+        MusicHub.notice.flash(error, result.error);
+        nameInput.focus();
+        return;
+      }
+      nameInput.value = '';
+      render();
+      nameInput.focus();
+      confirmSaved('Saved — ' + result.city.name + ', ' + cities.countryName(result.city.country)
+        + ' is on the list.');
+    });
+
+    render();
+  }
+
   // Read by wallet.js (every sound) and collection.js (the listening coins).
   var SOUND_SETTING = 'soundEffects';
   var LISTEN_COIN_SOUND_SETTING = 'listenCoinSound';
@@ -670,6 +836,7 @@ window.MusicHub = window.MusicHub || {};
 
   MusicHub.sync.ready(function () {
     initSoundSwitches();
+    initConcertCities();
     initGoogleControls();
     initSyncControls();
     initGalleryFolder();

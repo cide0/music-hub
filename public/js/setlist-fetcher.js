@@ -280,12 +280,15 @@ window.MusicHub = window.MusicHub || {};
     if (source) {
       names.push(fold(source.artist));
     }
+    // The show's city as the Concerts page names it (null outside its
+    // cities), whichever way setlist.fm spells it.
+    var knownCity = MusicHub.concertCities.match(setlist.city, setlist.countryCode);
 
     var changed = false;
     data.concerts = data.concerts.filter(function (concert) {
       var sameShow = concert.localDate === setlist.eventDate
         && ((source && concert.id === source.concertId)
-          || (setlist.knownCity && concert.city === setlist.knownCity));
+          || (knownCity && concert.city === knownCity));
       if (!sameShow || !Array.isArray(concert.artists)) {
         return true;
       }

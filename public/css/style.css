@@ -4339,6 +4339,68 @@ textarea.text-input {
   margin: 0.75rem 0 0;
 }
 
+/* The Concerts section's cities: one group per country, each city a switch
+   in a grid that narrows to one column on a phone. */
+.city-group {
+  margin-bottom: 1rem;
+}
+
+.city-group__title {
+  margin: 0 0 0.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.city-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: 0 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.city-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+}
+
+.city-list__item .switch {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.75rem;
+}
+
+.city-list__item .switch__label {
+  overflow-wrap: anywhere;
+}
+
+/* No border, but still a full-size tap. */
+.city-list__remove {
+  padding: 0;
+  border-color: transparent;
+}
+
+.city-list__remove svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The playlists' dropdown, sized for a country name. */
+.city-form__country {
+  flex: none;
+  width: min(220px, 100%);
+}
+
+/* Names only, no covers: rows of a comfortable tap's height. */
+.playlist-picker--plain .playlist-option {
+  min-height: 44px;
+}
+
 @media (max-width: 480px) {
   .settings-section__actions .button {
     flex: 1;

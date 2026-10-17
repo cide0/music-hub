@@ -1,7 +1,9 @@
 /*
  * The playlist dropdown: a custom listbox, since a native <select> can't show
  * cover images. Used by Setlists and by the Settings page's default
- * playlist. Markup it expects inside `root`:
+ * playlist - and, showing plain names, by Settings' country of a new
+ * concert city, so that dropdown looks the same. Markup it expects inside
+ * `root`:
  *
  *   .playlist-picker__toggle > .playlist-picker__current
  *   ul.playlist-picker__list[role=listbox]
@@ -80,10 +82,14 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * Wires up one dropdown. `onChange(playlist)` runs whenever the user picks
-   * a playlist (not when one is selected from code).
+   * a playlist (not when one is selected from code). `summary(item)`, if
+   * given, builds what an option and the closed field show in place of a
+   * playlist's cover, name and song count - for a list of other things
+   * ({ id, name }).
    */
   function create(root, options) {
     var onChange = (options && options.onChange) || function () {};
+    var summarize = (options && options.summary) || playlistSummary;
     var toggle = root.querySelector('.playlist-picker__toggle');
     var current = root.querySelector('.playlist-picker__current');
     var list = root.querySelector('.playlist-picker__list');
@@ -103,7 +109,7 @@ window.MusicHub = window.MusicHub || {};
         option.id = optionPrefix + index;
         option.setAttribute('role', 'option');
         option.setAttribute('aria-selected', playlist.id === selectedId ? 'true' : 'false');
-        option.appendChild(playlistSummary(playlist));
+        option.appendChild(summarize(playlist));
         option.addEventListener('click', function () {
           choose(playlist, true);
         });
@@ -127,7 +133,7 @@ window.MusicHub = window.MusicHub || {};
     function choose(playlist, byUser) {
       selectedId = playlist.id;
       current.textContent = '';
-      current.appendChild(playlistSummary(playlist));
+      current.appendChild(summarize(playlist));
       Array.prototype.forEach.call(list.children, function (option, index) {
         option.setAttribute('aria-selected', playlists[index].id === playlist.id ? 'true' : 'false');
       });

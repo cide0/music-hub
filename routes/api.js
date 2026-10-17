@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { eventMatchesArtist } from '../lib/artistMatch.js';
-import { citySearchNames, matchCity } from '../lib/cities.js';
+import { citySearchNames, ticketmasterCountry } from '../lib/cities.js';
 import { buildSearchUrl, collapseVariants, toShows } from '../lib/eventim.js';
 import { requireEnv } from '../lib/oauth.js';
 
@@ -20,7 +20,7 @@ function pickImage(images) {
   return (wide || sorted[0]).url || null;
 }
 
-function parseEvent(event, city) {
+function parseEvent(event, city, country) {
   const venue = event._embedded?.venues?.[0];
   const start = event.dates?.start || {};
 
@@ -38,14 +38,16 @@ function parseEvent(event, city) {
     dateTime: start.dateTime || null,
     venueName: venue?.name || '',
     city,
+    country,
     ticketUrl: event.url || null,
     attractionNames: (event._embedded?.attractions || []).map((a) => a?.name).filter(Boolean),
   };
 }
 
 /**
- * Proxies the Ticketmaster Discovery API so the API key stays server-side,
- * and filters the response down to the allowed cities.
+ * Proxies the Ticketmaster Discovery API so the API key stays server-side:
+ * the artist's events in one `country` (Germany by default), each with the
+ * city Ticketmaster names - the page keeps the ones in the user's cities.
  */
 router.get('/api/concerts', async (req, res) => {
   const artist = String(req.query.artist || '').trim();
@@ -53,11 +55,19 @@ router.get('/api/concerts', async (req, res) => {
     res.status(400).json({ error: 'artist is required' });
     return;
   }
+  const country = ticketmasterCountry(req.query.country);
+  if (!country) {
+    res.status(400).json({ error: 'country is not one Ticketmaster is searched in' });
+    return;
+  }
 
   try {
     const params = new URLSearchParams({
       keyword: artist,
-      countryCode: 'DE',
+      countryCode: country,
+      // Every language: without it Ticketmaster only returns the listings
+      // in English and drops the rest - half of Germany's, all of France's.
+      locale: '*',
       sort: 'date,asc',
       size: '50',
       apikey: requireEnv('TICKETMASTER_API_KEY'),
@@ -82,17 +92,17 @@ router.get('/api/concerts', async (req, res) => {
         continue;
       }
 
-      const city = matchCity(event._embedded?.venues?.[0]?.city?.name);
+      const city = String(event._embedded?.venues?.[0]?.city?.name || '').trim();
       if (!city) {
         continue;
       }
-      const parsed = parseEvent(event, city);
+      const parsed = parseEvent(event, city, country);
       if (parsed) {
         events.push(parsed);
       }
     }
 
-    res.json({ artist, events });
+    res.json({ artist, country, events });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -279,10 +289,9 @@ function parseSetlist(setlist) {
     artistUrl: setlist.artist?.url || null,
     venueName: venue.name || '',
     city: venue.city?.name || '',
-    // The same city as Concert Date Fetcher names it (null outside its
-    // list), so the page can match this show to a stored concert.
-    knownCity: matchCity(venue.city?.name),
     country: venue.city?.country?.name || '',
+    // So the page can match the city to the Concerts page's cities.
+    countryCode: venue.city?.country?.code || '',
     songs: flattenSongs(setlist),
   };
 }
@@ -728,8 +737,10 @@ async function waitForEventimSlot() {
 }
 
 /**
- * Proxies Eventim's search for one artist's upcoming shows, normalized by
- * lib/eventim.js. Eventim saying no (403/429) is never retried.
+ * Proxies Eventim's search (eventim.de) for one artist's upcoming shows in
+ * Germany, each with the city Eventim names - the page keeps the ones in the
+ * user's cities. Normalized by lib/eventim.js. Eventim saying no (403/429)
+ * is never retried.
  */
 router.get('/api/eventim/concerts', async (req, res) => {
   const artist = String(req.query.artist || '').trim();
@@ -741,7 +752,6 @@ router.get('/api/eventim/concerts', async (req, res) => {
     res.status(400).json({ error: `artist is at most ${EVENTIM_MAX_ARTIST_LENGTH} characters` });
     return;
   }
-
   // Not req.on('close'): that fires once the request is read, not when the
   // browser goes away.
   let cancelled = false;
