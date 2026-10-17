@@ -275,6 +275,30 @@ window.MusicHub = window.MusicHub || {};
     return byId;
   }
 
+  /**
+   * Opens the Albums page's Edit rating modal on the vinyl's album. The
+   * change lands in the album history entry whose rating the pill shows -
+   * the last one, as loadRatings reads them.
+   */
+  function editRating(vinyl) {
+    var stored = MusicHub.storage.read(HISTORY_KEY, null);
+    var listened = stored && Array.isArray(stored.listened) ? stored.listened : [];
+    var entry = null;
+    listened.forEach(function (candidate) {
+      if (candidate && candidate.spotifyAlbumId === vinyl.album.id && typeof candidate.rating === 'number') {
+        entry = candidate;
+      }
+    });
+    if (!entry) {
+      return;
+    }
+    MusicHub.ratingDialog.open(entry, function (rating) {
+      entry.rating = rating;
+      MusicHub.storage.write(HISTORY_KEY, stored);
+      render();
+    });
+  }
+
   /** The user's rating of the vinyl's album, or null if it has none. */
   function ratingOf(vinyl) {
     var id = vinyl.album && vinyl.album.id;
@@ -338,9 +362,14 @@ window.MusicHub = window.MusicHub || {};
       heading.appendChild(el('h3', 'release-card__title', album.name));
       var rated = ratingOf(vinyl);
       if (rated !== null) {
-        var rating = el('span', 'vinyl-card__rating', String(rated));
-        rating.setAttribute('aria-label', 'Rated ' + rated + ' out of 100');
-        rating.title = 'Your rating';
+        // Opens the Albums page's modal to change (or take away) the rating.
+        var rating = el('button', 'vinyl-card__rating', String(rated));
+        rating.type = 'button';
+        rating.setAttribute('aria-label', 'Rated ' + rated + ' out of 100 - edit the rating');
+        rating.title = 'Edit rating';
+        rating.addEventListener('click', function () {
+          editRating(vinyl);
+        });
         heading.appendChild(rating);
       }
       body.appendChild(heading);

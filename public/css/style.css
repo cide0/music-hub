@@ -8331,12 +8331,21 @@ button.turntable__power:focus-visible {
   flex: none;
   min-width: 3rem;
   padding: 0.25rem 0.625rem;
+  border: none;
   border-radius: var(--radius-pill);
   background-color: var(--color-primary);
+  color: inherit;
+  font: inherit;
   font-size: 1rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: center;
+  cursor: pointer;
+}
+
+.vinyl-card__rating:hover,
+.vinyl-card__rating:active {
+  background-color: var(--color-primary-hover);
 }
 
 .vinyl-card__foot {

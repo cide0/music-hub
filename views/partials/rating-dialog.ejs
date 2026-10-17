@@ -1,0 +1,22 @@
+<!-- An album's rating in the album history, changed with the Albums page's
+     pen or the Collection's rating pill (public/js/rating-dialog.js). -->
+<dialog class="modal modal--confirm" id="rating-dialog" aria-labelledby="rating-dialog-title" aria-describedby="rating-dialog-text">
+  <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  </button>
+  <form class="modal__form" id="rating-form" novalidate>
+    <h2 class="modal__title" id="rating-dialog-title">Edit rating</h2>
+    <p class="modal__hint" id="rating-dialog-text"></p>
+    <label class="rating-field">
+      <span class="rating-field__label">Rating <span class="rating-field__optional">(1–100)</span></span>
+      <input type="number" class="text-input rating-field__input" id="rating-dialog-input" min="1" max="100" step="1" inputmode="numeric" />
+    </label>
+    <p class="form-error" id="rating-dialog-error" role="alert" hidden></p>
+    <div class="modal__actions">
+      <button type="button" class="button button--ghost" id="rating-cancel">Cancel</button>
+      <button type="submit" class="button button--primary">Save</button>
+    </div>
+  </form>
+</dialog>

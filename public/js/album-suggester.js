@@ -1296,17 +1296,7 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /** '' -> null (unrated), a whole number 1-100, or undefined when invalid. */
-  function parseRating(raw) {
-    var value = String(raw || '').trim();
-    if (!value) {
-      return null;
-    }
-    if (!/^\d+$/.test(value)) {
-      return undefined;
-    }
-    var rating = Number(value);
-    return rating >= 1 && rating <= 100 ? rating : undefined;
-  }
+  var parseRating = MusicHub.ratingDialog.parse;
 
   function setRemoving(on) {
     removing = on;
@@ -1594,30 +1584,13 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------ editing a rating */
 
-  var ratingTarget = null;
-
   function openRatingDialog(entry) {
-    ratingTarget = entry;
-    els.ratingText.textContent = entry.albumName + ' by ' + entry.artistName
-      + '. Leave it empty to take the rating away.';
-    els.ratingInput.value = typeof entry.rating === 'number' ? String(entry.rating) : '';
-    MusicHub.notice.hide(els.ratingError);
-    els.ratingDialog.showModal();
-    els.ratingInput.focus();
-    els.ratingInput.select();
-  }
-
-  function saveRating() {
-    var rating = parseRating(els.ratingInput.value);
-    if (rating === undefined) {
-      MusicHub.notice.flash(els.ratingError, 'The rating has to be a whole number from 1 to 100.');
-      return;
-    }
-    // The stored entry itself, so the change lands in the history.
-    ratingTarget.rating = rating;
-    saveHistory();
-    renderHistory();
-    els.ratingDialog.close();
+    MusicHub.ratingDialog.open(entry, function (rating) {
+      // The stored entry itself, so the change lands in the history.
+      entry.rating = rating;
+      saveHistory();
+      renderHistory();
+    });
   }
 
   function historyItem(entry) {
@@ -1810,17 +1783,6 @@ window.MusicHub = window.MusicHub || {};
     els.addSubmit = document.getElementById('add-album-submit');
     els.addCancel = document.getElementById('add-album-cancel');
     document.getElementById('history-add').addEventListener('click', openAddDialog);
-    els.ratingDialog = document.getElementById('rating-dialog');
-    els.ratingText = document.getElementById('rating-dialog-text');
-    els.ratingInput = document.getElementById('rating-dialog-input');
-    els.ratingError = document.getElementById('rating-dialog-error');
-    document.getElementById('rating-form').addEventListener('submit', function (event) {
-      event.preventDefault();
-      saveRating();
-    });
-    document.getElementById('rating-cancel').addEventListener('click', function () {
-      els.ratingDialog.close();
-    });
     document.getElementById('add-album-form').addEventListener('submit', function (event) {
       event.preventDefault();
       if (!addingAlbum) {

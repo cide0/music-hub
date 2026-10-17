@@ -39,7 +39,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Listened albums can be added to your album history, with your own rating.
 - **Store:** Spend the coins you earn around the app on username styles, a golden record player, Mystery Vinyls or extra spins on the Wheel of Fortune.
 - **Collection:** Your collection of unboxed vinyls. Press **Play** on any of them to put it on the record player and start the album on your Spotify.
-  - Shows the rating you gave each album on the Albums page, and can be sorted by date or rating.
+  - Shows the rating you gave each album on the Albums page (click it to edit it), and can be sorted by date or rating.
   - Add the song that's currently playing to your playlists right from the record player.
   - Playlists can be set to rotate, so they only keep your newest songs.
 - **Settings:** Export and import your data, manage the Google login and Drive sync, set your Gallery folder, Spotify playlists and Discogs username, and turn the sound effects on or off.

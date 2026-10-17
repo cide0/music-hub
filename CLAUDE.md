@@ -77,7 +77,8 @@ routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
                      GET /api/similar-artists (Last.fm),
                      GET /api/discogs/releases + /random-collection-item
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
-views/               EJS pages + partials/ (head, navbar, daily-wheel, unbox)
+views/               EJS pages + partials/ (head, navbar, daily-wheel, unbox,
+                     rating-dialog)
 public/css/          variables.css (palette) + style.css
 public/js/           notice.js, storage.js, google.js, sync.js, navbar.js, auth.js,
                      followed-artists.js, wallet.js (every page; notice.js =
@@ -105,6 +106,8 @@ public/js/           notice.js, storage.js, google.js, sync.js, navbar.js, auth.
                      vinyl.js (Discogs format -> CSS-drawn record),
                      vinyl-catalog.js (the Store's mystery vinyls + the
                      wheel exclusives), sfx.js (synthesised sounds),
+                     rating-dialog.js (the Edit rating modal: Albums'
+                     history pen + the Collection's rating pill),
                      tear.js (a cover or card torn in two, with its
                      ripping sound: Albums + Collection),
                      unbox.js (album picker + Mystery Vinyl unboxing, every
