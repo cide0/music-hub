@@ -711,6 +711,9 @@ const EVENTIM_USER_AGENT = 'MusicHub/1.0 +https://music-hub-r9w6.onrender.com';
 const EVENTIM_REQUEST_INTERVAL_MS = 2000;
 const EVENTIM_TIMEOUT_MS = 15000;
 const EVENTIM_MAX_ARTIST_LENGTH = 200;
+// A queue longer than this (several tabs fetching at once) is turned away at
+// once instead of making the browser wait minutes for its slot.
+const EVENTIM_MAX_QUEUE_MS = 30000;
 
 let eventimNextSlotAt = 0;
 
@@ -747,6 +750,11 @@ router.get('/api/eventim/concerts', async (req, res) => {
       cancelled = true;
     }
   });
+
+  if (eventimNextSlotAt - Date.now() > EVENTIM_MAX_QUEUE_MS) {
+    res.status(429).json({ blocked: false, error: 'busy' });
+    return;
+  }
 
   try {
     await waitForEventimSlot();
