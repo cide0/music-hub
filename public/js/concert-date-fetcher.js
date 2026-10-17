@@ -326,6 +326,8 @@ window.MusicHub = window.MusicHub || {};
       var withTime = main.localTime ? main : firstWith(group.events, 'localTime');
       var withEventimUrl = firstWith(group.events, 'eventimUrl');
       var withEventimId = firstWith(group.events, 'eventimId');
+      // Ticketmaster sometimes lists no venue name where Eventim has one.
+      var withEventimVenue = firstWith(group.events, 'eventimVenueName');
       // "stored:" ids only stand in for cards saved without a real one.
       var ticketmasterId = main.ticketmasterId && String(main.ticketmasterId).indexOf('stored:') !== 0
         ? main.ticketmasterId
@@ -342,7 +344,7 @@ window.MusicHub = window.MusicHub || {};
         localTime: withTime ? withTime.localTime : null,
         dateTime: withTime ? withTime.dateTime : null,
         supportArtists: supportArtists,
-        venueName: main.venueName,
+        venueName: main.venueName || (withEventimVenue && withEventimVenue.eventimVenueName) || null,
         city: main.city,
         ticketUrl: main.ticketUrl || null,
         eventimUrl: withEventimUrl ? withEventimUrl.eventimUrl : null,
@@ -383,20 +385,32 @@ window.MusicHub = window.MusicHub || {};
    * either an artist on both or the same venue under normalizeName. Start
    * times aren't compared - a matinee and an evening show share a card
    * anyway, since cards group by venue, city and day.
+   *
+   * The artist test runs both ways: `name` billed on the match's event, or
+   * the match's artist billed on `event`. The second one alone also needs
+   * the venues to be close (venueCloseness 1 or more) - otherwise a festival
+   * billing the match's artist would swallow that artist's own club show in
+   * the same city that day.
    */
   function sameConcert(match, name, event) {
     var other = match.event;
     return !!event.localDate && other.localDate === event.localDate
       && sameText(other.city, event.city)
       && (isOn(name, match.artistName, other)
-        || isOn(match.artistName, name, event)
-        || sameText(other.venueName, event.venueName));
+        || sameText(other.venueName, event.venueName)
+        || (isOn(match.artistName, name, event) && venueCloseness(other, event) >= 1));
   }
 
+  /**
+   * An Eventim show's fields onto the Ticketmaster event it is. Its venue
+   * name only fills in for an empty one of Ticketmaster's on the card - the
+   * card's id still comes from the event's own venueName.
+   */
   function copyEventimFields(target, show) {
     target.eventimUrl = show.eventimUrl || null;
     target.eventimId = show.eventimId;
     target.eventimHasVariants = !!show.eventimHasVariants;
+    target.eventimVenueName = show.venueName || null;
   }
 
   /**
@@ -902,13 +916,19 @@ window.MusicHub = window.MusicHub || {};
     return lines;
   }
 
-  /** " and N more" as a real button; a tap swaps it for the rest of the list. */
+  /**
+   * " and N more" as a real button; a tap swaps it for the rest of the list,
+   * which takes the focus the button had (keyboard and screen reader users
+   * land on the names it revealed instead of the top of the page).
+   */
   function appendMoreFailed(line) {
     var button = el('button', 'notice__more', 'and ' + line.moreCount + ' more');
     button.type = 'button';
     button.addEventListener('click', function () {
-      var rest = document.createTextNode(line.more);
+      var rest = el('span', null, line.more);
+      rest.setAttribute('tabindex', '-1');
       button.replaceWith(rest);
+      rest.focus();
     });
     els.failedText.appendChild(document.createTextNode(', '));
     els.failedText.appendChild(button);
@@ -1134,7 +1154,7 @@ window.MusicHub = window.MusicHub || {};
       var pill = el('a', 'concert-card__ticket', shop.label);
       pill.href = shop.url;
       pill.target = '_blank';
-      pill.rel = 'noopener';
+      pill.rel = 'noopener noreferrer';
       pill.setAttribute('aria-label', shop.label + ' tickets for ' + concert.artists.join(', ')
         + (where ? ' at ' + where : ''));
       actions.appendChild(pill);
@@ -1215,9 +1235,11 @@ window.MusicHub = window.MusicHub || {};
   /**
    * Carries the user's flags over from the previous list and reports which
    * concerts weren't in it. On the very first fetch there is no previous list,
-   * so everything counts as new.
+   * so everything counts as new. `replacing` says the result replaces the
+   * stored list (a full, uncancelled fetch), so the previous concerts no card
+   * claimed are about to go.
    */
-  function applyPreviousState(concerts, previous) {
+  function applyPreviousState(concerts, previous, replacing) {
     var previousById = {};
     (previous || []).forEach(function (concert) {
       previousById[concert.id] = concert;
@@ -1257,7 +1279,41 @@ window.MusicHub = window.MusicHub || {};
       }
     });
 
+    if (replacing) {
+      absorbUnclaimed(concerts, previous, taken);
+    }
     return newIds;
+  }
+
+  /**
+   * Two stored cards can turn out to be one show (an Eventim-only card and a
+   * Ticketmaster one whose venue spellings differ): the new card takes one
+   * of them, and the other would vanish with the user's flags. So each
+   * previous concert no card claimed hands its flags to a card of the same
+   * day and city that shares a shop's id with it, else an artist - and the
+   * coins it already paid out count for that card too, so they're never
+   * paid twice. A partial run keeps the unclaimed card itself instead
+   * (mergeConcerts), so this is for a run that replaces the list only.
+   */
+  function absorbUnclaimed(concerts, previous, taken) {
+    [sharesShopId, sharesArtist].forEach(function (test) {
+      (previous || []).forEach(function (before) {
+        if (taken[before.id]) {
+          return;
+        }
+        concerts.some(function (concert) {
+          if (!concert.localDate || before.localDate !== concert.localDate
+            || !sameText(before.city, concert.city) || !test(concert, before)) {
+            return false;
+          }
+          taken[before.id] = true;
+          concert.addedToCalendar = concert.addedToCalendar || !!before.addedToCalendar;
+          concert.attending = concert.attending || !!before.attending;
+          MusicHub.wallet.carryReward('concert:' + before.id, 'concert:' + concert.id);
+          return true;
+        });
+      });
+    });
   }
 
   function sharesShopId(concert, before) {
@@ -1420,7 +1476,8 @@ window.MusicHub = window.MusicHub || {};
   /**
    * Why a lookup failed, in the notice's words, from the proxy's answer. The
    * Eventim route marks its 429 { blocked } and 502 { unexpected }; any other
-   * error status (Ticketmaster's own 429 too) is just "request failed".
+   * error status (Ticketmaster's own 429 too, and the Eventim route's
+   * 429 { blocked: false } for a full queue) is just "request failed".
    */
   function failureReason(status, body) {
     if (status === 429 && body && body.blocked) {
@@ -1661,10 +1718,10 @@ window.MusicHub = window.MusicHub || {};
   /**
    * Stores what a run turned up and reports it. `replace` is for a run that
    * covered every followed artist: its result is the whole truth, so concerts
-   * that have disappeared from Ticketmaster drop out (all but the past ones
-   * still waiting on the Setlists page). A partial run - one that
-   * was cancelled, or a retry of a few artists - is merged into the stored
-   * list instead, and leaves "Last fetched" alone.
+   * that have disappeared from both shops (Ticketmaster and Eventim) drop
+   * out (all but the past ones still waiting on the Setlists page). A
+   * partial run - one that was cancelled, or a retry of a few artists - is
+   * merged into the stored list instead, and leaves "Last fetched" alone.
    *
    * The concerts a fetch added replace the ones marked "New" - except for a
    * cancelled fetch that found nothing, which leaves them, and a retry,
@@ -1672,7 +1729,7 @@ window.MusicHub = window.MusicHub || {};
    */
   function storeRunResult(previous, matches, failed, run, replace) {
     var concerts = buildConcerts(matches);
-    var newIds = applyPreviousState(concerts, previous);
+    var newIds = applyPreviousState(concerts, previous, replace && !run.cancelled);
 
     var lastFound = state.lastFound;
     if (!replace) {

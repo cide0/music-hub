@@ -1036,6 +1036,21 @@ window.MusicHub = window.MusicHub || {};
     return first ? earn(amount, options) : null;
   }
 
+  /**
+   * What `fromKey` already paid out counts for `toKey` too, so earnOnce
+   * never pays for it again (no coins move) - for one thing that turned out
+   * to be stored under two keys, like two concert cards that are one show.
+   */
+  function carryReward(fromKey, toKey) {
+    update(function (state) {
+      if (state.rewarded.indexOf(fromKey) === -1 || state.rewarded.indexOf(toKey) !== -1) {
+        return false;
+      }
+      state.rewarded.push(toKey);
+      return true;
+    });
+  }
+
   // A frame's landings shown at once: the count and the hop, once a frame
   // however many coins came in, rather than a layout for every coin.
   var landingFrame = 0;
@@ -1071,6 +1086,7 @@ window.MusicHub = window.MusicHub || {};
     balance: balance,
     earn: earn,
     earnOnce: earnOnce,
+    carryReward: carryReward,
     owns: owns,
     buy: buy,
     equipped: equipped,
