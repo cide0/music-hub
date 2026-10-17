@@ -1171,12 +1171,20 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  /** A stored card's line-up, headliners first, so the support labels hold. */
+  /**
+   * Attraction names that give a rebuilt card back its stored support
+   * labels: buildConcerts reads the first name as the headliner and every
+   * other billed one as support. So one leading name - the first artist who
+   * isn't support, or the event's name when all of them are - and then the
+   * support acts. Any other artist stays unbilled (no label), as before; the
+   * match's artistName still puts them on the card.
+   */
   function billing(concert) {
     var support = concert.supportArtists || [];
-    return concert.artists.filter(function (name) {
+    var lead = concert.artists.filter(function (name) {
       return support.indexOf(name) === -1;
-    }).concat(support);
+    })[0];
+    return [lead || concert.eventName || ''].concat(support);
   }
 
   /**
