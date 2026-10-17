@@ -31,6 +31,8 @@ window.MusicHub = window.MusicHub || {};
   // Media view preferences, per session.
   var mediaOrder = 'newest';
   var mediaFavoritesOnly = false;
+  // What the artist folders are filtered by, kept while the levels change.
+  var artistQuery = '';
   // The rendered media elements, kept so sorting and filtering can be applied
   // without rebuilding them (a recreated or moved <iframe> reloads).
   var mediaNodes = { images: [], videos: [] };
@@ -874,12 +876,32 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
+  /** Every word typed has to be in the artist's name, accents and case aside. */
+  function matchesArtistQuery(artist) {
+    var name = foldName(artist.artistName);
+    return foldName(artistQuery).split(' ').filter(Boolean).every(function (word) {
+      return name.indexOf(word) !== -1;
+    });
+  }
+
   function renderArtists() {
     clearGrid(els.artistsGrid, els.addArtistCard);
-    renderFavoritesFolder();
+
+    var artists = sortedArtists(data);
+    var searching = Boolean(artistQuery.trim());
+    var shown = artists.filter(matchesArtistQuery);
+    els.galleryToolbar.hidden = !artists.length;
+    els.gallerySearchClear.hidden = !artistQuery;
+    els.galleryNoMatch.hidden = !searching || shown.length > 0;
+    els.galleryNoMatch.textContent = 'No artists match “' + artistQuery.trim() + '”.';
+
+    // The Favorites folder isn't an artist, so a search leaves it out.
+    if (!searching) {
+      renderFavoritesFolder();
+    }
 
     // No artists yet: just the Add artist card.
-    sortedArtists(data).forEach(function (artist) {
+    shown.forEach(function (artist) {
       var card = el('div', 'folder-card');
 
       var open = button('folder-card__open', '', function () {
@@ -1804,8 +1826,23 @@ window.MusicHub = window.MusicHub || {};
     els.driveUnmatched = document.getElementById('gallery-drive-unmatched');
     els.driveShare = document.getElementById('gallery-drive-share');
     els.unhide = document.getElementById('gallery-unhide');
+    els.galleryToolbar = document.getElementById('gallery-toolbar');
+    els.gallerySearch = document.getElementById('gallery-search');
+    els.gallerySearchClear = document.getElementById('gallery-search-clear');
+    els.galleryNoMatch = document.getElementById('gallery-no-match');
 
     data = load();
+
+    els.gallerySearch.addEventListener('input', function () {
+      artistQuery = els.gallerySearch.value;
+      renderArtists();
+    });
+    els.gallerySearchClear.addEventListener('click', function () {
+      artistQuery = '';
+      els.gallerySearch.value = '';
+      renderArtists();
+      els.gallerySearch.focus();
+    });
 
     els.addArtistToggle.addEventListener('click', function () {
       if (els.artistPanel.hidden) {

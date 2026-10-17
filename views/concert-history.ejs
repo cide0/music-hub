@@ -32,6 +32,24 @@
 
         <!-- Level 1: artist folders -->
         <section id="view-artists">
+          <!-- Filters the artist folders as you type, once there's an artist. -->
+          <div class="toolbar" id="gallery-toolbar" hidden>
+            <div class="gallery-search">
+              <label class="visually-hidden" for="gallery-search">Search your artist folders</label>
+              <div class="input-clear">
+                <input type="text" id="gallery-search" class="text-input" placeholder="Search artist"
+                  autocomplete="off" spellcheck="false" />
+                <button type="button" class="input-clear__button" id="gallery-search-clear" aria-label="Clear search" hidden>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p class="empty-state" id="gallery-no-match" hidden></p>
+
           <div class="folder-grid" id="artists-grid">
             <!-- Always the first card: renderArtists keeps it and rebuilds the rest. -->
             <div class="folder-card folder-card--add folder-card--add-artist" id="add-artist">

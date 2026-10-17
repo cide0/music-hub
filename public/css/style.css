@@ -8227,6 +8227,19 @@ button.turntable__power:focus-visible {
   }
 }
 
+/* Filters the Gallery's artist folders as you type. Sized like
+   .collection-search. */
+.gallery-search {
+  width: 280px;
+  max-width: 100%;
+}
+
+@media (max-width: 600px) {
+  .gallery-search {
+    width: 100%;
+  }
+}
+
 /* The album's name, with the user's rating (the album history's pill) on
    the right of its first line. */
 .vinyl-card__heading {
