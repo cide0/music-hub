@@ -1511,8 +1511,13 @@ button[aria-disabled='true'] {
   font-size: 0.875rem;
 }
 
-/* "and N more" in the failed-artists notice: a button that reads as a link. */
+/* "and N more" in the failed-artists notice: a button that reads as a link,
+   40px tall for a comfortable tap. Its text, centred, stays on the line's
+   baseline; only that line of the notice grows. */
 .notice__more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   padding: 0.25rem 0;
   border: 0;
   background: none;

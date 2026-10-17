@@ -229,3 +229,16 @@ The main risks are that Eventim changes or closes the search API, or blocks the 
 - [Eventim partner program](https://www.eventim.de/campaign/eventim-partner/)
 - [eventim DE program on Awin](https://ui.awin.com/merchant-profile/11388)
 - [cide0/music-hub](https://github.com/cide0/music-hub) (`CLAUDE.md`, `routes/api.js`, `public/js/concert-date-fetcher.js`, `lib/cities.js`, `lib/artistMatch.js`)
+
+## As built (2026-10-17)
+
+Where the build differs from, or adds to, the plan above:
+
+- **Sort:** the search request uses `sort=Recommendation`, not `DateAsc`. The artist's own shows come first; `DateAsc` filled the 50 products with namesakes and loosely matching products.
+- **One request per artist:** the API ignores paging (every page repeats page 1), so the route makes one request per artist and reads at most 50 products.
+- **Artist rule in both directions:** two listings on the same day in the same city are one concert if the newly found artist is billed on the other listing, or the other listing's artist is billed on the new one, or the venues match. The second direction on its own also needs the venue names to be close (a shared word other than the city's), so a festival billing an artist doesn't swallow that artist's own club show that day.
+- **Ticketmaster is always the representative:** on a merged card, the event name, image, venue (and the card's id) come from Ticketmaster's listing. Where Ticketmaster has no venue name, the card shows Eventim's, but the id stays Ticketmaster's.
+- **Id passes:** a rebuilt card first keeps a stored card with its exact id, then one of the same day and city that shares a shop's id, then one that shares an artist. Each stored card is claimed once. A card can therefore keep an id that isn't its own venue + city + date key, so ids are never recomputed. On a full fetch, a stored card no card claimed (two stored cards for one show) hands its "attending" and calendar flags, and the coins it already paid, to the matching card.
+- **`mergeShops` on partial runs:** a retry or a cancelled fetch keeps the stored card's links from the shop the fresh card lacks, so a one-shop result doesn't strip the other shop's link.
+- **"Suite" is an add-on word:** Eventim sells "Suiten-Ticket" products, so "Suite" joins VIP, Loge, Lounge and the rest when variants are folded.
+- **Queue cap:** if the Eventim route's queue is more than 30 s long (several tabs fetching at once), it answers `429 { blocked: false, error: 'busy' }` at once. The page treats that as "request failed", not "blocked": it uses the artist's stored Eventim dates and doesn't count toward the 3-in-a-row pause.
