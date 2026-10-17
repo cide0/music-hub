@@ -397,6 +397,57 @@ window.MusicHub = window.MusicHub || {};
     target.eventimHasVariants = !!show.eventimHasVariants;
   }
 
+  /**
+   * How close two listings' venue names are, to choose between several
+   * entries that are the same concert by sameConcert (an artist playing two
+   * venues in one city on one day): 2 = equal, 1 = a word in common other
+   * than the city's ("Sporthalle Hamburg" and "Sporthalle"), 0 = neither.
+   */
+  function venueCloseness(a, b) {
+    if (sameText(a.venueName, b.venueName)) {
+      return 2;
+    }
+    var cityWords = normalizeName(a.city).split(' ');
+    var words = normalizeName(a.venueName).split(' ').filter(function (word) {
+      return word && cityWords.indexOf(word) === -1;
+    });
+    return normalizeName(b.venueName).split(' ').some(function (word) {
+      return words.indexOf(word) !== -1;
+    }) ? 1 : 0;
+  }
+
+  /**
+   * The entry `accept` allows that is the same concert as `event` (found for
+   * `name`), the one with the closest venue name winning; first on a tie.
+   */
+  function closestMatch(matches, name, event, accept) {
+    var best = null;
+    var bestCloseness = -1;
+    matches.forEach(function (match) {
+      if (!accept(match.event) || !sameConcert(match, name, event)) {
+        return;
+      }
+      var closeness = venueCloseness(match.event, event);
+      if (closeness > bestCloseness) {
+        best = match;
+        bestCloseness = closeness;
+      }
+    });
+    return best;
+  }
+
+  /**
+   * Points every Eventim-only entry of the show a Ticketmaster event now
+   * carries at that event, so those artists stay on its card.
+   */
+  function adoptEventimEntries(matches, event) {
+    matches.forEach(function (match) {
+      if (!match.event.ticketmasterId && match.event.eventimId === event.eventimId) {
+        match.event = event;
+      }
+    });
+  }
+
   function hasEntry(matches, name, event) {
     return matches.some(function (match) {
       return match.event === event && match.artistName === name;
@@ -406,10 +457,10 @@ window.MusicHub = window.MusicHub || {};
   /**
    * One artist's Eventim shows (live, or rebuilt from stored cards) into the
    * run's matches. A show that a Ticketmaster event already carries, or that
-   * is the same concert as one, only lends that event its Eventim fields, and
-   * the artist joins it if they aren't on it yet (a co-headline found through
-   * the venue). Any other show is an Eventim-only entry. A Ticketmaster event
-   * takes one Eventim show at most.
+   * is the same concert as one (the closest venue name wins), only lends that
+   * event its Eventim fields, and the artist joins it if they aren't on it
+   * yet (a co-headline found through the venue). Any other show is an
+   * Eventim-only entry. A Ticketmaster event takes one Eventim show at most.
    */
   function addEventimShows(matches, name, shows) {
     shows.forEach(function (show) {
@@ -422,13 +473,10 @@ window.MusicHub = window.MusicHub || {};
         return !!target;
       });
       if (!target) {
-        matches.some(function (match) {
-          var event = match.event;
-          if (event.ticketmasterId && !event.eventimId && sameConcert(match, name, show)) {
-            target = event;
-          }
-          return !!target;
+        var closest = closestMatch(matches, name, show, function (event) {
+          return !!event.ticketmasterId && !event.eventimId;
         });
+        target = closest ? closest.event : null;
       }
 
       if (!target) {
@@ -437,6 +485,8 @@ window.MusicHub = window.MusicHub || {};
       }
       if (!target.eventimId) {
         copyEventimFields(target, show);
+        // Another artist may have found the show on Eventim only before.
+        adoptEventimEntries(matches, target);
       }
       if (!hasEntry(matches, name, target)) {
         matches.push({ artistName: name, event: target });
@@ -448,9 +498,10 @@ window.MusicHub = window.MusicHub || {};
    * One artist's Ticketmaster events (live, or rebuilt from stored cards) into
    * the run's matches. An event another artist already brought is shared, not
    * copied, so Eventim fields added to it reach every artist on it. When an
-   * earlier artist found the same concert on Eventim only, the Ticketmaster
-   * event takes over: it gets the Eventim fields, and those Eventim-only
-   * entries point at it, so that artist stays on the card.
+   * earlier artist found the same concert on Eventim only (the closest venue
+   * name wins), the Ticketmaster event takes over: it gets the Eventim
+   * fields, and those Eventim-only entries point at it, so that artist
+   * stays on the card.
    */
   function addTicketmasterEvents(matches, name, events) {
     events.forEach(function (incoming) {
@@ -463,21 +514,15 @@ window.MusicHub = window.MusicHub || {};
       });
 
       if (!event.eventimId) {
-        matches.some(function (match) {
-          var other = match.event;
-          if (!other.ticketmasterId && other.eventimId && sameConcert(match, name, event)) {
-            copyEventimFields(event, other);
-            return true;
-          }
-          return false;
+        var closest = closestMatch(matches, name, event, function (other) {
+          return !other.ticketmasterId && !!other.eventimId;
         });
+        if (closest) {
+          copyEventimFields(event, closest.event);
+        }
       }
       if (event.eventimId) {
-        matches.forEach(function (match) {
-          if (!match.event.ticketmasterId && match.event.eventimId === event.eventimId) {
-            match.event = event;
-          }
-        });
+        adoptEventimEntries(matches, event);
       }
 
       matches.push({ artistName: name, event: event });
@@ -1138,9 +1183,23 @@ window.MusicHub = window.MusicHub || {};
       taken[concert.id] = true;
     });
 
+    // Exact ids first, then a previous concert sharing a shop's id, then one
+    // sharing an artist - each pass over every card before the next, so a
+    // looser stand-in never takes what a closer one stands for.
+    var befores = concerts.map(function (concert) {
+      return previousById[concert.id] || null;
+    });
+    [sharesShopId, sharesArtist].forEach(function (test) {
+      concerts.forEach(function (concert, index) {
+        if (!befores[index]) {
+          befores[index] = previousStandIn(concert, previous, taken, test);
+        }
+      });
+    });
+
     var newIds = [];
-    concerts.forEach(function (concert) {
-      var before = previousById[concert.id] || previousStandIn(concert, previous, taken);
+    concerts.forEach(function (concert, index) {
+      var before = befores[index];
       if (before) {
         // The previous id stays, and with it the "New" mark and the coins
         // (`concert:<id>` in the wallet) already settled for this concert.
@@ -1156,28 +1215,35 @@ window.MusicHub = window.MusicHub || {};
     return newIds;
   }
 
+  function sharesShopId(concert, before) {
+    return !!(concert.ticketmasterId && concert.ticketmasterId === before.ticketmasterId)
+      || !!(concert.eventimId && concert.eventimId === before.eventimId);
+  }
+
+  function sharesArtist(concert, before) {
+    return (before.artists || []).some(function (name) {
+      return concert.artists.some(function (other) {
+        return sameText(name, other);
+      });
+    });
+  }
+
   /**
    * The previous concert a card stands for when its id changed: same city,
-   * same day, an artist in common. That happens when an Eventim-only card is
-   * listed by Ticketmaster later, and its id now comes from Ticketmaster's
-   * venue spelling. Each previous concert is claimed once at most (`taken`).
+   * same day, and `test` (a shop id or an artist in common). That happens
+   * when an Eventim-only card is listed by Ticketmaster later, and its id now
+   * comes from Ticketmaster's venue spelling. Each previous concert is
+   * claimed once at most (`taken`).
    */
-  function previousStandIn(concert, previous, taken) {
+  function previousStandIn(concert, previous, taken, test) {
     var found = null;
     (previous || []).some(function (before) {
       if (taken[before.id] || !concert.localDate || before.localDate !== concert.localDate
-        || !sameText(before.city, concert.city)) {
+        || !sameText(before.city, concert.city) || !test(concert, before)) {
         return false;
       }
-      var shared = (before.artists || []).some(function (name) {
-        return concert.artists.some(function (other) {
-          return sameText(name, other);
-        });
-      });
-      if (shared) {
-        found = before;
-      }
-      return shared;
+      found = before;
+      return true;
     });
     if (found) {
       taken[found.id] = true;
@@ -1217,6 +1283,41 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * The same goes for the shops: a partial run that only checked an artist
+   * one shop doesn't bill (a co-headline found through the venue) builds the
+   * card from the other shop alone. The stored card's links from the shop
+   * the fresh one lacks are kept - with Ticketmaster's, its venue and event
+   * name too, as Ticketmaster's listing is the card's representative.
+   */
+  function mergeShops(concert, before) {
+    if (!before) {
+      return concert;
+    }
+
+    var kept = false;
+    if (!concert.ticketUrl && before.ticketUrl) {
+      concert.ticketmasterId = before.ticketmasterId || null;
+      concert.ticketUrl = before.ticketUrl;
+      concert.venueName = before.venueName;
+      concert.eventName = before.eventName;
+      kept = true;
+    }
+    if (!concert.eventimId && before.eventimId) {
+      concert.eventimId = before.eventimId;
+      concert.eventimUrl = before.eventimUrl || null;
+      kept = true;
+    }
+    if (!concert.imageUrl && before.imageUrl) {
+      concert.imageUrl = before.imageUrl;
+    }
+    // The stored note may have come from the shop kept here.
+    if (kept && before.hasMultipleTicketOptions) {
+      concert.hasMultipleTicketOptions = true;
+    }
+    return concert;
+  }
+
+  /**
    * Folds a cancelled run's partial results into the stored list. The artists
    * the run never got to still have their concerts in `previous`, so those are
    * kept; where both lists hold the same concert, the fresh one wins.
@@ -1230,7 +1331,7 @@ window.MusicHub = window.MusicHub || {};
     var seen = {};
     var combined = partial.map(function (concert) {
       seen[concert.id] = true;
-      return mergeArtists(concert, previousById[concert.id]);
+      return mergeShops(mergeArtists(concert, previousById[concert.id]), previousById[concert.id]);
     });
     (previous || []).forEach(function (concert) {
       if (!seen[concert.id]) {
