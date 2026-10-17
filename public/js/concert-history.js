@@ -1023,17 +1023,73 @@ window.MusicHub = window.MusicHub || {};
     wrapper.appendChild(cover);
   }
 
-  /** The viewer, with the item's own embed - taken out again on close. */
+  /**
+   * The viewer, with the item's own embed - taken out again on close. Drive's
+   * own fullscreen would only stretch its player to the screen, into the
+   * layout fitViewerFrame steers clear of, so where the page can go
+   * fullscreen itself the embed isn't allowed to (Drive then leaves its
+   * button out) and the viewer's own button takes the whole viewer there.
+   */
   function openViewer(kind, embedSrc) {
+    var ownFullscreen = kind === 'videos' && !!document.fullscreenEnabled;
     var frame = document.createElement('iframe');
     frame.src = embedSrc;
     frame.allow = 'autoplay';
-    frame.setAttribute('allowfullscreen', '');
+    if (!ownFullscreen) {
+      frame.setAttribute('allowfullscreen', '');
+    }
     frame.title = mediaTitle(kind);
+    frame.dataset.kind = kind;
     els.viewer.setAttribute('aria-label', frame.title);
+    els.viewerFullscreen.hidden = !ownFullscreen;
     els.viewerFrame.textContent = '';
     els.viewerFrame.appendChild(frame);
     els.viewer.showModal();
+    fitViewerFrame();
+  }
+
+  /*
+   * Drive's player picks its layout from the size of its frame, and at a
+   * phone's sizes it picks badly: under 440px wide its control bar runs off
+   * the right-hand edge, and under 500px high (a phone on its side, or in
+   * fullscreen) its controls scatter across the picture, over the faint
+   * second set of its inner player. So a video's player is laid out at a
+   * size Drive draws cleanly and scaled to fill the viewer: 440px wide on an
+   * upright screen (its phone layout, made for exactly that width, the bar
+   * centred), at least 520 x 500 on a wide one (its full layout, one row of
+   * controls along the bottom). Resizing or scaling never reloads it.
+   */
+  var DRIVE_PHONE_WIDTH = 440;
+  var DRIVE_FULL_WIDTH = 520;
+  var DRIVE_FULL_HEIGHT = 500;
+
+  function fitViewerFrame() {
+    var frame = els.viewerFrame.firstElementChild;
+    if (!frame) {
+      return;
+    }
+
+    var width = els.viewerFrame.clientWidth;
+    var height = els.viewerFrame.clientHeight;
+    var scale = 1;
+    var roomy = width >= DRIVE_FULL_WIDTH && height >= DRIVE_FULL_HEIGHT;
+    if (frame.dataset.kind === 'videos' && !roomy && width && height) {
+      scale = width / height < 0.95
+        ? width / DRIVE_PHONE_WIDTH
+        : Math.min(width / DRIVE_FULL_WIDTH, height / DRIVE_FULL_HEIGHT);
+    }
+
+    frame.style.width = width / scale + 'px';
+    frame.style.height = height / scale + 'px';
+    frame.style.transform = scale === 1 ? '' : 'scale(' + scale + ')';
+  }
+
+  function toggleViewerFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      els.viewerStage.requestFullscreen().catch(function () {});
+    }
   }
 
   function buildMediaItem(kind, item) {
@@ -1797,9 +1853,23 @@ window.MusicHub = window.MusicHub || {};
     els.mediaDialog = document.getElementById('media-dialog');
     els.viewer = document.getElementById('media-viewer');
     els.viewerFrame = document.getElementById('media-viewer-frame');
+    els.viewerStage = document.getElementById('media-viewer-stage');
+    els.viewerFullscreen = document.getElementById('media-viewer-fullscreen');
     els.viewer.addEventListener('close', function () {
       els.viewerFrame.textContent = '';
+      if (document.fullscreenElement === els.viewerStage) {
+        document.exitFullscreen();
+      }
     });
+    els.viewerFullscreen.addEventListener('click', toggleViewerFullscreen);
+    document.addEventListener('fullscreenchange', function () {
+      var full = document.fullscreenElement === els.viewerStage;
+      els.viewerFullscreen.setAttribute('aria-pressed', String(full));
+      els.viewerFullscreen.setAttribute('aria-label', full ? 'Exit fullscreen' : 'Fullscreen');
+      els.viewerFullscreen.title = full ? 'Exit fullscreen' : 'Fullscreen';
+    });
+    // Turning the phone, or going fullscreen, resizes the viewer.
+    new ResizeObserver(fitViewerFrame).observe(els.viewerFrame);
     els.confirmDialog = document.getElementById('confirm-dialog');
     els.confirmTitle = document.getElementById('confirm-dialog-title');
     els.confirmText = document.getElementById('confirm-dialog-text');

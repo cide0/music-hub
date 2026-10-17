@@ -145,16 +145,32 @@
           </form>
         </dialog>
 
-        <!-- Touch screens: an image or video opened large from its card, where
-             Drive's viewer can pan and zoom, or its player has room for its
-             controls below the picture (concert-history.js openViewer). -->
+        <!-- Touch screens: an image or video opened from its card, filling the
+             screen - Drive's viewer to pan and zoom, or its player laid out
+             to fit (concert-history.js openViewer / fitViewerFrame). The X
+             and the fullscreen button sit top left, clear of Drive's own
+             button in the top-right corner. -->
         <dialog class="modal media-viewer" id="media-viewer" aria-label="Image from Google Drive">
-          <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-          <div class="media-viewer__frame" id="media-viewer-frame"></div>
+          <!-- What goes fullscreen: a <dialog> itself can't. -->
+          <div class="media-viewer__stage" id="media-viewer-stage">
+            <div class="media-viewer__frame" id="media-viewer-frame"></div>
+            <div class="media-viewer__buttons">
+              <button type="button" class="icon-button media-viewer__button" data-modal-close aria-label="Close" title="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+              <button type="button" class="icon-button media-viewer__button" id="media-viewer-fullscreen"
+                      aria-pressed="false" aria-label="Fullscreen" title="Fullscreen" hidden>
+                <svg class="media-viewer__enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+                </svg>
+                <svg class="media-viewer__exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </dialog>
 
         <dialog class="modal" id="media-dialog">

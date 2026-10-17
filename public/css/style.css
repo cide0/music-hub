@@ -2605,22 +2605,65 @@ textarea.text-input {
   }
 }
 
-/* The viewer: the image or video as big as the screen allows, the X above
-   it, clear of Drive's own controls in the embed's top corner. */
+/* The viewer fills the screen, its buttons floating in the top-left corner
+   (Drive keeps its own in the top-right one). The embed is sized and scaled
+   from the top-left corner by fitViewerFrame. */
 .media-viewer {
-  width: min(1000px, calc(100vw - 1rem));
+  width: 100%;
   max-width: none;
+  height: 100dvh;
   max-height: none;
-  padding: 3.75rem 0.5rem 0.5rem;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: var(--color-black);
+}
+
+.media-viewer__stage {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-black);
+}
+
+.media-viewer__frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
 }
 
 .media-viewer__frame iframe {
   display: block;
-  width: 100%;
-  height: calc(100dvh - 7rem);
   border: 0;
-  border-radius: calc(var(--radius-card) - 0.25rem);
-  background-color: var(--color-black);
+  transform-origin: 0 0;
+}
+
+.media-viewer__buttons {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.media-viewer__button {
+  width: 40px;
+  min-width: 0;
+  height: 40px;
+  min-height: 0;
+  padding: 0;
+  background-color: color-mix(in srgb, var(--color-black) 60%, transparent);
+  color: var(--color-text);
+}
+
+.media-viewer__button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.media-viewer__button[hidden],
+.media-viewer__button[aria-pressed="true"] .media-viewer__enter,
+.media-viewer__button[aria-pressed="false"] .media-viewer__exit {
+  display: none;
 }
 
 /* Everything that belongs at the right-hand end of a toolbar, kept together
