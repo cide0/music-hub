@@ -227,8 +227,8 @@ button[aria-disabled='true'] {
 /* The round "clear saved data" button beside it (Albums, Concerts, Artist
    Graph, Discogs): just the trash can, "Clear saved data" in the tooltip
    and aria-label. */
-/* The round "add" button (the Gallery's +) looks like it too, e.g. the
-   Albums page's "Add an album" beside the history's clear button. */
+/* The round "add" button looks like it too, e.g. the Albums page's "Add an
+   album" beside the history's clear button, or the Gallery's +. */
 .clear-button,
 .add-button {
   flex: none;
@@ -2153,41 +2153,30 @@ textarea.text-input {
 
 /* ------------------------------------------------------ gallery drive */
 
-/* The Gallery's box about its Google Drive folder, above the breadcrumb: a
-   notice, its text on the left and "Show N hidden" / "Sync now" on the
-   right - below the text when there isn't room beside it. */
-.gallery-drive {
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  /* The same space below as the page's top padding leaves above it. */
-  margin-bottom: 1.5rem;
+/* The Gallery's toolbar, below the breadcrumb: refresh, + and "Show N
+   hidden" on the left, the search (or a concert's sort and filter) at the
+   right edge. Positioned, so the artist picker drops out of it. */
+.gallery-toolbar {
+  position: relative;
 }
 
-.gallery-drive__body {
-  flex: 1 1 16rem;
-  min-width: 0;
+/* The page's top padding matches the toolbar's gap to the folders below
+   (its margin-bottom), rather than the usual 1.5rem. */
+.page--gallery {
+  padding-top: 1rem;
 }
 
+.gallery-toolbar .gallery-search {
+  margin-left: auto;
+}
+
+/* How the Gallery's last Drive sync went, below its toolbar. */
 .gallery-drive__status {
   margin: 0;
 }
 
 .gallery-drive__note {
   margin-top: 0.375rem;
-}
-
-/* Kept at the right edge, also when they wrap below the text. */
-.gallery-drive__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-left: auto;
-}
-
-.gallery-drive__actions:not(:has(> :not([hidden]))) {
-  display: none;
 }
 
 /* ------------------------------------------------------------- breadcrumb */
@@ -2396,47 +2385,6 @@ textarea.text-input {
   width: 56px;
   height: 56px;
   color: var(--color-purple-300);
-}
-
-/* "Add artist" / "Add concert": a folder card with a dashed border, always
-   first in its grid. Raised above the cards after it, so the artist picker
-   that drops out of it isn't covered by them. */
-.folder-card--add {
-  z-index: 1;
-  border-style: dashed;
-}
-
-/* The Add artist card's dashes are longer than a dashed border's: its border
-   keeps its width but is drawn by .folder-card__dashes instead, as a CSS
-   dashed border's dash length can't be set. */
-.folder-card--add-artist,
-.folder-card--add-artist:hover {
-  border-color: transparent;
-}
-
-.folder-card__dashes {
-  position: absolute;
-  inset: -1px;
-  width: calc(100% + 2px);
-  height: calc(100% + 2px);
-  color: var(--color-border);
-  pointer-events: none;
-  transition: color 0.18s ease;
-}
-
-/* The rect runs along the card's outer edge (its rx matches --radius-card);
-   the outer half of the 2px stroke is clipped away, leaving a 1px line. */
-.folder-card__dashes rect {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2px;
-  stroke-dasharray: 14px 8px;
-}
-
-@media (hover: hover) {
-  .folder-card--add-artist:hover .folder-card__dashes {
-    color: var(--color-purple-300);
-  }
 }
 
 .folder-card__rename {
@@ -2832,24 +2780,17 @@ textarea.text-input {
   border-color: var(--color-purple-800);
 }
 
-/* The Add artist card matches the Favorites card next to it. */
-.folder-card--add-artist .folder-card__dashes {
-  color: var(--color-purple-800);
-}
-
 /* Its heart is smaller than an artist avatar, so centre the contents in the
    height the grid row gives the card. */
-.folder-card--favorites .folder-card__open,
-.folder-card--add-artist .folder-card__open {
+.folder-card--favorites .folder-card__open {
   height: 100%;
   justify-content: center;
 }
 
-/* The 88px icon in a box as big as an artist's avatar, so the Favorites and
-   Add artist cards are as tall as an artist folder from the start - rather
-   than growing when the first one joins their row. */
-.folder-card__icon--heart,
-.folder-card__icon--add {
+/* The 88px icon in a box as big as an artist's avatar, so the Favorites
+   card is as tall as an artist folder from the start - rather than growing
+   when the first one joins its row. */
+.folder-card__icon--heart {
   width: 200px;
   height: 200px;
   padding: 56px;
@@ -2858,8 +2799,7 @@ textarea.text-input {
 }
 
 @media (max-width: 600px) {
-  .folder-card__icon--heart,
-  .folder-card__icon--add {
+  .folder-card__icon--heart {
     width: 132px;
     height: 132px;
     padding: 22px;

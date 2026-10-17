@@ -866,16 +866,6 @@ window.MusicHub = window.MusicHub || {};
     els.artistsGrid.appendChild(card);
   }
 
-  /**
-   * Empties a folder grid except for its "add" card, which stays first. It is
-   * never taken out of the page, so an open artist picker in it stays as is.
-   */
-  function clearGrid(grid, addCard) {
-    while (addCard.nextSibling) {
-      grid.removeChild(addCard.nextSibling);
-    }
-  }
-
   /** Every word typed has to be in the artist's name, accents and case aside. */
   function matchesArtistQuery(artist) {
     var name = foldName(artist.artistName);
@@ -885,12 +875,12 @@ window.MusicHub = window.MusicHub || {};
   }
 
   function renderArtists() {
-    clearGrid(els.artistsGrid, els.addArtistCard);
+    els.artistsGrid.textContent = '';
 
     var artists = sortedArtists(data);
     var searching = Boolean(artistQuery.trim());
     var shown = artists.filter(matchesArtistQuery);
-    els.galleryToolbar.hidden = !artists.length;
+    els.gallerySearchBox.hidden = !artists.length;
     els.gallerySearchClear.hidden = !artistQuery;
     els.galleryNoMatch.hidden = !searching || shown.length > 0;
     els.galleryNoMatch.textContent = 'No artists match “' + artistQuery.trim() + '”.';
@@ -900,7 +890,6 @@ window.MusicHub = window.MusicHub || {};
       renderFavoritesFolder();
     }
 
-    // No artists yet: just the Add artist card.
     shown.forEach(function (artist) {
       var card = el('div', 'folder-card');
 
@@ -953,13 +942,12 @@ window.MusicHub = window.MusicHub || {};
 
   function renderConcerts() {
     var artist = findArtist(data, currentView.artistId);
-    clearGrid(els.concertsList, els.addConcertTile);
+    els.concertsList.textContent = '';
     if (!artist) {
       go({ view: 'artists' }, 'replace');
       return;
     }
 
-    // No concerts yet: just the Add concert tile.
     sortedConcerts(artist).forEach(function (concert) {
       var tile = el('li', 'folder-card folder-card--concert');
 
@@ -1303,7 +1291,7 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
-  /** The one "Show hidden" button, in the Drive box, for the level on screen. */
+  /** The one "Show hidden" button, in the toolbar, for the level on screen. */
   function renderUnhideButton() {
     function currentArtist() {
       return findArtist(data, currentView.artistId);
@@ -1323,16 +1311,34 @@ window.MusicHub = window.MusicHub || {};
         return null;
       });
     }
-    // A "Show hidden" button keeps the box up, even after its message faded.
-    if (!els.unhide.hidden && els.driveStatus.textContent) {
-      showDriveBox();
+  }
+
+  /**
+   * The toolbar's + adds to the level on screen: an artist (the picker), a
+   * concert, or media. The Favorites view has nothing to add.
+   */
+  function renderAddButton() {
+    var label = { artists: 'Add artist', concerts: 'Add concert', media: 'Add media' }[currentView.view];
+    els.add.hidden = !label;
+    if (label) {
+      els.add.title = label;
+      els.add.setAttribute('aria-label', label);
+    }
+    if (currentView.view === 'artists') {
+      els.add.setAttribute('aria-expanded', String(!els.artistPanel.hidden));
+    } else {
+      els.add.removeAttribute('aria-expanded');
     }
   }
 
   function render() {
     renderBreadcrumb();
+    renderAddButton();
     renderUnhideButton();
 
+    // Only the artists level has its search, and only a concert its sort and filter.
+    els.gallerySearchBox.hidden = currentView.view !== 'artists' || !data.artists.length;
+    els.mediaControls.hidden = currentView.view !== 'media';
     els.viewArtists.hidden = currentView.view !== 'artists';
     els.viewFavorites.hidden = currentView.view !== 'favorites';
     els.viewConcerts.hidden = currentView.view !== 'concerts';
@@ -1359,17 +1365,22 @@ window.MusicHub = window.MusicHub || {};
     return link;
   }
 
-  /** The status line: text parts (strings, or a node like a Settings link). */
+  /** Its arrows turn while a sync runs, like every page's refresh button. */
+  function showDriveRunning() {
+    els.driveSync.disabled = driveRunning;
+    els.driveSync.setAttribute('aria-busy', String(driveRunning));
+  }
+
+  /**
+   * The note below the toolbar, fading out like every note (notice.js):
+   * text parts (strings, or a node like a Settings link).
+   */
   function showDriveStatus(parts, options) {
     options = options || {};
     els.driveStatus.textContent = '';
     parts.forEach(function (part) {
       els.driveStatus.appendChild(typeof part === 'string' ? document.createTextNode(part) : part);
     });
-    els.driveSync.hidden = !options.canSync;
-    els.driveSync.disabled = driveRunning;
-    // Its arrows turn while a sync runs, like every page's refresh button.
-    els.driveSync.setAttribute('aria-busy', String(driveRunning));
 
     var unmatched = options.unmatched || [];
     els.driveUnmatched.textContent = unmatched.length
@@ -1380,17 +1391,7 @@ window.MusicHub = window.MusicHub || {};
 
     els.driveShare.textContent = options.shareTip || '';
     els.driveShare.hidden = !options.shareTip;
-    showDriveBox();
-  }
-
-  /**
-   * The Drive box stays up while it has a button (the sync button, or
-   * "Show hidden"); a message on its own fades out like every note
-   * (notice.js).
-   */
-  function showDriveBox() {
-    var withButton = !els.driveSync.hidden || !els.unhide.hidden;
-    MusicHub.notice[withButton ? 'hold' : 'flash'](els.drive);
+    MusicHub.notice.flash(els.drive, null, { error: !!options.error });
   }
 
   function hasDriveMedia(current) {
@@ -1406,45 +1407,32 @@ window.MusicHub = window.MusicHub || {};
   /**
    * What a Drive sync needs: the Google login with folder access and the
    * followed artists (for the names). The followed artists when it's all
-   * there; otherwise null, with what's missing on the status line.
+   * there; otherwise null, with what's missing in the note.
    */
   function driveReady() {
     var google = MusicHub.google;
     if (!google || !google.isConnected()) {
       showDriveStatus(['Log in to Google in ', settingsLink(),
-        ' to fill the Gallery from a folder in your Google Drive.']);
+        ' to fill the Gallery from a folder in your Google Drive.'], { error: true });
       return null;
     }
     if (!google.hasFolderAccess()) {
       showDriveStatus(['Log out of Google and in again in ', settingsLink(),
-        ' to let the Gallery read its folder in your Google Drive.']);
+        ' to let the Gallery read its folder in your Google Drive.'], { error: true });
       return null;
     }
     var followed = MusicHub.followedArtists.list();
     if (!followed) {
-      showDriveStatus([MusicHub.followedArtists.MISSING_MESSAGE]);
+      showDriveStatus([MusicHub.followedArtists.MISSING_MESSAGE], { error: true });
       return null;
     }
     return followed;
   }
 
   /**
-   * The Drive box without syncing - on every visit, and once the followed
-   * artists come in: the refresh button ready, or what's missing for it.
-   * Only that button (and "Show hidden") reads the folder.
-   */
-  function showDriveIdle() {
-    if (driveRunning || !driveReady()) {
-      return;
-    }
-    showDriveStatus(['Press refresh to fill the Gallery from its folder in your Google Drive.'],
-      { canSync: true });
-  }
-
-  /**
    * Reads the Gallery folder from Drive and merges it in - on its refresh
    * button, and when hidden Drive items are shown again. Says what's
-   * missing on the status line instead when it can't (driveReady).
+   * missing in the note instead when it can't (driveReady).
    */
   function syncDrive() {
     var google = MusicHub.google;
@@ -1454,7 +1442,7 @@ window.MusicHub = window.MusicHub || {};
     }
 
     driveRunning = true;
-    showDriveStatus(['Syncing with your Google Drive\u2026'], { canSync: true });
+    showDriveRunning();
     var folderId = MusicHub.storage.getSetting(GALLERY_FOLDER_SETTING, null);
 
     google.findFolder(folderId, DEFAULT_GALLERY_FOLDER).then(function (root) {
@@ -1466,12 +1454,13 @@ window.MusicHub = window.MusicHub || {};
       });
     }).then(function (result) {
       driveRunning = false;
+      showDriveRunning();
       if (!result.root) {
         showDriveStatus(folderId
           ? ['The Gallery folder set in ', settingsLink(), ' wasn\u2019t found in your Google Drive.']
           : ['No folder called \u201c' + DEFAULT_GALLERY_FOLDER + '\u201d at the top of your My Drive '
             + 'yet - create one, with a folder per artist inside and a folder per concert in those, '
-            + 'or pick another folder in ', settingsLink(), '.'], { canSync: true });
+            + 'or pick another folder in ', settingsLink(), '.'], { error: true });
         return;
       }
 
@@ -1492,7 +1481,6 @@ window.MusicHub = window.MusicHub || {};
       }
 
       showDriveStatus(['Synced with \u201c' + result.root.name + '\u201d in your Google Drive.'], {
-        canSync: true,
         unmatched: unmatched,
         shareTip: !result.root.shared && hasDriveMedia(data)
           ? 'Tip: share \u201c' + result.root.name + '\u201d in Google Drive as \u201cAnyone with the '
@@ -1502,9 +1490,10 @@ window.MusicHub = window.MusicHub || {};
       });
     }, function (err) {
       driveRunning = false;
+      showDriveRunning();
       console.warn('Could not read the Gallery folder', err);
       showDriveStatus(['Couldn\u2019t read your Google Drive: ' + (err && err.message ? err.message : 'unknown error')],
-        { canSync: true });
+        { error: true });
     });
   }
 
@@ -1584,7 +1573,7 @@ window.MusicHub = window.MusicHub || {};
   function closeArtistPicker() {
     if (els.artistPanel) {
       els.artistPanel.hidden = true;
-      els.addArtistToggle.setAttribute('aria-expanded', 'false');
+      renderAddButton();
     }
   }
 
@@ -1646,7 +1635,7 @@ window.MusicHub = window.MusicHub || {};
 
   function openArtistPicker() {
     els.artistPanel.hidden = false;
-    els.addArtistToggle.setAttribute('aria-expanded', 'true');
+    renderAddButton();
     els.artistSearch.value = '';
     els.artistSearch.focus();
     // Fetched by the navbar's refresh button only - never from here.
@@ -1789,10 +1778,8 @@ window.MusicHub = window.MusicHub || {};
     els.viewConcerts = document.getElementById('view-concerts');
     els.viewMedia = document.getElementById('view-media');
     els.artistsGrid = document.getElementById('artists-grid');
-    els.addArtistCard = document.getElementById('add-artist');
-    els.addArtistToggle = document.getElementById('add-artist-toggle');
+    els.add = document.getElementById('gallery-add');
     els.concertsList = document.getElementById('concerts-list');
-    els.addConcertTile = document.getElementById('add-concert-tile');
     els.imagesGrid = document.getElementById('images-grid');
     els.videosList = document.getElementById('videos-list');
     els.imagesSection = document.getElementById('images-section');
@@ -1800,6 +1787,7 @@ window.MusicHub = window.MusicHub || {};
     els.mediaNote = document.getElementById('media-note');
     els.mediaOrder = document.getElementById('media-order');
     els.mediaFilters = document.getElementById('media-filters');
+    els.mediaControls = document.getElementById('media-controls');
     els.artistPanel = document.getElementById('add-artist-panel');
     els.concertDialog = document.getElementById('concert-dialog');
     els.concertTitle = document.getElementById('concert-dialog-title');
@@ -1830,7 +1818,7 @@ window.MusicHub = window.MusicHub || {};
     els.driveUnmatched = document.getElementById('gallery-drive-unmatched');
     els.driveShare = document.getElementById('gallery-drive-share');
     els.unhide = document.getElementById('gallery-unhide');
-    els.galleryToolbar = document.getElementById('gallery-toolbar');
+    els.gallerySearchBox = document.getElementById('gallery-search-box');
     els.gallerySearch = document.getElementById('gallery-search');
     els.gallerySearchClear = document.getElementById('gallery-search-clear');
     els.galleryNoMatch = document.getElementById('gallery-no-match');
@@ -1848,28 +1836,30 @@ window.MusicHub = window.MusicHub || {};
       els.gallerySearch.focus();
     });
 
-    els.addArtistToggle.addEventListener('click', function () {
-      if (els.artistPanel.hidden) {
+    els.add.addEventListener('click', function () {
+      if (currentView.view === 'concerts') {
+        openConcertDialog('add', currentView.artistId, null);
+      } else if (currentView.view === 'media') {
+        openMediaDialog();
+      } else if (els.artistPanel.hidden) {
         openArtistPicker();
       } else {
         closeArtistPicker();
       }
     });
     els.artistSearch.addEventListener('input', renderArtistPicker);
-    // The navbar fetched a new list while the picker is open - and the
-    // Drive box can offer its refresh button now, if it was waiting for one.
+    // The navbar fetched a new list while the picker is open.
     document.addEventListener(MusicHub.followedArtists.CHANGE_EVENT, function () {
       if (!els.artistPanel.hidden) {
         followedArtists = MusicHub.followedArtists.list();
         renderArtistPicker();
       }
-      showDriveIdle();
     });
     els.driveSync.addEventListener('click', syncDrive);
 
     document.addEventListener('click', function (event) {
-      var container = document.getElementById('add-artist');
-      if (!els.artistPanel.hidden && container && !container.contains(event.target)) {
+      if (!els.artistPanel.hidden && !els.artistPanel.contains(event.target)
+        && !els.add.contains(event.target)) {
         closeArtistPicker();
       }
     });
@@ -1880,9 +1870,6 @@ window.MusicHub = window.MusicHub || {};
       }
     });
 
-    document.getElementById('add-concert').addEventListener('click', function () {
-      openConcertDialog('add', currentView.artistId, null);
-    });
     // The X and a click outside close these modals too (navbar.js).
     document.getElementById('confirm-form').addEventListener('submit', submitConfirmDialog);
     els.confirmCancel.addEventListener('click', function () {
@@ -1896,10 +1883,6 @@ window.MusicHub = window.MusicHub || {};
     document.getElementById('concert-form').addEventListener('submit', submitConcertDialog);
     document.getElementById('concert-cancel').addEventListener('click', function () {
       els.concertDialog.close();
-    });
-
-    document.getElementById('add-media').addEventListener('click', function () {
-      openMediaDialog();
     });
 
     els.mediaOrder.addEventListener('click', function () {
@@ -1930,7 +1913,6 @@ window.MusicHub = window.MusicHub || {};
     // The URL decides the starting level - including the graph page's
     // ?artist=<spotifyArtistId> deep link.
     go(resolveView(viewFromUrl()), 'replace');
-    showDriveIdle();
   });
 
   // Exposed for tests.

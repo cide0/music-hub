@@ -6,71 +6,81 @@
   <body>
     <%- include('partials/navbar') %>
 
-    <main class="page">
+    <main class="page page--gallery">
       <!-- Shown once a valid Spotify login is present. -->
       <section class="page__content" data-auth-required>
-        <!-- The Drive folder the gallery fills itself from (concert-history.js). -->
-        <div class="notice gallery-drive" id="gallery-drive" hidden>
-          <div class="notice__text gallery-drive__body">
-            <p class="gallery-drive__status" id="gallery-drive-status" role="status"></p>
-            <p class="form-message gallery-drive__note" id="gallery-drive-unmatched" hidden></p>
-            <p class="form-message gallery-drive__note" id="gallery-drive-share" hidden></p>
+        <nav class="breadcrumb" id="breadcrumb" aria-label="Breadcrumb"></nav>
+
+        <!-- Every level's controls, below the breadcrumb: syncing the Drive
+             folder and adding to the level on the left, the artist search
+             (or the media sort and filter) on the right. -->
+        <div class="toolbar gallery-toolbar">
+          <button type="button" class="icon-button refresh-button" id="gallery-drive-sync" aria-label="Sync with Google Drive" title="Sync with Google Drive">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+          <!-- Add artist / concert / media, for the level on screen (renderAddButton). -->
+          <button type="button" class="icon-button add-button" id="gallery-add"
+            aria-controls="add-artist-panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+          <!-- What this level has hidden of the Drive folder (renderUnhideButton). -->
+          <button type="button" class="button button--ghost" id="gallery-unhide" hidden></button>
+
+          <!-- The artist picker, dropping out of the toolbar over the page. -->
+          <div class="add-panel" id="add-artist-panel" hidden>
+            <label class="visually-hidden" for="artist-search">Search your followed artists</label>
+            <input type="search" id="artist-search" class="text-input" placeholder="Search your followed artists" autocomplete="off" />
+            <p class="form-message" id="artist-picker-message" hidden></p>
+            <ul class="picker" id="artist-picker"></ul>
           </div>
-          <div class="gallery-drive__actions">
-            <!-- What this level has hidden of the Drive folder (renderUnhideButton). -->
-            <button type="button" class="button button--ghost notice__action" id="gallery-unhide" hidden></button>
-            <button type="button" class="icon-button refresh-button" id="gallery-drive-sync" aria-label="Sync with Google Drive" title="Sync with Google Drive" hidden>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-              </svg>
-            </button>
+
+          <!-- Filters the artist folders as you type, once there's an artist. -->
+          <div class="gallery-search" id="gallery-search-box" hidden>
+            <label class="visually-hidden" for="gallery-search">Search your artist folders</label>
+            <div class="input-clear">
+              <input type="text" id="gallery-search" class="text-input" placeholder="Search"
+                autocomplete="off" spellcheck="false" />
+              <button type="button" class="input-clear__button" id="gallery-search-clear" aria-label="Clear search" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Inside a concert. Sorted by the date an item was added; clicking
+               flips the direction, like the Album Suggester's history sort. -->
+          <div class="toolbar__end" id="media-controls" hidden>
+            <div class="filter-group" role="group" aria-label="Sort media">
+              <button type="button" class="filter-button filter-button--active" id="media-order" aria-pressed="true">Date ↓</button>
+            </div>
+
+            <div class="filter-group" id="media-filters" role="group" aria-label="Filter media">
+              <button type="button" class="filter-button filter-button--active" data-media-filter="all" aria-pressed="true">All</button>
+              <button type="button" class="filter-button" data-media-filter="favorites" aria-pressed="false">Favorites</button>
+            </div>
           </div>
         </div>
 
-        <nav class="breadcrumb" id="breadcrumb" aria-label="Breadcrumb"></nav>
+        <!-- How the last Drive sync went, or what it's missing; fades out on its own. -->
+        <div class="notice gallery-drive" id="gallery-drive" role="status" hidden>
+          <div class="notice__text">
+            <p class="gallery-drive__status" id="gallery-drive-status"></p>
+            <p class="form-message gallery-drive__note" id="gallery-drive-unmatched" hidden></p>
+            <p class="form-message gallery-drive__note" id="gallery-drive-share" hidden></p>
+          </div>
+        </div>
 
         <!-- Level 1: artist folders -->
         <section id="view-artists">
-          <!-- Filters the artist folders as you type, once there's an artist. -->
-          <div class="toolbar" id="gallery-toolbar" hidden>
-            <div class="gallery-search">
-              <label class="visually-hidden" for="gallery-search">Search your artist folders</label>
-              <div class="input-clear">
-                <input type="text" id="gallery-search" class="text-input" placeholder="Search artist"
-                  autocomplete="off" spellcheck="false" />
-                <button type="button" class="input-clear__button" id="gallery-search-clear" aria-label="Clear search" hidden>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-
           <p class="empty-state" id="gallery-no-match" hidden></p>
 
-          <div class="folder-grid" id="artists-grid">
-            <!-- Always the first card: renderArtists keeps it and rebuilds the rest. -->
-            <div class="folder-card folder-card--add folder-card--add-artist" id="add-artist">
-              <svg class="folder-card__dashes" aria-hidden="true"><rect width="100%" height="100%" rx="12" /></svg>
-              <button type="button" class="folder-card__open" id="add-artist-toggle"
-                aria-expanded="false" aria-controls="add-artist-panel">
-                <svg class="folder-card__icon folder-card__icon--add" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                <span class="folder-card__name">Add artist</span>
-                <span class="folder-card__meta">From the artists you follow</span>
-              </button>
-
-              <div class="add-panel" id="add-artist-panel" hidden>
-                <label class="visually-hidden" for="artist-search">Search your followed artists</label>
-                <input type="search" id="artist-search" class="text-input" placeholder="Search your followed artists" autocomplete="off" />
-                <p class="form-message" id="artist-picker-message" hidden></p>
-                <ul class="picker" id="artist-picker"></ul>
-              </div>
-            </div>
-          </div>
+          <div class="folder-grid" id="artists-grid"></div>
         </section>
 
         <!-- Everything hearted, across every artist and concert -->
@@ -81,38 +91,11 @@
 
         <!-- Level 2: concert subfolders -->
         <section id="view-concerts" hidden>
-          <ul class="folder-grid folder-grid--tiles" id="concerts-list">
-            <!-- Always the first tile: renderConcerts keeps it and rebuilds the rest. -->
-            <li class="folder-card folder-card--concert folder-card--add" id="add-concert-tile">
-              <button type="button" class="folder-card__open" id="add-concert">
-                <svg class="folder-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                <span class="folder-card__name">Add concert</span>
-              </button>
-            </li>
-          </ul>
+          <ul class="folder-grid folder-grid--tiles" id="concerts-list"></ul>
         </section>
 
         <!-- Level 3: the images and videos of one concert -->
         <section id="view-media" hidden>
-          <div class="toolbar">
-            <button type="button" class="button button--primary" id="add-media">+ Add media</button>
-
-            <div class="toolbar__end">
-              <!-- Sorted by the date an item was added; clicking flips the direction,
-                   like the Album Suggester's history sort. -->
-              <div class="filter-group" role="group" aria-label="Sort media">
-                <button type="button" class="filter-button filter-button--active" id="media-order" aria-pressed="true">Date ↓</button>
-              </div>
-
-              <div class="filter-group" id="media-filters" role="group" aria-label="Filter media">
-                <button type="button" class="filter-button filter-button--active" data-media-filter="all" aria-pressed="true">All</button>
-                <button type="button" class="filter-button" data-media-filter="favorites" aria-pressed="false">Favorites</button>
-              </div>
-            </div>
-          </div>
-
           <p class="empty-state" id="media-note" hidden></p>
 
           <div id="images-section" hidden>
