@@ -164,9 +164,20 @@ window.MusicHub = window.MusicHub || {};
     'business seat', 'dinner', 'parking', 'shuttle',
   ];
 
+  /**
+   * Lowercase, without umlauts, accents or punctuation - the same folding as
+   * normalizeArtistName in lib/artistMatch.js, so "Motörhead" equals
+   * "Motorhead". concertId doesn't use it, so the stored ids stay as they are.
+   */
   function normalizeName(value) {
     return String(value || '')
       .toLowerCase()
+      .replace(/ä/g, 'a')
+      .replace(/ö/g, 'o')
+      .replace(/ü/g, 'u')
+      .replace(/ß/g, 'ss')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/[\u2019'`´.]/g, '')
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
@@ -346,6 +357,130 @@ window.MusicHub = window.MusicHub || {};
       };
     }).sort(function (a, b) {
       return sortValue(a) < sortValue(b) ? -1 : sortValue(a) > sortValue(b) ? 1 : 0;
+    });
+  }
+
+  /* ------------------------------------------------------------- merging */
+
+  /** Equal after normalizeName - and not both empty. */
+  function sameText(a, b) {
+    var key = normalizeName(a);
+    return !!key && key === normalizeName(b);
+  }
+
+  /** `name` is `artistName`, or one of the acts `event` bills. */
+  function isOn(name, artistName, event) {
+    return sameText(name, artistName) || (event.attractionNames || []).some(function (attraction) {
+      return sameText(name, attraction);
+    });
+  }
+
+  /**
+   * Whether a match already in the run and an event found for `name` are one
+   * concert: same day, same city (both shops carry matchCity's name), and
+   * either an artist on both or the same venue under normalizeName. Start
+   * times aren't compared - a matinee and an evening show share a card
+   * anyway, since cards group by venue, city and day.
+   */
+  function sameConcert(match, name, event) {
+    var other = match.event;
+    return !!event.localDate && other.localDate === event.localDate
+      && sameText(other.city, event.city)
+      && (isOn(name, match.artistName, other)
+        || isOn(match.artistName, name, event)
+        || sameText(other.venueName, event.venueName));
+  }
+
+  function copyEventimFields(target, show) {
+    target.eventimUrl = show.eventimUrl || null;
+    target.eventimId = show.eventimId;
+    target.eventimHasVariants = !!show.eventimHasVariants;
+  }
+
+  function hasEntry(matches, name, event) {
+    return matches.some(function (match) {
+      return match.event === event && match.artistName === name;
+    });
+  }
+
+  /**
+   * One artist's Eventim shows (live, or rebuilt from stored cards) into the
+   * run's matches. A show that a Ticketmaster event already carries, or that
+   * is the same concert as one, only lends that event its Eventim fields, and
+   * the artist joins it if they aren't on it yet (a co-headline found through
+   * the venue). Any other show is an Eventim-only entry. A Ticketmaster event
+   * takes one Eventim show at most.
+   */
+  function addEventimShows(matches, name, shows) {
+    shows.forEach(function (show) {
+      var target = null;
+      matches.some(function (match) {
+        var event = match.event;
+        if (event.ticketmasterId && show.eventimId && event.eventimId === show.eventimId) {
+          target = event;
+        }
+        return !!target;
+      });
+      if (!target) {
+        matches.some(function (match) {
+          var event = match.event;
+          if (event.ticketmasterId && !event.eventimId && sameConcert(match, name, show)) {
+            target = event;
+          }
+          return !!target;
+        });
+      }
+
+      if (!target) {
+        matches.push({ artistName: name, event: show });
+        return;
+      }
+      if (!target.eventimId) {
+        copyEventimFields(target, show);
+      }
+      if (!hasEntry(matches, name, target)) {
+        matches.push({ artistName: name, event: target });
+      }
+    });
+  }
+
+  /**
+   * One artist's Ticketmaster events (live, or rebuilt from stored cards) into
+   * the run's matches. An event another artist already brought is shared, not
+   * copied, so Eventim fields added to it reach every artist on it. When an
+   * earlier artist found the same concert on Eventim only, the Ticketmaster
+   * event takes over: it gets the Eventim fields, and those Eventim-only
+   * entries point at it, so that artist stays on the card.
+   */
+  function addTicketmasterEvents(matches, name, events) {
+    events.forEach(function (incoming) {
+      var event = incoming;
+      matches.some(function (match) {
+        if (incoming.ticketmasterId && match.event.ticketmasterId === incoming.ticketmasterId) {
+          event = match.event;
+        }
+        return event !== incoming;
+      });
+
+      if (!event.eventimId) {
+        matches.some(function (match) {
+          var other = match.event;
+          if (!other.ticketmasterId && other.eventimId && sameConcert(match, name, event)) {
+            copyEventimFields(event, other);
+            return true;
+          }
+          return false;
+        });
+      }
+      if (event.eventimId) {
+        matches.forEach(function (match) {
+          if (!match.event.ticketmasterId && match.event.eventimId === event.eventimId) {
+            match.event = event;
+          }
+        });
+      }
+
+      matches.push({ artistName: name, event: event });
     });
   }
 
@@ -997,11 +1132,19 @@ window.MusicHub = window.MusicHub || {};
     (previous || []).forEach(function (concert) {
       previousById[concert.id] = concert;
     });
+    // The ids this list already uses, so no previous id is handed out twice.
+    var taken = {};
+    concerts.forEach(function (concert) {
+      taken[concert.id] = true;
+    });
 
     var newIds = [];
     concerts.forEach(function (concert) {
-      var before = previousById[concert.id];
+      var before = previousById[concert.id] || previousStandIn(concert, previous, taken);
       if (before) {
+        // The previous id stays, and with it the "New" mark and the coins
+        // (`concert:<id>` in the wallet) already settled for this concert.
+        concert.id = before.id;
         // Keep the flags the user set on this concert before.
         concert.addedToCalendar = !!before.addedToCalendar;
         concert.attending = !!before.attending;
@@ -1011,6 +1154,35 @@ window.MusicHub = window.MusicHub || {};
     });
 
     return newIds;
+  }
+
+  /**
+   * The previous concert a card stands for when its id changed: same city,
+   * same day, an artist in common. That happens when an Eventim-only card is
+   * listed by Ticketmaster later, and its id now comes from Ticketmaster's
+   * venue spelling. Each previous concert is claimed once at most (`taken`).
+   */
+  function previousStandIn(concert, previous, taken) {
+    var found = null;
+    (previous || []).some(function (before) {
+      if (taken[before.id] || !concert.localDate || before.localDate !== concert.localDate
+        || !sameText(before.city, concert.city)) {
+        return false;
+      }
+      var shared = (before.artists || []).some(function (name) {
+        return concert.artists.some(function (other) {
+          return sameText(name, other);
+        });
+      });
+      if (shared) {
+        found = before;
+      }
+      return shared;
+    });
+    if (found) {
+      taken[found.id] = true;
+    }
+    return found;
   }
 
   /**
@@ -1232,12 +1404,6 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  function pushEvents(matches, name, events) {
-    events.forEach(function (event) {
-      matches.push({ artistName: name, event: event });
-    });
-  }
-
   function cancelFetch() {
     if (!activeRun) {
       return;
@@ -1252,14 +1418,14 @@ window.MusicHub = window.MusicHub || {};
    */
   function checkTicketmaster(name, run, matches, failed, previous) {
     return fetchConcertsFor(name, run.controller.signal).then(function (data) {
-      pushEvents(matches, name, data.events || []);
+      addTicketmasterEvents(matches, name, data.events || []);
     }).catch(function (err) {
       if (run.cancelled) {
         return;
       }
       console.warn('Ticketmaster lookup failed for ' + name, err);
       var stored = ticketmasterFallback(previous, name);
-      pushEvents(matches, name, stored);
+      addTicketmasterEvents(matches, name, stored);
       failed.push({
         name: name, source: 'ticketmaster', reason: err.reason || 'request failed', usedFallback: stored.length > 0,
       });
@@ -1267,14 +1433,14 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
-   * One artist's Eventim lookup, each show an entry of its own. If it fails,
+   * One artist's Eventim lookup, merged into the run's matches. If it fails,
    * the artist's stored Eventim dates stand in for it, and a third "blocked"
    * in a row pauses Eventim for the rest of the run.
    */
   function checkEventim(name, run, matches, failed, previous) {
     return fetchEventimFor(name, run.controller.signal).then(function (data) {
       run.eventimBlocked = 0;
-      pushEvents(matches, name, (data.shows || []).map(eventimEvent));
+      addEventimShows(matches, name, (data.shows || []).map(eventimEvent));
     }).catch(function (err) {
       if (run.cancelled) {
         return;
@@ -1286,14 +1452,15 @@ window.MusicHub = window.MusicHub || {};
         run.eventimPaused = { after: name, remaining: 0 };
       }
       var stored = eventimFallback(previous, name);
-      pushEvents(matches, name, stored);
+      addEventimShows(matches, name, stored);
       failed.push({ name: name, source: 'eventim', reason: reason, usedFallback: stored.length > 0 });
     });
   }
 
   /**
    * Walks a list of artist names one at a time: Ticketmaster first, with a
-   * small delay after it so its rate limit is never hit, then Eventim. A
+   * small delay after it so its rate limit is never hit, then Eventim, whose
+   * shows are merged into what Ticketmaster found before the next artist. A
    * failed lookup on either shop is collected rather than fatal and never
    * skips the other one; `previous` (the stored list) is what it falls back
    * to. Progress only moves once both are done - the two take very
@@ -1326,7 +1493,7 @@ window.MusicHub = window.MusicHub || {};
           // Paused: Eventim isn't asked again this run, the stored dates
           // stand in, and the notice counts the artist instead of naming it.
           if (run.eventimPaused) {
-            pushEvents(matches, name, eventimFallback(previous, name));
+            addEventimShows(matches, name, eventimFallback(previous, name));
             run.eventimPaused.remaining += 1;
             return null;
           }
@@ -1575,6 +1742,8 @@ window.MusicHub = window.MusicHub || {};
     pickRepresentative: pickRepresentative,
     buildConcerts: buildConcerts,
     eventimEvent: eventimEvent,
+    addEventimShows: addEventimShows,
+    addTicketmasterEvents: addTicketmasterEvents,
     ticketmasterFallback: ticketmasterFallback,
     eventimFallback: eventimFallback,
     failureReason: failureReason,
