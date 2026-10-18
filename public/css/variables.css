@@ -299,6 +299,13 @@
   --color-google-yellow: #FBBC05;
   --color-google-green: #34A853;
 
+  /* The ticket shops' own logo colours, for the Concerts page's "my tickets"
+     buttons - brand marks too. */
+  --color-ticketmaster-blue: #024DDF;
+  --color-eventim-navy: #202867;
+  --color-eventim-yellow: #FECA27;
+  --color-shop-logo: #FFFFFF;
+
   /* Shared layout tokens */
   --font-size-page-title: 1.75rem;
   --radius-pill: 999px;

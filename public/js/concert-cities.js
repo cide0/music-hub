@@ -25,26 +25,31 @@ window.MusicHub = window.MusicHub || {};
   // country Ticketmaster lists concerts in, plus Switzerland and the UK -
   // Germany first, then by name. The codes must stay in sync with
   // TICKETMASTER_COUNTRIES in lib/cities.js.
+  //
+  // `tickets` is the user's bought tickets on that country's Ticketmaster
+  // site (the Concerts page's Ticketmaster button) - only the start page
+  // where the site isn't Ticketmaster's usual one (France, Greece, Italy),
+  // none where the country has no site of its own.
   var COUNTRIES = [
-    { code: 'DE', name: 'Germany', timeZone: 'Europe/Berlin' },
-    { code: 'AT', name: 'Austria', timeZone: 'Europe/Vienna' },
-    { code: 'BE', name: 'Belgium', timeZone: 'Europe/Brussels' },
-    { code: 'CZ', name: 'Czechia', timeZone: 'Europe/Prague' },
-    { code: 'DK', name: 'Denmark', timeZone: 'Europe/Copenhagen' },
+    { code: 'DE', name: 'Germany', timeZone: 'Europe/Berlin', tickets: 'https://www.ticketmaster.de/user/orders' },
+    { code: 'AT', name: 'Austria', timeZone: 'Europe/Vienna', tickets: 'https://www.ticketmaster.at/user/orders' },
+    { code: 'BE', name: 'Belgium', timeZone: 'Europe/Brussels', tickets: 'https://www.ticketmaster.be/user/orders' },
+    { code: 'CZ', name: 'Czechia', timeZone: 'Europe/Prague', tickets: 'https://www.ticketmaster.cz/user/orders' },
+    { code: 'DK', name: 'Denmark', timeZone: 'Europe/Copenhagen', tickets: 'https://www.ticketmaster.dk/user/orders' },
     { code: 'EE', name: 'Estonia', timeZone: 'Europe/Tallinn' },
-    { code: 'FI', name: 'Finland', timeZone: 'Europe/Helsinki' },
-    { code: 'FR', name: 'France', timeZone: 'Europe/Paris' },
-    { code: 'GR', name: 'Greece', timeZone: 'Europe/Athens' },
-    { code: 'IE', name: 'Ireland', timeZone: 'Europe/Dublin' },
-    { code: 'IT', name: 'Italy', timeZone: 'Europe/Rome' },
+    { code: 'FI', name: 'Finland', timeZone: 'Europe/Helsinki', tickets: 'https://www.ticketmaster.fi/user/orders' },
+    { code: 'FR', name: 'France', timeZone: 'Europe/Paris', tickets: 'https://www.ticketmaster.fr/' },
+    { code: 'GR', name: 'Greece', timeZone: 'Europe/Athens', tickets: 'https://www.ticketmaster.gr/' },
+    { code: 'IE', name: 'Ireland', timeZone: 'Europe/Dublin', tickets: 'https://www.ticketmaster.ie/user/orders' },
+    { code: 'IT', name: 'Italy', timeZone: 'Europe/Rome', tickets: 'https://www.ticketmaster.it/' },
     { code: 'LU', name: 'Luxembourg', timeZone: 'Europe/Luxembourg' },
-    { code: 'NL', name: 'Netherlands', timeZone: 'Europe/Amsterdam' },
-    { code: 'PL', name: 'Poland', timeZone: 'Europe/Warsaw' },
+    { code: 'NL', name: 'Netherlands', timeZone: 'Europe/Amsterdam', tickets: 'https://www.ticketmaster.nl/user/orders' },
+    { code: 'PL', name: 'Poland', timeZone: 'Europe/Warsaw', tickets: 'https://www.ticketmaster.pl/user/orders' },
     { code: 'PT', name: 'Portugal', timeZone: 'Europe/Lisbon' },
-    { code: 'ES', name: 'Spain', timeZone: 'Europe/Madrid' },
-    { code: 'SE', name: 'Sweden', timeZone: 'Europe/Stockholm' },
-    { code: 'CH', name: 'Switzerland', timeZone: 'Europe/Zurich' },
-    { code: 'GB', name: 'United Kingdom', timeZone: 'Europe/London' },
+    { code: 'ES', name: 'Spain', timeZone: 'Europe/Madrid', tickets: 'https://www.ticketmaster.es/user/orders' },
+    { code: 'SE', name: 'Sweden', timeZone: 'Europe/Stockholm', tickets: 'https://www.ticketmaster.se/user/orders' },
+    { code: 'CH', name: 'Switzerland', timeZone: 'Europe/Zurich', tickets: 'https://www.ticketmaster.ch/user/orders' },
+    { code: 'GB', name: 'United Kingdom', timeZone: 'Europe/London', tickets: 'https://www.ticketmaster.co.uk/user/orders' },
   ];
   var DEFAULT_COUNTRY = 'DE';
 
@@ -247,6 +252,28 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * The Ticketmaster page with the user's bought tickets: on the site of the
+   * country most switched-on cities are in (a tie goes to the one first in
+   * COUNTRIES), countries without a site of their own skipped - Germany's
+   * when none is left.
+   */
+  function ticketmasterTickets() {
+    var counts = {};
+    enabled().forEach(function (city) {
+      counts[city.country] = (counts[city.country] || 0) + 1;
+    });
+    var best = country(DEFAULT_COUNTRY);
+    var bestCount = 0;
+    COUNTRIES.forEach(function (entry) {
+      if (entry.tickets && (counts[entry.code] || 0) > bestCount) {
+        best = entry;
+        bestCount = counts[entry.code];
+      }
+    });
+    return best.tickets;
+  }
+
+  /**
    * The normalized spellings a shop's city name is found by: besides the
    * name itself, the name without its district - a number ("Praha 9"), a
    * Danish postal district's letters ("København S", "Odense SØ") or "City"
@@ -369,6 +396,7 @@ window.MusicHub = window.MusicHub || {};
     all: all,
     enabled: enabled,
     enabledCountries: enabledCountries,
+    ticketmasterTickets: ticketmasterTickets,
     match: match,
     countryName: countryName,
     timeZone: timeZone,

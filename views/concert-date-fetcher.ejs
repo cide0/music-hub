@@ -31,6 +31,22 @@
               <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
             </svg>
           </button>
+          <%# The user's bought tickets on each shop, in a new tab. Ticketmaster's
+              site follows the cities' country (concert-date-fetcher.js). %>
+          <a class="icon-button shop-button shop-button--ticketmaster" id="ticketmaster-tickets"
+            href="https://www.ticketmaster.de/user/orders" target="_blank" rel="noopener noreferrer"
+            aria-label="My tickets on Ticketmaster" title="My tickets on Ticketmaster">
+            <svg viewBox="-5.6 0.6 20 20" aria-hidden="true">
+              <path class="shop-button__mark" d="M4.19 15.35c0-.47.07-.9.14-1.18l1.16-5.3h2.86l.5-2.32H5.99l.79-3.61-3.43 1.1-.54 2.5H.5L0 8.87h2.3l-.9 4.11c-.21.97-.4 1.89-.4 2.83C1 18.14 2.52 19 4.69 19c.54 0 1.16-.18 1.7-.3l.56-2.45a4.27 4.27 0 0 1-1.55.28c-.71 0-1.22-.44-1.22-1.18z" />
+            </svg>
+          </a>
+          <a class="icon-button shop-button shop-button--eventim" id="eventim-tickets"
+            href="https://www.eventim.de/dashboard/my-events" target="_blank" rel="noopener noreferrer"
+            aria-label="My tickets on Eventim" title="My tickets on Eventim">
+            <svg viewBox="302.35 -2.25 64 64" aria-hidden="true">
+              <path class="shop-button__star" d="M327.2,36.9L327.2,36.9c6.2,6.2,6.4,15.9,6.4,22.6h1.5c0-6.7,0.2-16.4,6.4-22.6l0,0 c6.2-6.2,15.9-6.4,22.6-6.4V29c-6.7,0-16.4-0.2-22.6-6.4l0,0c-6.2-6.2-6.4-15.9-6.4-22.6h-1.6c0,6.7-0.2,16.4-6.4,22.6l0,0 c-6.2,6.2-15.9,6.4-22.6,6.4v1.5C311.3,30.5,321,30.7,327.2,36.9z" />
+            </svg>
+          </a>
 
           <div class="toolbar__end concert-controls" id="concert-controls" hidden>
             <div class="concert-search">

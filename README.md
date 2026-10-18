@@ -19,6 +19,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - If a lookup fails, the concerts already saved for that artist are kept and the artist is listed in a notice (grouped by shop) with a retry button.
   - Concerts that weren't there during the last fetch are highlighted as new.
   - Every concert can be added to your Google Calendar with one click or simply be marked as attended.
+  - The Ticketmaster and Eventim buttons open the tickets you bought there (log in on the shop's site). Ticketmaster's is the site of the country most of your cities are in.
 - **Artist Graph:** Shows all artists you follow on Spotify as a graph, where similar artists (based on Last.fm data) are connected to each other.
   - Can be updated with newly followed artists without re-fetching everything.
   - Recommended artists you don't follow yet can be toggled on, and the ones you like can be followed right from the graph.

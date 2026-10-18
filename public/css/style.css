@@ -250,6 +250,49 @@ button[aria-disabled='true'] {
   height: 20px;
 }
 
+/* The Concerts page's "my tickets" links beside the clear button: round
+   like it, but each in its shop's own logo colours. */
+.shop-button {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  min-width: 0;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 50%;
+  text-decoration: none;
+  transition: filter 0.15s ease, border-color 0.15s ease;
+}
+
+.shop-button svg {
+  width: 26px;
+  height: 26px;
+}
+
+.shop-button__mark {
+  fill: var(--color-shop-logo);
+}
+
+/* With the :hover too, as the icon buttons' own hover background would
+   win otherwise. */
+.shop-button--ticketmaster,
+.shop-button--ticketmaster.icon-button:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--color-ticketmaster-blue);
+}
+
+.shop-button--eventim,
+.shop-button--eventim.icon-button:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--color-eventim-navy);
+}
+
+.shop-button__star {
+  fill: var(--color-eventim-yellow);
+}
+
+.shop-button:hover {
+  filter: brightness(1.15);
+}
+
 @keyframes refresh-button-spin {
   to {
     transform: rotate(360deg);

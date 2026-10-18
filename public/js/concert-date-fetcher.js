@@ -2134,6 +2134,7 @@ window.MusicHub = window.MusicHub || {};
     els.fetchButton.addEventListener('click', runFetch);
     document.getElementById('fetch-cancel').addEventListener('click', cancelFetch);
     els.clearButton.addEventListener('click', clearStoredData);
+    document.getElementById('ticketmaster-tickets').href = MusicHub.concertCities.ticketmasterTickets();
 
     els.filters.addEventListener('click', function (event) {
       var button = event.target.closest('.filter-button');
