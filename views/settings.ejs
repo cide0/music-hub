@@ -59,37 +59,6 @@
           </div>
         </section>
 
-        <section class="settings-section" aria-labelledby="settings-concerts-title">
-          <h2 class="settings-section__title" id="settings-concerts-title">Concerts</h2>
-          <p class="settings-section__text">
-            The cities the Concerts page looks for concerts in. Cities in Germany are looked up
-            on Ticketmaster and Eventim, cities in other countries on Ticketmaster only. Switch
-            off the ones you don&rsquo;t want, or add your own. Each country with a city switched
-            on is one more Ticketmaster search per artist, so every extra country makes
-            fetching the concert dates take a little longer.
-          </p>
-          <p class="form-message settings-section__message" id="concert-cities-message" hidden></p>
-          <div class="city-groups" id="concert-cities"></div>
-          <form class="inline-form city-form" id="concert-city-form" novalidate>
-            <label class="visually-hidden" for="concert-city-name">City</label>
-            <input type="text" class="text-input" id="concert-city-name" name="concert-city-name"
-              placeholder="Add a city, e.g. Wien" autocomplete="off" maxlength="60" />
-            <!-- The playlists' dropdown (playlist-picker.js), with country names. -->
-            <div class="playlist-picker playlist-picker--plain city-form__country" id="concert-city-country">
-              <span class="visually-hidden" id="concert-city-country-label">Country</span>
-              <button type="button" class="playlist-picker__toggle"
-                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="concert-city-country-label concert-city-country-current">
-                <span class="playlist-picker__current" id="concert-city-country-current">Country</span>
-              </button>
-              <ul class="playlist-picker__list" role="listbox" tabindex="-1"
-                aria-labelledby="concert-city-country-label" hidden></ul>
-            </div>
-            <button type="submit" class="button button--ghost">Add city</button>
-          </form>
-          <p class="form-error" id="concert-city-error" role="alert" hidden></p>
-          <p class="form-message" id="concert-city-saved" role="status" hidden></p>
-        </section>
-
         <section class="settings-section" aria-labelledby="settings-google-title">
           <h2 class="settings-section__title settings-section__title--icon" id="settings-google-title">
             <svg class="google-logo" viewBox="0 0 48 48" aria-hidden="true">
@@ -213,6 +182,37 @@
             <p class="form-error" id="collection-playlists-error" role="alert" hidden></p>
             <p class="form-message" id="collection-playlists-saved" role="status" hidden></p>
           </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-concerts-title">
+          <h2 class="settings-section__title" id="settings-concerts-title">Concerts</h2>
+          <p class="settings-section__text">
+            The cities the Concerts page looks for concerts in. Cities in Germany are looked up
+            on Ticketmaster and Eventim, cities in other countries on Ticketmaster only. Switch
+            off the ones you don&rsquo;t want, or add your own. Each country with a city switched
+            on is one more Ticketmaster search per artist, so every extra country makes
+            fetching the concert dates take a little longer.
+          </p>
+          <p class="form-message settings-section__message" id="concert-cities-message" hidden></p>
+          <div class="city-groups" id="concert-cities"></div>
+          <form class="inline-form city-form" id="concert-city-form" novalidate>
+            <label class="visually-hidden" for="concert-city-name">City</label>
+            <input type="text" class="text-input" id="concert-city-name" name="concert-city-name"
+              placeholder="Add a city, e.g. Wien" autocomplete="off" maxlength="60" />
+            <!-- The playlists' dropdown (playlist-picker.js), with country names. -->
+            <div class="playlist-picker playlist-picker--plain city-form__country" id="concert-city-country">
+              <span class="visually-hidden" id="concert-city-country-label">Country</span>
+              <button type="button" class="playlist-picker__toggle"
+                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="concert-city-country-label concert-city-country-current">
+                <span class="playlist-picker__current" id="concert-city-country-current">Country</span>
+              </button>
+              <ul class="playlist-picker__list" role="listbox" tabindex="-1"
+                aria-labelledby="concert-city-country-label" hidden></ul>
+            </div>
+            <button type="submit" class="button button--ghost">Add city</button>
+          </form>
+          <p class="form-error" id="concert-city-error" role="alert" hidden></p>
+          <p class="form-message" id="concert-city-saved" role="status" hidden></p>
         </section>
 
         <section class="settings-section" aria-labelledby="settings-discogs-title">
