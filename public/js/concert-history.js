@@ -1648,9 +1648,27 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
+  function plural(count, noun) {
+    return count + ' ' + noun + (count === 1 ? '' : 's');
+  }
+
+  /** "12 artists · 34 concerts" next to the +, on the artists level only. */
+  function renderTotals() {
+    var artistCount = data.artists.length;
+    els.totals.hidden = currentView.view !== 'artists' || !artistCount;
+    if (els.totals.hidden) {
+      return;
+    }
+    var concertCount = data.artists.reduce(function (sum, artist) {
+      return sum + artist.concerts.length;
+    }, 0);
+    els.totals.textContent = plural(artistCount, 'artist') + ' · ' + plural(concertCount, 'concert');
+  }
+
   function render() {
     renderBreadcrumb();
     renderAddButton();
+    renderTotals();
     renderUnhideButton();
 
     // Only the artists level has its search, and only a concert its sort and filter.
@@ -2096,6 +2114,7 @@ window.MusicHub = window.MusicHub || {};
     els.viewMedia = document.getElementById('view-media');
     els.artistsGrid = document.getElementById('artists-grid');
     els.add = document.getElementById('gallery-add');
+    els.totals = document.getElementById('gallery-totals');
     els.concertsList = document.getElementById('concerts-list');
     els.imagesGrid = document.getElementById('images-grid');
     els.videosList = document.getElementById('videos-list');

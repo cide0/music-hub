@@ -30,7 +30,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Past concerts you marked as attended on the Concerts page are listed as shortcuts, with the artist’s Spotify picture, until their setlist has been added to a playlist.
 - **Gallery:** A gallery of the concerts you went to, sorted into artist and concert folders, with your images and videos from Google Drive.
   - Fills itself from a "Concerts" folder in your Google Drive (or any other folder set in Settings) when you press its refresh button.
-  - The artist folders can be searched by name.
+  - The artist folders can be searched by name, and the top level shows how many artists and concerts you have.
   - Images and videos can also be added by pasting Google Drive links.
   - On a phone, a tapped video opens straight in fullscreen (turned sideways when it was filmed in landscape), and arrows step through a concert's images and videos without leaving it. A heart next to the X favorites the item from there too.
 - **Discogs:** Checks Discogs for new vinyl releases of all artists you follow on Spotify.
