@@ -6717,6 +6717,10 @@ button.turntable__power:focus-visible {
   border-radius: var(--radius-card);
   background-color: var(--color-surface);
   transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+  /* Its own layer, like a Gallery folder card: otherwise the lift re-draws
+     it and its contents snap to slightly different sub-pixel positions. */
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .history-item__link {
