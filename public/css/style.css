@@ -2072,7 +2072,8 @@ button[aria-disabled='true'] {
 }
 
 .concert-card__role,
-.song__label {
+.song__label,
+.history-item__label {
   display: inline-block;
   margin-left: 0.375rem;
   padding: 0.0625rem 0.5rem;
@@ -6754,6 +6755,37 @@ button.turntable__power:focus-visible {
 
 .history-item__title {
   font-weight: 600;
+}
+
+/* A suggested album's name with its label right after it: the name
+   shortens, the label stays. */
+.history-item__title--labelled {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem 0.375rem;
+}
+
+.history-item__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-item__label {
+  flex: none;
+  margin-left: 0;
+}
+
+/* A phone's narrow card would cut the name to almost nothing, so there the
+   label drops below a name that doesn't fit beside it. */
+.history-item__text--labelled {
+  container-type: inline-size;
+}
+
+@container (max-width: 12rem) {
+  .history-item__title--labelled {
+    flex-wrap: wrap;
+  }
 }
 
 .history-item__artist {

@@ -38,7 +38,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Every release card slides its record out of the sleeve on hover, drawn to look like the actual pressing (colour, marble, splatter, picture disc and many more).
 - **Albums:** Opens a CS:GO-style case to pick a random album out of your Spotify Saved Albums to listen to.
   - Albums get a rarity tier based on how long they have been saved, so the albums that have waited longest come up most.
-  - Listened albums can be added to your album history, with your own rating.
+  - Listened albums can be added to your album history, with your own rating. The ones the case picked for you are marked "Suggested" there.
 - **Store:** Spend the coins you earn around the app on username styles, a golden record player, Mystery Vinyls or extra spins on the Wheel of Fortune.
 - **Collection:** Your collection of unboxed vinyls. Press **Play** on any of them to put it on the record player and start the album on your Spotify.
   - Shows the rating you gave each album on the Albums page (click it to edit it), and can be sorted by date or rating.

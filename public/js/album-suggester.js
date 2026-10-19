@@ -1595,8 +1595,11 @@ window.MusicHub = window.MusicHub || {};
 
   function historyItem(entry) {
     var item = el('li', 'history-item');
-    // Entries from before rarities were kept have none, and stay app purple.
-    if (TIERS.some(function (tier) { return tier.name === entry.rarity; })) {
+    // Only a picked album has a rarity - one added by its link has none.
+    // Entries from before rarities were kept have none either, and stay
+    // app purple.
+    var suggested = TIERS.some(function (tier) { return tier.name === entry.rarity; });
+    if (suggested) {
       item.dataset.rarity = entry.rarity;
     }
 
@@ -1608,8 +1611,16 @@ window.MusicHub = window.MusicHub || {};
     item.appendChild(link);
 
     item.appendChild(cover(entry.imageUrl, 'history-item__cover'));
-    var text = el('div', 'history-item__text');
-    text.appendChild(el('p', 'history-item__title', entry.albumName));
+    var text = el('div', 'history-item__text' + (suggested ? ' history-item__text--labelled' : ''));
+    if (suggested) {
+      // The name alone shortens with an ellipsis, so the label stays.
+      var title = el('p', 'history-item__title history-item__title--labelled');
+      title.appendChild(el('span', 'history-item__name', entry.albumName));
+      title.appendChild(el('span', 'history-item__label', 'Suggested'));
+      text.appendChild(title);
+    } else {
+      text.appendChild(el('p', 'history-item__title', entry.albumName));
+    }
     text.appendChild(el('p', 'history-item__artist', entry.artistName));
     text.appendChild(el('p', 'history-item__date', 'Listened ' + formatDate(entry.listenedAt)));
     item.appendChild(text);
