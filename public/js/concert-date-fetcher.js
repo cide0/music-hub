@@ -19,6 +19,8 @@ window.MusicHub = window.MusicHub || {};
   // The one country Eventim (eventim.de) is searched for; the cities abroad
   // are looked up on Ticketmaster alone.
   var EVENTIM_COUNTRY = 'DE';
+  // Where the Eventim button goes on a phone: a page the Eventim app opens.
+  var EVENTIM_APP_URL = 'https://www.eventim.de/';
   // "Today" and the "Last fetched" time; a concert's own date and time are
   // shown in its country's time zone (concertTimeZone).
   var TIMEZONE = 'Europe/Berlin';
@@ -2105,6 +2107,17 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  /**
+   * Whether this is a phone or tablet, where the shops have their apps. An
+   * iPad asks for desktop pages, so it passes for a Mac - one with a touch
+   * screen.
+   */
+  function isPhoneOrTablet() {
+    var agent = navigator.userAgent;
+    return /Android|iPhone|iPad|iPod/i.test(agent)
+      || (/Macintosh/.test(agent) && navigator.maxTouchPoints > 1);
+  }
+
   /* ------------------------------------------------------------------ init */
 
   MusicHub.sync.ready(function () {
@@ -2135,6 +2148,12 @@ window.MusicHub = window.MusicHub || {};
     document.getElementById('fetch-cancel').addEventListener('click', cancelFetch);
     els.clearButton.addEventListener('click', clearStoredData);
     document.getElementById('ticketmaster-tickets').href = MusicHub.concertCities.ticketmasterTickets();
+    // Eventim's app takes none of its /dashboard/ pages (its app-link files
+    // exclude them), so a phone opens the start page instead - the app, with
+    // the tickets a tab away.
+    if (isPhoneOrTablet()) {
+      document.getElementById('eventim-tickets').href = EVENTIM_APP_URL;
+    }
 
     els.filters.addEventListener('click', function (event) {
       var button = event.target.closest('.filter-button');

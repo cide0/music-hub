@@ -251,17 +251,23 @@ button[aria-disabled='true'] {
 }
 
 /* The Concerts page's "my tickets" links beside the clear button: round
-   like it, but each in its shop's own logo colours. */
+   like it, but each in its shop's own logo colours - always the same, with
+   none of the icon buttons' hover border or the tap flash. */
+.shop-button,
+.shop-button.icon-button:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: transparent;
+}
+
 .shop-button {
   flex: none;
   width: 44px;
   height: 44px;
   min-width: 0;
   padding: 0;
-  border-color: transparent;
   border-radius: 50%;
   text-decoration: none;
-  transition: filter 0.15s ease, border-color 0.15s ease;
+  transition: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .shop-button svg {
@@ -287,10 +293,6 @@ button[aria-disabled='true'] {
 
 .shop-button__star {
   fill: var(--color-eventim-yellow);
-}
-
-.shop-button:hover {
-  filter: brightness(1.15);
 }
 
 @keyframes refresh-button-spin {
