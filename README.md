@@ -32,6 +32,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Fills itself from a "Concerts" folder in your Google Drive (or any other folder set in Settings) when you press its refresh button.
   - The artist folders can be searched by name.
   - Images and videos can also be added by pasting Google Drive links.
+  - On a phone, a tapped video opens straight in fullscreen (turned sideways when it was filmed in landscape), and arrows step through a concert's images and videos without leaving it.
 - **Discogs:** Checks Discogs for new vinyl releases of all artists you follow on Spotify.
   - A "Pick of the Day" suggests a random record from your own Discogs collection on every page load.
   - Every release card slides its record out of the sleeve on hover, drawn to look like the actual pressing (colour, marble, splatter, picture disc and many more).

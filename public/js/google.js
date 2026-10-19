@@ -282,6 +282,22 @@ window.MusicHub = window.MusicHub || {};
     }, Promise.resolve([]));
   }
 
+  /**
+   * A video's picture size, as Drive reports it: { width, height }, already
+   * turned the way it plays (a phone video filmed upright comes out taller
+   * than wide). Null while Drive is still processing it.
+   */
+  function getVideoSize(fileId) {
+    return driveFetch(DRIVE_FILES_URL + '/' + encodeURIComponent(fileId) + '?fields=videoMediaMetadata')
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (file) {
+        var meta = file.videoMediaMetadata;
+        return meta && meta.width && meta.height ? { width: meta.width, height: meta.height } : null;
+      });
+  }
+
   /** A Drive file's content, as text. */
   function readDriveFile(fileId) {
     return driveFetch(DRIVE_FILES_URL + '/' + encodeURIComponent(fileId) + '?alt=media')
@@ -350,5 +366,6 @@ window.MusicHub = window.MusicHub || {};
     deleteDriveFile: deleteDriveFile,
     findFolder: findFolder,
     listChildren: listChildren,
+    getVideoSize: getVideoSize,
   };
 })(window.MusicHub);

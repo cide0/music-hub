@@ -2648,7 +2648,7 @@ textarea.text-input {
   }
 }
 
-/* The viewer fills the screen, its buttons floating in the top-left corner
+/* The viewer fills the screen, its X floating in the top-left corner
    (Drive keeps its own in the top-right one). The embed is sized and scaled
    from the top-left corner by fitViewerFrame. */
 .media-viewer {
@@ -2703,10 +2703,31 @@ textarea.text-input {
   height: 20px;
 }
 
-.media-viewer__button[hidden],
-.media-viewer__button[aria-pressed="true"] .media-viewer__enter,
-.media-viewer__button[aria-pressed="false"] .media-viewer__exit {
+/* Previous / next: round, halfway down either edge. Hidden for a lone item,
+   faded at either end. */
+.media-viewer__arrow {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  translate: 0 -50%;
+}
+
+.media-viewer__arrow--previous {
+  left: 0.75rem;
+}
+
+.media-viewer__arrow--next {
+  right: 0.75rem;
+}
+
+.media-viewer__arrow[hidden] {
   display: none;
+}
+
+.media-viewer__arrow:disabled {
+  opacity: 0.35;
 }
 
 /* Everything that belongs at the right-hand end of a toolbar, kept together

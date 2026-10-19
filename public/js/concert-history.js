@@ -1040,39 +1040,124 @@ window.MusicHub = window.MusicHub || {};
    * nothing can hover): a swipe on it scrolls the page, and a tap opens the
    * item large in the viewer - an image to zoom and pan, a video to play
    * with its controls below the picture. Under the heart and the X, which
-   * stay usable.
+   * stay usable. `sequence` lists what the viewer's arrows step through.
    */
-  function addTouchCover(wrapper, kind, embedSrc) {
+  function addTouchCover(wrapper, kind, embedSrc, sequence) {
     var cover = button('media-item__cover', '', function () {
-      openViewer(kind, embedSrc);
+      openViewer(kind, embedSrc, sequence);
     });
     cover.setAttribute('aria-label', kind === 'images' ? 'Open image' : 'Play video');
     wrapper.appendChild(cover);
   }
 
+  // What the open viewer shows, and what its arrows step through: a
+  // function returning [{ kind, embedSrc }], read again on every step so a
+  // sort, filter or removal since is followed.
+  var viewerShowing = null;
+  var viewerSequence = null;
+
+  /** A concert's images, then its videos, as its page shows them. */
+  function concertSequence() {
+    var concert = findConcert(findArtist(data, currentView.artistId), currentView.concertId);
+    if (!concert) {
+      return [];
+    }
+    return ['images', 'videos'].reduce(function (all, kind) {
+      return all.concat(orderedMedia(concert[kind], mediaOrder, mediaFavoritesOnly).map(function (item) {
+        return { kind: kind, embedSrc: item.embedSrc };
+      }));
+    }, []);
+  }
+
+  /** One concert's favorites, as their group in Favorites shows them. */
+  function favoritesSequence(group) {
+    return function () {
+      var found = collectFavorites(data).filter(function (other) {
+        return other.artistId === group.artistId && other.concertId === group.concertId;
+      })[0];
+      return found ? found.items.map(function (entry) {
+        return { kind: entry.kind, embedSrc: entry.item.embedSrc };
+      }) : [];
+    };
+  }
+
   /**
-   * The viewer, with the item's own embed - taken out again on close. Drive's
-   * own fullscreen would only stretch its player to the screen, into the
-   * layout fitViewerFrame steers clear of, so where the page can go
-   * fullscreen itself the embed isn't allowed to (Drive then leaves its
-   * button out) and the viewer's own button takes the whole viewer there.
+   * The viewer, with the item's own embed - taken out again on close. A
+   * video goes straight on to fullscreen, still inside the tap that opened
+   * it (a page may only go fullscreen from one). Where it can't (an iPhone)
+   * the viewer is as far as a video goes.
    */
-  function openViewer(kind, embedSrc) {
-    var ownFullscreen = kind === 'videos' && !!document.fullscreenEnabled;
+  function openViewer(kind, embedSrc, sequence) {
+    viewerSequence = sequence || null;
+    els.viewer.showModal();
+    showInViewer(kind, embedSrc);
+    if (kind === 'videos' && document.fullscreenEnabled) {
+      enterViewerFullscreen();
+    }
+  }
+
+  /**
+   * Swaps the viewer's embed. Drive's own fullscreen would only stretch its
+   * player to the screen, into the layout fitViewerFrame steers clear of,
+   * so where the page can go fullscreen itself a video isn't allowed to
+   * (Drive then leaves its button out).
+   */
+  function showInViewer(kind, embedSrc) {
     var frame = document.createElement('iframe');
     frame.src = embedSrc;
     frame.allow = 'autoplay';
-    if (!ownFullscreen) {
+    if (kind !== 'videos' || !document.fullscreenEnabled) {
       frame.setAttribute('allowfullscreen', '');
     }
     frame.title = mediaTitle(kind);
     frame.dataset.kind = kind;
     els.viewer.setAttribute('aria-label', frame.title);
-    els.viewerFullscreen.hidden = !ownFullscreen;
     els.viewerFrame.textContent = '';
     els.viewerFrame.appendChild(frame);
-    els.viewer.showModal();
+    viewerShowing = { kind: kind, embedSrc: embedSrc };
     fitViewerFrame();
+    paintViewerArrows();
+  }
+
+  function viewerPosition() {
+    var list = viewerSequence ? viewerSequence() : [];
+    var index = -1;
+    list.forEach(function (entry, i) {
+      if (viewerShowing && entry.embedSrc === viewerShowing.embedSrc) {
+        index = i;
+      }
+    });
+    return { list: list, index: index };
+  }
+
+  /** No arrows for a lone item; at either end, that end's arrow is off. */
+  function paintViewerArrows() {
+    var position = viewerPosition();
+    var lone = position.index === -1 || position.list.length < 2;
+    els.viewerPrevious.hidden = lone;
+    els.viewerNext.hidden = lone;
+    els.viewerPrevious.disabled = position.index <= 0;
+    els.viewerNext.disabled = position.index >= position.list.length - 1;
+  }
+
+  /**
+   * The previous (-1) or next (1) item, without leaving fullscreen: the
+   * phone turns for a landscape video and is let go for anything else. A
+   * video reached from the plain viewer (an image opened there) goes on to
+   * fullscreen, as it would from its card.
+   */
+  function stepViewer(step) {
+    var position = viewerPosition();
+    var target = position.list[position.index + step];
+    if (position.index === -1 || !target) {
+      return;
+    }
+    showInViewer(target.kind, target.embedSrc);
+    if (document.fullscreenElement === els.viewerStage) {
+      turnForViewer();
+    } else if (target.kind === 'videos' && document.fullscreenEnabled) {
+      enterViewerFullscreen();
+    }
   }
 
   /*
@@ -1112,23 +1197,82 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /*
-   * Fullscreen turns a phone on its side straight away, the way a video app
-   * does - a phone only lets a page lock the orientation while it's
-   * fullscreen, and lets go of the lock again when it leaves it. Where it
-   * can't be locked (a desktop, an iPhone) the screen just stays as it is.
+   * The embed is Drive's page, so the video's own size can't be read from
+   * it - Drive's file info has it (with Folder access), else the shape of
+   * Drive's thumbnail of it does. 'landscape', 'portrait' or null when
+   * neither is to be had; asked once per video and page load.
    */
-  function toggleViewerFullscreen() {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-      return;
+  var videoShapes = {};
+
+  function thumbnailSize(fileId) {
+    return new Promise(function (resolve) {
+      var image = new Image();
+      image.onload = function () {
+        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      };
+      image.onerror = function () {
+        resolve(null);
+      };
+      image.src = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fileId) + '&sz=w320';
+    });
+  }
+
+  function videoShape(embedSrc) {
+    var match = /\/file\/d\/([\w-]+)\//.exec(embedSrc);
+    if (!match) {
+      return Promise.resolve(null);
     }
-    els.viewerStage.requestFullscreen()
-      .then(function () {
-        if (screen.orientation && screen.orientation.lock) {
-          return screen.orientation.lock('landscape');
+    var fileId = match[1];
+    if (!videoShapes[fileId]) {
+      var google = MusicHub.google;
+      var fromDrive = google.hasFolderAccess()
+        ? google.getVideoSize(fileId).catch(function () {
+          return null;
+        })
+        : Promise.resolve(null);
+      videoShapes[fileId] = fromDrive.then(function (size) {
+        return size || thumbnailSize(fileId);
+      }).then(function (size) {
+        if (!size || !size.width || !size.height) {
+          return null;
         }
-      })
+        return size.width > size.height ? 'landscape' : 'portrait';
+      });
+    }
+    return videoShapes[fileId];
+  }
+
+  /*
+   * Fullscreen turns a phone on its side straight away for a landscape
+   * video, the way a video app does - an upright one, an image (or a video
+   * whose shape isn't known) fills the screen as the phone is held. A phone
+   * only lets a page lock the orientation while it's fullscreen, and lets
+   * go of the lock again when it leaves it. Where it can't be locked (a
+   * desktop) the screen just stays as it is. Leaving fullscreen closes the
+   * viewer.
+   */
+  function enterViewerFullscreen() {
+    els.viewerStage.requestFullscreen()
+      .then(turnForViewer)
       .catch(function () {});
+  }
+
+  function turnForViewer() {
+    var showing = viewerShowing;
+    var shape = showing.kind === 'videos' ? videoShape(showing.embedSrc) : Promise.resolve(null);
+    return shape.then(function (found) {
+      // Stepped on (or out) while the shape was still being asked.
+      if (viewerShowing !== showing || document.fullscreenElement !== els.viewerStage
+        || !screen.orientation) {
+        return;
+      }
+      if (found === 'landscape') {
+        return screen.orientation.lock && screen.orientation.lock('landscape');
+      }
+      if (screen.orientation.unlock) {
+        screen.orientation.unlock();
+      }
+    }).catch(function () {});
   }
 
   function buildMediaItem(kind, item) {
@@ -1142,7 +1286,7 @@ window.MusicHub = window.MusicHub || {};
     frame.setAttribute('allowfullscreen', '');
     frame.title = mediaTitle(kind);
     wrapper.appendChild(frame);
-    addTouchCover(wrapper, kind, item.embedSrc);
+    addTouchCover(wrapper, kind, item.embedSrc, concertSequence);
 
     var heart = button('icon-button media-item__favorite', '', function () {
       var favorite = toggleFavorite(data, currentView.artistId, currentView.concertId, kind, item.id);
@@ -1313,7 +1457,7 @@ window.MusicHub = window.MusicHub || {};
     frame.setAttribute('allowfullscreen', '');
     frame.title = mediaTitle(entry.kind);
     wrapper.appendChild(frame);
-    addTouchCover(wrapper, entry.kind, entry.item.embedSrc);
+    addTouchCover(wrapper, entry.kind, entry.item.embedSrc, favoritesSequence(group));
 
     var heart = button('icon-button media-item__favorite', '', function () {
       toggleFavorite(data, group.artistId, group.concertId, entry.kind, entry.item.id);
@@ -1893,19 +2037,28 @@ window.MusicHub = window.MusicHub || {};
     els.viewer = document.getElementById('media-viewer');
     els.viewerFrame = document.getElementById('media-viewer-frame');
     els.viewerStage = document.getElementById('media-viewer-stage');
-    els.viewerFullscreen = document.getElementById('media-viewer-fullscreen');
+    els.viewerPrevious = document.getElementById('media-viewer-previous');
+    els.viewerNext = document.getElementById('media-viewer-next');
+    els.viewerPrevious.addEventListener('click', function () {
+      stepViewer(-1);
+    });
+    els.viewerNext.addEventListener('click', function () {
+      stepViewer(1);
+    });
     els.viewer.addEventListener('close', function () {
       els.viewerFrame.textContent = '';
+      viewerShowing = null;
+      viewerSequence = null;
       if (document.fullscreenElement === els.viewerStage) {
         document.exitFullscreen();
       }
     });
-    els.viewerFullscreen.addEventListener('click', toggleViewerFullscreen);
-    document.addEventListener('fullscreenchange', function () {
-      var full = document.fullscreenElement === els.viewerStage;
-      els.viewerFullscreen.setAttribute('aria-pressed', String(full));
-      els.viewerFullscreen.setAttribute('aria-label', full ? 'Exit fullscreen' : 'Fullscreen');
-      els.viewerFullscreen.title = full ? 'Exit fullscreen' : 'Fullscreen';
+    // Out of fullscreen (the phone's back gesture) is out of the video too.
+    // Only the stage's own - an image's Drive fullscreen bubbles up here too.
+    els.viewerStage.addEventListener('fullscreenchange', function (event) {
+      if (event.target === els.viewerStage && !document.fullscreenElement && els.viewer.open) {
+        els.viewer.close();
+      }
     });
     // Turning the phone, or going fullscreen, resizes the viewer.
     new ResizeObserver(fitViewerFrame).observe(els.viewerFrame);

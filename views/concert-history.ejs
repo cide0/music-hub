@@ -147,9 +147,10 @@
 
         <!-- Touch screens: an image or video opened from its card, filling the
              screen - Drive's viewer to pan and zoom, or its player laid out
-             to fit (concert-history.js openViewer / fitViewerFrame). The X
-             and the fullscreen button sit top left, clear of Drive's own
-             button in the top-right corner. -->
+             to fit and taken straight on to fullscreen (concert-history.js
+             openViewer / fitViewerFrame). The X sits top left, clear of
+             Drive's own button in the top-right corner; the arrows halfway
+             down either side step through the concert's items. -->
         <dialog class="modal media-viewer" id="media-viewer" aria-label="Image from Google Drive">
           <!-- What goes fullscreen: a <dialog> itself can't. -->
           <div class="media-viewer__stage" id="media-viewer-stage">
@@ -160,16 +161,19 @@
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
-              <button type="button" class="icon-button media-viewer__button" id="media-viewer-fullscreen"
-                      aria-pressed="false" aria-label="Fullscreen" title="Fullscreen" hidden>
-                <svg class="media-viewer__enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
-                </svg>
-                <svg class="media-viewer__exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
-                </svg>
-              </button>
             </div>
+            <button type="button" class="icon-button media-viewer__button media-viewer__arrow media-viewer__arrow--previous"
+                    id="media-viewer-previous" aria-label="Previous" title="Previous" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <button type="button" class="icon-button media-viewer__button media-viewer__arrow media-viewer__arrow--next"
+                    id="media-viewer-next" aria-label="Next" title="Next" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
           </div>
         </dialog>
 
