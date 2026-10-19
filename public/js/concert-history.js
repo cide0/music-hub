@@ -1042,19 +1042,27 @@ window.MusicHub = window.MusicHub || {};
    * with its controls below the picture. Under the heart and the X, which
    * stay usable. `sequence` lists what the viewer's arrows step through.
    */
-  function addTouchCover(wrapper, kind, embedSrc, sequence) {
+  function addTouchCover(wrapper, entry, sequence) {
     var cover = button('media-item__cover', '', function () {
-      openViewer(kind, embedSrc, sequence);
+      openViewer(entry, sequence);
     });
-    cover.setAttribute('aria-label', kind === 'images' ? 'Open image' : 'Play video');
+    cover.setAttribute('aria-label', entry.kind === 'images' ? 'Open image' : 'Play video');
     wrapper.appendChild(cover);
   }
 
+  /** What the viewer needs of an item: its embed, and where to heart it. */
+  function viewerEntry(kind, item, artistId, concertId) {
+    return { kind: kind, embedSrc: item.embedSrc, id: item.id, artistId: artistId, concertId: concertId };
+  }
+
   // What the open viewer shows, and what its arrows step through: a
-  // function returning [{ kind, embedSrc }], read again on every step so a
-  // sort, filter or removal since is followed.
+  // function returning viewerEntry()s, read again on every step so a sort,
+  // filter or removal since is followed. viewerIndex is where the shown
+  // item last stood in it - for when it has dropped out since (un-hearted
+  // in Favorites), so the arrows still step on from there.
   var viewerShowing = null;
   var viewerSequence = null;
+  var viewerIndex = null;
 
   /** A concert's images, then its videos, as its page shows them. */
   function concertSequence() {
@@ -1064,7 +1072,7 @@ window.MusicHub = window.MusicHub || {};
     }
     return ['images', 'videos'].reduce(function (all, kind) {
       return all.concat(orderedMedia(concert[kind], mediaOrder, mediaFavoritesOnly).map(function (item) {
-        return { kind: kind, embedSrc: item.embedSrc };
+        return viewerEntry(kind, item, currentView.artistId, currentView.concertId);
       }));
     }, []);
   }
@@ -1076,7 +1084,7 @@ window.MusicHub = window.MusicHub || {};
         return other.artistId === group.artistId && other.concertId === group.concertId;
       })[0];
       return found ? found.items.map(function (entry) {
-        return { kind: entry.kind, embedSrc: entry.item.embedSrc };
+        return viewerEntry(entry.kind, entry.item, group.artistId, group.concertId);
       }) : [];
     };
   }
@@ -1087,11 +1095,11 @@ window.MusicHub = window.MusicHub || {};
    * it (a page may only go fullscreen from one). Where it can't (an iPhone)
    * the viewer is as far as a video goes.
    */
-  function openViewer(kind, embedSrc, sequence) {
+  function openViewer(entry, sequence) {
     viewerSequence = sequence || null;
     els.viewer.showModal();
-    showInViewer(kind, embedSrc);
-    if (kind === 'videos' && document.fullscreenEnabled) {
+    showInViewer(entry);
+    if (entry.kind === 'videos' && document.fullscreenEnabled) {
       enterViewerFullscreen();
     }
   }
@@ -1102,42 +1110,109 @@ window.MusicHub = window.MusicHub || {};
    * so where the page can go fullscreen itself a video isn't allowed to
    * (Drive then leaves its button out).
    */
-  function showInViewer(kind, embedSrc) {
+  function showInViewer(entry) {
     var frame = document.createElement('iframe');
-    frame.src = embedSrc;
+    frame.src = entry.embedSrc;
     frame.allow = 'autoplay';
-    if (kind !== 'videos' || !document.fullscreenEnabled) {
+    if (entry.kind !== 'videos' || !document.fullscreenEnabled) {
       frame.setAttribute('allowfullscreen', '');
     }
-    frame.title = mediaTitle(kind);
-    frame.dataset.kind = kind;
+    frame.title = mediaTitle(entry.kind);
+    frame.dataset.kind = entry.kind;
     els.viewer.setAttribute('aria-label', frame.title);
     els.viewerFrame.textContent = '';
     els.viewerFrame.appendChild(frame);
-    viewerShowing = { kind: kind, embedSrc: embedSrc };
+    viewerShowing = entry;
+    viewerIndex = null;
     fitViewerFrame();
+    paintViewerArrows();
+    paintViewerHeart();
+  }
+
+  /** The shown item as stored now - the Drive sync may have swapped `data`. */
+  function viewerItem() {
+    var concert = viewerShowing
+      && findConcert(findArtist(data, viewerShowing.artistId), viewerShowing.concertId);
+    return concert ? concert[viewerShowing.kind].filter(function (item) {
+      return item.id === viewerShowing.id;
+    })[0] || null : null;
+  }
+
+  /** The heart next to the X, as the item's own on its card. */
+  function paintViewerHeart() {
+    var item = viewerItem();
+    els.viewerFavorite.hidden = !item;
+    paintHeart(els.viewerFavorite, !!(item && item.favorite));
+  }
+
+  /**
+   * Hearts the shown item (or takes it back), with the same burst as on its
+   * card, and brings its card on the page in line: there it's repainted,
+   * in Favorites it leaves (or comes back). The viewer keeps showing it.
+   */
+  function toggleViewerFavorite() {
+    var showing = viewerShowing;
+    var favorite = toggleFavorite(data, showing.artistId, showing.concertId, showing.kind, showing.id);
+    if (favorite === null) {
+      return;
+    }
+    save();
+    paintHeart(els.viewerFavorite, favorite);
+    if (favorite) {
+      playHeartBurst(els.viewerStage);
+    }
+
+    var node = mediaNodes[showing.kind].filter(function (other) {
+      return other.item.id === showing.id;
+    })[0];
+    if (node && currentView.view === 'favorites') {
+      node.wrapper.hidden = !favorite;
+      refreshFavoritesChrome();
+    } else if (node) {
+      paintHeart(node.wrapper.querySelector('.media-item__favorite'), favorite);
+      applyMediaView();
+    }
     paintViewerArrows();
   }
 
+  /**
+   * Where the shown item stands in the sequence: its index, halfway between
+   * its old neighbours once it has dropped out, null when never in it.
+   */
   function viewerPosition() {
     var list = viewerSequence ? viewerSequence() : [];
-    var index = -1;
+    var index = null;
     list.forEach(function (entry, i) {
       if (viewerShowing && entry.embedSrc === viewerShowing.embedSrc) {
         index = i;
       }
     });
+    if (index !== null) {
+      viewerIndex = index;
+    } else if (viewerIndex !== null) {
+      index = viewerIndex - 0.5;
+    }
     return { list: list, index: index };
+  }
+
+  /** The item a step of -1 (previous) or 1 (next) leads to, if any. */
+  function viewerNeighbour(position, step) {
+    if (position.index === null) {
+      return null;
+    }
+    var at = step > 0 ? Math.floor(position.index) + 1 : Math.ceil(position.index) - 1;
+    return position.list[at] || null;
   }
 
   /** No arrows for a lone item; at either end, that end's arrow is off. */
   function paintViewerArrows() {
     var position = viewerPosition();
-    var lone = position.index === -1 || position.list.length < 2;
-    els.viewerPrevious.hidden = lone;
-    els.viewerNext.hidden = lone;
-    els.viewerPrevious.disabled = position.index <= 0;
-    els.viewerNext.disabled = position.index >= position.list.length - 1;
+    var previous = viewerNeighbour(position, -1);
+    var next = viewerNeighbour(position, 1);
+    els.viewerPrevious.hidden = !previous && !next;
+    els.viewerNext.hidden = !previous && !next;
+    els.viewerPrevious.disabled = !previous;
+    els.viewerNext.disabled = !next;
   }
 
   /**
@@ -1147,12 +1222,11 @@ window.MusicHub = window.MusicHub || {};
    * fullscreen, as it would from its card.
    */
   function stepViewer(step) {
-    var position = viewerPosition();
-    var target = position.list[position.index + step];
-    if (position.index === -1 || !target) {
+    var target = viewerNeighbour(viewerPosition(), step);
+    if (!target) {
       return;
     }
-    showInViewer(target.kind, target.embedSrc);
+    showInViewer(target);
     if (document.fullscreenElement === els.viewerStage) {
       turnForViewer();
     } else if (target.kind === 'videos' && document.fullscreenEnabled) {
@@ -1286,7 +1360,7 @@ window.MusicHub = window.MusicHub || {};
     frame.setAttribute('allowfullscreen', '');
     frame.title = mediaTitle(kind);
     wrapper.appendChild(frame);
-    addTouchCover(wrapper, kind, item.embedSrc, concertSequence);
+    addTouchCover(wrapper, viewerEntry(kind, item, currentView.artistId, currentView.concertId), concertSequence);
 
     var heart = button('icon-button media-item__favorite', '', function () {
       var favorite = toggleFavorite(data, currentView.artistId, currentView.concertId, kind, item.id);
@@ -1438,6 +1512,8 @@ window.MusicHub = window.MusicHub || {};
       var grid = el('div', 'media-grid');
       group.items.forEach(function (entry) {
         var wrapper = buildFavoriteItem(group, entry);
+        // So the viewer's heart can find it again.
+        mediaNodes[entry.kind].push({ item: entry.item, wrapper: wrapper });
         grid.appendChild(wrapper);
       });
       section.appendChild(grid);
@@ -1457,7 +1533,8 @@ window.MusicHub = window.MusicHub || {};
     frame.setAttribute('allowfullscreen', '');
     frame.title = mediaTitle(entry.kind);
     wrapper.appendChild(frame);
-    addTouchCover(wrapper, entry.kind, entry.item.embedSrc, favoritesSequence(group));
+    addTouchCover(wrapper, viewerEntry(entry.kind, entry.item, group.artistId, group.concertId),
+      favoritesSequence(group));
 
     var heart = button('icon-button media-item__favorite', '', function () {
       toggleFavorite(data, group.artistId, group.concertId, entry.kind, entry.item.id);
@@ -1503,8 +1580,9 @@ window.MusicHub = window.MusicHub || {};
     if (!remaining) {
       els.favoritesEmpty.textContent =
         'No favorites yet — tap the heart on an image or video to add one.';
-      els.favoritesEmpty.hidden = false;
     }
+    // Hearted again in the viewer, an item brings its group back.
+    els.favoritesEmpty.hidden = remaining > 0;
   }
 
   /**
@@ -2039,6 +2117,8 @@ window.MusicHub = window.MusicHub || {};
     els.viewerStage = document.getElementById('media-viewer-stage');
     els.viewerPrevious = document.getElementById('media-viewer-previous');
     els.viewerNext = document.getElementById('media-viewer-next');
+    els.viewerFavorite = document.getElementById('media-viewer-favorite');
+    els.viewerFavorite.addEventListener('click', toggleViewerFavorite);
     els.viewerPrevious.addEventListener('click', function () {
       stepViewer(-1);
     });

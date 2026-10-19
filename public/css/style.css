@@ -2705,6 +2705,15 @@ textarea.text-input {
   height: 20px;
 }
 
+/* The item's heart, next to the X: lit like a card's when it's on. */
+.media-viewer__favorite[hidden] {
+  display: none;
+}
+
+.media-viewer__favorite .media-item__heart {
+  stroke-width: 2;
+}
+
 /* Previous / next: round, halfway down either edge. Hidden for a lone item,
    faded at either end. */
 .media-viewer__arrow {

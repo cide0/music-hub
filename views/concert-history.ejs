@@ -148,8 +148,8 @@
         <!-- Touch screens: an image or video opened from its card, filling the
              screen - Drive's viewer to pan and zoom, or its player laid out
              to fit and taken straight on to fullscreen (concert-history.js
-             openViewer / fitViewerFrame). The X sits top left, clear of
-             Drive's own button in the top-right corner; the arrows halfway
+             openViewer / fitViewerFrame). The X and the heart sit top left,
+             clear of Drive's own button in the top-right corner; the arrows halfway
              down either side step through the concert's items. -->
         <dialog class="modal media-viewer" id="media-viewer" aria-label="Image from Google Drive">
           <!-- What goes fullscreen: a <dialog> itself can't. -->
@@ -161,6 +161,9 @@
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
+              <!-- Filled in by paintViewerHeart, like a card's heart. -->
+              <button type="button" class="icon-button media-viewer__button media-viewer__favorite"
+                      id="media-viewer-favorite" hidden></button>
             </div>
             <button type="button" class="icon-button media-viewer__button media-viewer__arrow media-viewer__arrow--previous"
                     id="media-viewer-previous" aria-label="Previous" title="Previous" hidden>
