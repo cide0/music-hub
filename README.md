@@ -27,7 +27,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Click on an artist to open them in the Spotify app.
 - **Setlists:** Searches setlist.fm for the latest setlist of an artist in a city and adds the songs to one of your Spotify playlists.
   - Songs are matched with Spotify tracks automatically, the ones that couldn't be matched can be picked by hand or skipped.
-  - Past concerts you marked as attended on the Concerts page are listed as shortcuts until their setlist has been added to a playlist.
+  - Past concerts you marked as attended on the Concerts page are listed as shortcuts, with the artist’s Spotify picture, until their setlist has been added to a playlist.
 - **Gallery:** A gallery of the concerts you went to, sorted into artist and concert folders, with your images and videos from Google Drive.
   - Fills itself from a "Concerts" folder in your Google Drive (or any other folder set in Settings) when you press its refresh button.
   - The artist folders can be searched by name.

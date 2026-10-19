@@ -168,8 +168,37 @@ window.MusicHub = window.MusicHub || {};
       });
   }
 
+  /**
+   * The followed artists' Spotify pictures by folded name, so a row shows
+   * its artist's - read at render time, so it follows Spotify's.
+   */
+  function artistImages() {
+    var images = {};
+    (MusicHub.followedArtists.list() || []).forEach(function (artist) {
+      if (artist.imageUrl) {
+        images[fold(artist.name)] = artist.imageUrl;
+      }
+    });
+    return images;
+  }
+
+  /** The artist's picture, or the app's accent circle with their initial. */
+  function artistAvatar(artist, images) {
+    var url = images[fold(artist)];
+    if (!url) {
+      return el('span', 'picker__avatar picker__avatar--fallback past-show__avatar',
+        (artist || '?').charAt(0).toUpperCase());
+    }
+    var image = el('img', 'picker__avatar past-show__avatar');
+    image.src = url;
+    image.alt = '';
+    image.loading = 'lazy';
+    return image;
+  }
+
   function renderPastShows() {
     var shows = pastShows();
+    var images = artistImages();
     els.pastList.textContent = '';
 
     shows.forEach(function (concert) {
@@ -178,6 +207,7 @@ window.MusicHub = window.MusicHub || {};
       concert.artists.forEach(function (artist) {
         var when = formatDate(concert.localDate) + ' · ' + place(concert.venueName, concert.city);
         var item = el('li', 'past-show');
+        item.appendChild(artistAvatar(artist, images));
         var info = el('div', 'past-show__info');
         info.appendChild(el('span', 'past-show__artists', artist));
         info.appendChild(el('span', 'past-show__meta', when));
@@ -1508,6 +1538,14 @@ window.MusicHub = window.MusicHub || {};
       } else if ((key === 'z' && event.shiftKey) || key === 'y') {
         event.preventDefault();
         redo();
+      }
+    });
+
+    // The navbar's refresh brings new artist pictures; a running search
+    // keeps its rows as they are.
+    document.addEventListener(MusicHub.followedArtists.CHANGE_EVENT, function () {
+      if (!searching) {
+        renderPastShows();
       }
     });
 
