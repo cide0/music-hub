@@ -42,6 +42,8 @@ There is no database, so everything the app saves is stored in your browser. On 
 - **Store:** Spend the coins you earn around the app on username styles, a golden record player, Mystery Vinyls or extra spins on the Wheel of Fortune.
 - **Collection:** Your collection of unboxed vinyls. Press **Play** on any of them to put it on the record player and start the album on your Spotify.
   - Shows the rating you gave each album on the Albums page (click it to edit it), and can be sorted by date or rating.
+  - The record player's power button pauses and resumes the album on Spotify. Pausing or resuming in Spotify itself switches the record player off or on too.
+  - The progress bar under the record shows the time played and the song's length. Click or drag on it to jump to that part of the song.
   - Add the song that's currently playing to your playlists right from the record player.
   - Playlists can be set to rotate, so they only keep your newest songs.
 - **Settings:** Export and import your data, choose the Concerts page's cities, manage the Google login and Drive sync, set your Gallery folder, Spotify playlists and Discogs username, and turn the sound effects on or off.

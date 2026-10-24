@@ -45,6 +45,10 @@ window.MusicHub = window.MusicHub || {};
   var SPIN_DOWN_MS = 1400;
   // Switched on, the platter gets going before the arm swings over.
   var ARM_ON_DELAY_MS = 350;
+  // The time played under the progress groove moves on this often; an
+  // arrow key on the groove seeks this far.
+  var TIME_TICK_MS = 250;
+  var SEEK_KEY_MS = 5000;
   // An ease-out that starts at twice its average speed (easeOutQuad), so a
   // spin-down covering half the ground of a full-speed turn starts at
   // exactly full speed.
@@ -106,8 +110,7 @@ window.MusicHub = window.MusicHub || {};
    * headshell, nearly in line with it. Drawn over the arm's whole box - 10
    * units across, 74.14 down (the box is always 7.414 times as tall as
    * it's wide, style.css) - from inside the counterweight (y -4.45) to just
-   * inside the headshell's top (5, 60.8), where the straight rod ended, so
-   * the headshell and the needle stay where they were. A dark edge, the
+   * inside the headshell's top (5, 61.5). A dark edge, the
    * metal and a bright line down its middle, for a round tube.
    */
   function armRod() {
@@ -119,7 +122,7 @@ window.MusicHub = window.MusicHub || {};
     svg.setAttribute('aria-hidden', 'true');
     ['edge', 'metal', 'shine'].forEach(function (layer) {
       var path = document.createElementNS(ns, 'path');
-      path.setAttribute('d', 'M5 -4.45 L5 16 C5 24 8.2 27 8.2 36 C8.2 46 6.6 56 5 60.8');
+      path.setAttribute('d', 'M5 -4.45 L5 16 C5 24 8.2 27 8.2 36 C8.2 46 6.6 56.7 5 61.5');
       path.setAttribute('class', 'turntable__rod-' + layer);
       svg.appendChild(path);
     });
@@ -131,20 +134,40 @@ window.MusicHub = window.MusicHub || {};
    * glowing fill running along it (setProgress). The fill slides in from
    * the left inside a rounded window (translate - composited, and its
    * leading end stays round); the window's glow is a filter, so it lights
-   * up round the fill alone.
+   * up round the fill alone. Under it, the time played and the song's
+   * length, once setProgress knows the length. Made seekable
+   * (setSeekable), it's a slider: clicked, dragged or moved with the arrow
+   * keys, it hands the point picked to `options.onSeek`.
    */
   function progressBar() {
     var bar = el('div', 'turntable__progress');
-    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('role', 'slider');
     bar.setAttribute('aria-label', 'Song progress');
     bar.setAttribute('aria-valuemin', '0');
     bar.setAttribute('aria-valuemax', '100');
     bar.setAttribute('aria-valuenow', '0');
+    bar.setAttribute('aria-disabled', 'true');
     var windowEl = el('span', 'turntable__progress-window');
     var fill = el('span', 'turntable__progress-fill');
     windowEl.appendChild(fill);
     bar.appendChild(windowEl);
-    return { bar: bar, fill: fill };
+    var times = el('div', 'turntable__times');
+    times.setAttribute('aria-hidden', 'true');
+    times.hidden = true;
+    var played = el('span', 'turntable__time');
+    var length = el('span', 'turntable__time');
+    times.appendChild(played);
+    times.appendChild(length);
+    return { bar: bar, fill: fill, times: times, played: played, length: length };
+  }
+
+  /** `ms` as a clock: 3:07, or 1:02:45 past an hour. */
+  function clock(ms) {
+    var seconds = Math.max(0, Math.floor(ms / 1000));
+    var hours = Math.floor(seconds / 3600);
+    var minutes = Math.floor(seconds / 60) % 60;
+    var rest = ('0' + (seconds % 60)).slice(-2);
+    return hours ? hours + ':' + ('0' + minutes).slice(-2) + ':' + rest : minutes + ':' + rest;
   }
 
   function skipButton(forward) {
@@ -167,6 +190,8 @@ window.MusicHub = window.MusicHub || {};
    * of the song's progress groove under the record (setProgress) - on a
    * plinth taller at the bottom to hold them (--plinth-grow, style.css).
    * `options.fromEdge`: the needle starts nearer the record's rim.
+   * `options.onSeek`: called with the point of the song (0 to 1) picked
+   * on the progress groove, while it's seekable (setSeekable).
    */
   function build(vinyl, options) {
     var o = options || {};
@@ -203,6 +228,7 @@ window.MusicHub = window.MusicHub || {};
       progress = progressBar();
       plinth.appendChild(prev);
       plinth.appendChild(progress.bar);
+      plinth.appendChild(progress.times);
       plinth.appendChild(next);
     }
 
@@ -238,12 +264,20 @@ window.MusicHub = window.MusicHub || {};
     plinth.appendChild(arm);
 
     root.appendChild(plinth);
-    return {
+    var parts = {
       root: root, record: record, disc: record.querySelector('.vinyl__disc'), cap: cap,
       arm: arm, head: head, power: power, powerOn: powerOn, prev: prev, next: next,
       progressBar: progress && progress.bar, progressFill: progress && progress.fill,
-      // How far through its song the record is (setProgress).
+      progressTimes: progress && progress.times, timePlayed: progress && progress.played,
+      timeLength: progress && progress.length,
+      // How far through its song the record is (setProgress), and the
+      // timer moving the time played on. Whether the groove can be used
+      // to seek (setSeekable), and where it's being dragged to (0 to 1,
+      // null while it isn't).
       progress: null,
+      timeTimer: 0,
+      seekable: false,
+      seekTo: null,
       // Whether it's switched on, and the animations running each part -
       // replaced, not piled up, each time it's switched.
       on: false,
@@ -256,6 +290,109 @@ window.MusicHub = window.MusicHub || {};
       armFreeAt: 0,
       needleTimer: 0,
     };
+    if (progress && o.onSeek) {
+      wireSeeking(parts, o.onSeek);
+    }
+    return parts;
+  }
+
+  /**
+   * The progress groove as a slider, while it's seekable: a press on it
+   * picks that point, a drag carries it along (the fill and the time
+   * played following it), and letting go hands it to `onSeek` (0 to 1).
+   * The arrow keys move it SEEK_KEY_MS at a time, Home and End to either
+   * end of the song.
+   */
+  function wireSeeking(parts, onSeek) {
+    var bar = parts.progressBar;
+
+    function pick(event) {
+      var rect = bar.getBoundingClientRect();
+      parts.seekTo = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+      drawProgress(parts, parts.seekTo, 0);
+      showTime(parts, parts.seekTo);
+    }
+
+    function done(commit) {
+      if (parts.seekTo === null) {
+        return;
+      }
+      var fraction = parts.seekTo;
+      parts.seekTo = null;
+      bar.classList.remove('turntable__progress--seeking');
+      var before = parts.progress;
+      if (commit) {
+        onSeek(fraction);
+      }
+      // Not taken up (or let go of elsewhere): back to where the song is.
+      if (parts.progress === before) {
+        redrawProgress(parts);
+      }
+    }
+
+    bar.addEventListener('pointerdown', function (event) {
+      if (!parts.seekable || event.button !== 0 || !songLength(parts)) {
+        return;
+      }
+      event.preventDefault();
+      bar.setPointerCapture(event.pointerId);
+      bar.classList.add('turntable__progress--seeking');
+      pick(event);
+    });
+    bar.addEventListener('pointermove', function (event) {
+      if (parts.seekTo !== null && bar.hasPointerCapture(event.pointerId)) {
+        pick(event);
+      }
+    });
+    bar.addEventListener('pointerup', function () {
+      done(true);
+    });
+    bar.addEventListener('pointercancel', function () {
+      done(false);
+    });
+    bar.addEventListener('lostpointercapture', function () {
+      done(true);
+    });
+    bar.addEventListener('keydown', function (event) {
+      var lengthMs = songLength(parts);
+      if (!parts.seekable || !lengthMs) {
+        return;
+      }
+      var fraction = progressAt(parts, performance.now());
+      var step = SEEK_KEY_MS / lengthMs;
+      var keys = { ArrowRight: fraction + step, ArrowUp: fraction + step, ArrowLeft: fraction - step, ArrowDown: fraction - step, Home: 0, End: 1 };
+      if (!(event.key in keys)) {
+        return;
+      }
+      event.preventDefault();
+      onSeek(Math.min(1, Math.max(0, keys[event.key])));
+    });
+  }
+
+  /** The song's length in ms, as setProgress was told it - 0 when it wasn't. */
+  function songLength(parts) {
+    return (parts.progress && parts.progress.lengthMs) || 0;
+  }
+
+  /**
+   * Switches the progress groove's seeking on or off - a slider the
+   * pointer and the keyboard can use, or only a picture. Switched off
+   * mid-drag, the drag is dropped.
+   */
+  function setSeekable(parts, seekable) {
+    var bar = parts.progressBar;
+    if (!bar) {
+      return;
+    }
+    parts.seekable = seekable;
+    bar.classList.toggle('turntable__progress--seekable', seekable);
+    bar.setAttribute('aria-disabled', seekable ? 'false' : 'true');
+    bar.tabIndex = seekable ? 0 : -1;
+    if (!seekable && parts.seekTo !== null) {
+      parts.seekTo = null;
+      bar.classList.remove('turntable__progress--seeking');
+      redrawProgress(parts);
+    }
   }
 
   /** Cancels the animations last started on `key` and keeps `animations` instead. */
@@ -377,15 +514,65 @@ window.MusicHub = window.MusicHub || {};
    * The song's progress in the groove: `fraction` of the way through it,
    * moving on by `perMs` of it each ms (0 while paused) - filling up to
    * the end on its own, linearly, until it's told otherwise. Null empties
-   * it. Only for a turntable built with track buttons.
+   * it. With the song's length (`lengthMs`), the time played and the
+   * length show under it, the time played moving on with it. While the
+   * groove is being dragged, it's only taken note of. Only for a turntable
+   * built with track buttons.
    */
-  function setProgress(parts, fraction, perMs) {
+  function setProgress(parts, fraction, perMs, lengthMs) {
     if (!parts.progressFill) {
       return;
     }
     var from = fraction === null ? 0 : Math.min(1, Math.max(0, fraction));
     var speed = fraction === null ? 0 : perMs || 0;
-    parts.progress = { fraction: from, perMs: speed, at: performance.now() };
+    parts.progress = { fraction: from, perMs: speed, at: performance.now(), lengthMs: fraction === null ? 0 : lengthMs || 0 };
+    if (parts.seekTo === null) {
+      redrawProgress(parts);
+    }
+  }
+
+  /** The groove and the times under it, where setProgress last put them. */
+  function redrawProgress(parts) {
+    var progress = parts.progress;
+    var lengthMs = songLength(parts);
+    window.clearInterval(parts.timeTimer);
+    parts.progressTimes.hidden = !lengthMs;
+    if (!progress) {
+      drawProgress(parts, 0, 0);
+      return;
+    }
+    var from = progressAt(parts, performance.now());
+    drawProgress(parts, from, progress.perMs);
+    if (!lengthMs) {
+      parts.progressBar.removeAttribute('aria-valuetext');
+      return;
+    }
+    parts.timeLength.textContent = clock(lengthMs);
+    showTime(parts, from);
+    if (progress.perMs > 0) {
+      parts.timeTimer = window.setInterval(function () {
+        // Taken off the page: nothing left to tell.
+        if (!parts.root.isConnected) {
+          window.clearInterval(parts.timeTimer);
+        } else if (parts.seekTo === null) {
+          showTime(parts, progressAt(parts, performance.now()));
+        }
+      }, TIME_TICK_MS);
+    }
+  }
+
+  /** The time played, at `fraction` of the way through the song. */
+  function showTime(parts, fraction) {
+    var lengthMs = songLength(parts);
+    var played = clock(fraction * lengthMs);
+    if (parts.timePlayed.textContent !== played) {
+      parts.timePlayed.textContent = played;
+      parts.progressBar.setAttribute('aria-valuetext', played + ' of ' + clock(lengthMs));
+    }
+  }
+
+  /** The fill at `from` (0 to 1), moving on by `speed` of the song each ms. */
+  function drawProgress(parts, from, speed) {
     parts.progressBar.setAttribute('aria-valuenow', String(Math.round(from * 100)));
     var start = { translate: ((from - 1) * 100) + '% 0' };
     if (speed > 0 && from < 1) {
@@ -482,12 +669,16 @@ window.MusicHub = window.MusicHub || {};
       parts.powerOn.animate([{ opacity: 0 }, { opacity: 1 }], { delay: TIMING.spinFrom, duration: 150, fill: 'forwards' }),
     ]);
 
-    // The tonearm swings over raised, then lowers onto the record.
+    // The tonearm lifts off its rest, swings over raised, then lowers onto
+    // the record.
     var armDeg = needleDeg(parts, performance.now() + TIMING.armFrom + TIMING.armSwing);
     swap(parts, 'arm', armOnto(parts, ARM_REST_DEG, armDeg, TIMING.armFrom, TIMING.armSwing));
     swap(parts, 'head', [
+      parts.head.animate([{ scale: '1' }, { scale: '1.25' }], {
+        delay: TIMING.armFrom - TIMING.lower, duration: TIMING.lower, easing: 'ease-out', fill: 'forwards',
+      }),
       parts.head.animate([{ scale: '1.25' }, { scale: '1' }], {
-        delay: TIMING.needleAt - TIMING.lower, duration: TIMING.lower, easing: 'ease-in', fill: 'both',
+        delay: TIMING.needleAt - TIMING.lower, duration: TIMING.lower, easing: 'ease-in', fill: 'forwards',
       }),
     ]);
     markOn(parts, true);
@@ -509,7 +700,7 @@ window.MusicHub = window.MusicHub || {};
     // Off, the song stops where it is - the page's next look at Spotify
     // sets it going again once it's back on.
     if (!on && parts.progress) {
-      setProgress(parts, progressAt(parts, performance.now()), 0);
+      setProgress(parts, progressAt(parts, performance.now()), 0, songLength(parts));
     }
     var still = !!(options && options.still);
     var time = still ? 0 : 1;
@@ -548,14 +739,14 @@ window.MusicHub = window.MusicHub || {};
         }),
       ]);
     }
-    // Raised straight away; on, lowered again once the arm is over the record.
-    var head = [parts.head.animate([{ scale: headScale }, { scale: 1.25 }], { duration: TIMING.lower * time, easing: 'ease-out', fill: 'forwards' })];
-    if (on) {
-      head.push(parts.head.animate([{ scale: 1.25 }, { scale: 1 }], {
+    // Raised straight away, and lowered again once the arm is there: onto
+    // the record, or onto its rest.
+    swap(parts, 'head', [
+      parts.head.animate([{ scale: headScale }, { scale: 1.25 }], { duration: TIMING.lower * time, easing: 'ease-out', fill: 'forwards' }),
+      parts.head.animate([{ scale: 1.25 }, { scale: 1 }], {
         delay: (armDelay + armMs) * time, duration: TIMING.lower * time, easing: 'ease-in', fill: 'forwards',
-      }));
-    }
-    swap(parts, 'head', head);
+      }),
+    ]);
 
     if (still) {
       swap(parts, 'spin', []);
@@ -665,6 +856,7 @@ window.MusicHub = window.MusicHub || {};
     setPower: setPower,
     setNeedle: setNeedle,
     setProgress: setProgress,
+    setSeekable: setSeekable,
     playSounds: playSounds,
   };
 })(window.MusicHub);

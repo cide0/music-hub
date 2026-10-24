@@ -1670,16 +1670,21 @@ window.MusicHub = window.MusicHub || {};
     return (hours ? hours + 'h ' + pad(minutes) + 'm ' : minutes + 'm ') + pad(seconds % 60) + 's';
   }
 
+  /** Whether the header's countdown is switched off (its row kept, empty). */
+  function statusOff() {
+    return els.status.classList.contains('wheel__status--off');
+  }
+
   /**
    * The header's countdown, every second while the wheel is open - and the
    * whole wheel afresh once midnight has brought the free spin back.
    */
   function tick() {
-    if (spinsLeft(wallet.wheel()).free !== els.status.hidden) {
+    if (spinsLeft(wallet.wheel()).free !== statusOff()) {
       render();
       return;
     }
-    if (!els.status.hidden) {
+    if (!statusOff()) {
       els.timer.textContent = countdown();
     }
   }
@@ -1715,7 +1720,7 @@ window.MusicHub = window.MusicHub || {};
     }
 
     // Until the free spin comes back, a countdown in the header.
-    els.status.hidden = left.free;
+    els.status.classList.toggle('wheel__status--off', left.free);
     els.timer.textContent = left.free ? '' : countdown();
     els.status.setAttribute('title', left.free ? '' : 'Next free spin at midnight');
 

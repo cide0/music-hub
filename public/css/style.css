@@ -5773,6 +5773,52 @@ button.turntable__power:focus-visible {
   background: var(--color-purple-800);
 }
 
+/* Seekable (turntable.js setSeekable), the groove is a slider: pressed or
+   dragged, it picks the point of the song to go to. Its hit area reaches
+   well past the thin groove, for a finger. */
+.turntable__progress--seekable {
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.turntable__progress--seekable::before {
+  content: '';
+  position: absolute;
+  inset: -10px -4px;
+}
+
+.turntable__progress--seekable:hover,
+.turntable__progress--seeking {
+  filter: brightness(1.2);
+}
+
+.turntable__progress:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Under the groove: the time played at its left end and the song's
+   length at its right, lit like the buttons while it's on. */
+.turntable__times {
+  position: absolute;
+  top: calc(var(--transport-y) + max(7px, calc(3.4% / var(--plinth-grow, 1))) / 2 + 1%);
+  left: var(--transport-x);
+  width: var(--progress-width);
+  translate: -50% 0;
+  display: flex;
+  justify-content: space-between;
+  font-size: clamp(9px, calc((var(--reel-cover) + 1.5rem) * 0.038), 13px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--color-purple-200);
+  pointer-events: none;
+  transition: color 0.3s ease;
+}
+
+.turntable:not(:has(.turntable__power--on)) .turntable__times {
+  color: var(--color-text-muted);
+}
+
 .turntable__skip:hover:not(:disabled) {
   filter: brightness(1.25);
 }
@@ -5968,14 +6014,15 @@ button.turntable__power:focus-visible {
    ends, so the angle and the scaling never pull it off the rod. */
 .turntable__head {
   position: absolute;
-  top: 81%;
+  top: 82%;
   left: 50%;
   width: 50%;
   height: 17%;
   transform-origin: 50% 0;
   translate: -50% 0;
-  /* Part of the arm's geometry (.turntable__arm). */
-  rotate: 24deg;
+  /* Part of the arm's geometry (.turntable__arm): set for the least
+     tracking error over the record's inner third (under a degree). */
+  rotate: 25.2deg;
   border-radius: 3px 3px 22% 22% / 3px 3px 9% 9%;
   /* Lit from its edges in, like a bent plate catching the light. */
   background: linear-gradient(90deg,
@@ -6271,6 +6318,10 @@ button.turntable__power:focus-visible {
 
 :is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable:not(:has(.turntable__power--on)) .turntable__progress-window {
   filter: none;
+}
+
+:is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable:has(.turntable__power--on) .turntable__times {
+  color: var(--rarity-gold-bright);
 }
 
 :is(:root[data-player-style="gold"] .player__deck, .player-preview[data-player-style="gold"]) .turntable:not(:has(.turntable__power--on)) .turntable__progress-fill {
@@ -9674,6 +9725,14 @@ button.turntable__power:focus-visible {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  /* As tall empty as with its time in it. */
+  min-height: 1lh;
+}
+
+/* Switched off (a free spin waiting): out of sight, its row still held, so
+   the wheel stays put when it comes or goes. */
+.wheel__status--off {
+  visibility: hidden;
 }
 
 .wheel__status svg {

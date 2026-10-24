@@ -4,8 +4,9 @@
   <div class="wheel__view" id="wheel-view">
     <div class="wheel__header">
       <h2 class="modal__title wheel__title" id="wheel-title">Wheel of Fortune</h2>
-      <!-- Until the free spin comes back: how long. -->
-      <p class="wheel__status" id="wheel-status" hidden>
+      <!-- Until the free spin comes back: how long. Its row is kept while
+           it's off, so the wheel doesn't move when it comes or goes. -->
+      <p class="wheel__status wheel__status--off" id="wheel-status">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
         </svg>
