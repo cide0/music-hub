@@ -16,7 +16,7 @@ The individual pages of the app will be added step by step below.
 
 - `Dockerfile` based on the latest official `node` image.
 - `docker-compose.yml`, so `make up` / `make down` can start/stop the container.
-- Pin an explicit Node.js version in the `Dockerfile` (e.g. `node:22-alpine`, updated deliberately) rather than the floating `latest` tag, so builds stay reproducible.
+- Pin an explicit Node.js version in the `Dockerfile` (e.g. `node:26.12.1-alpine`, updated deliberately) rather than the floating `latest` tag, so builds stay reproducible.
 
 ### Makefile Targets
 

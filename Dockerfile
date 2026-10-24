@@ -1,5 +1,5 @@
 # Pinned deliberately (rather than :latest) so builds stay reproducible.
-FROM node:22-alpine
+FROM node:26.12.1-alpine
 
 WORKDIR /app
 
