@@ -31,6 +31,16 @@ app.use((req, res) => {
   res.status(404).send('Not found');
 });
 
+// A malformed JSON body (the token refresh endpoints) gets a JSON error like
+// every other bad request, not Express's HTML error page.
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.parse.failed') {
+    res.status(400).json({ error: 'invalid JSON body' });
+    return;
+  }
+  next(err);
+});
+
 // Render assigns its own port in production; locally this falls back to the
 // value from .env.
 const port = process.env.PORT || 8080;
