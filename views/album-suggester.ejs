@@ -123,7 +123,8 @@
         </div>
 
         <div id="history-body" hidden>
-          <!-- Search on the left, sort on the right, once there's an album. -->
+          <!-- Search on the left, sort and the filter tabs on the right (the
+               tabs at the far end, as on the other pages), once there's an album. -->
           <div class="toolbar" id="history-toolbar" hidden>
             <div class="history-search">
               <label class="visually-hidden" for="history-search">Search album history</label>
@@ -143,9 +144,15 @@
                 <button type="button" class="filter-button" data-sort="date">Date</button>
                 <button type="button" class="filter-button" data-sort="rating">Rating</button>
               </div>
+              <div class="filter-group" id="history-filters" role="group" aria-label="Filter album history">
+                <button type="button" class="filter-button filter-button--active" data-filter="all" aria-pressed="true">All</button>
+                <button type="button" class="filter-button" data-filter="suggested" aria-pressed="false" disabled>Suggested</button>
+                <button type="button" class="filter-button" data-filter="vinyl" aria-pressed="false" disabled>Vinyl</button>
+                <button type="button" class="filter-button" data-filter="cd" aria-pressed="false" disabled>CD</button>
+              </div>
             </div>
           </div>
-          <p class="empty-state" id="history-no-match" hidden>No albums match your search.</p>
+          <p class="empty-state" id="history-no-match" hidden></p>
           <ol class="history-list" id="history-list" hidden></ol>
         </div>
         <p class="empty-state" id="history-empty">Nothing marked as listened yet.</p>

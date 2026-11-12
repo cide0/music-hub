@@ -6710,6 +6710,113 @@ button.turntable__power:focus-visible {
   width: 8rem;
 }
 
+/* Whether the album is owned on vinyl, CD or both - only the Albums page's
+   Edit album modal asks. Two pill-shaped checkboxes side by side. */
+.owned-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.owned-field[hidden] {
+  display: none;
+}
+
+.owned-field legend {
+  margin-bottom: 0.375rem;
+  padding: 0;
+}
+
+.owned-field__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.owned-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 1rem 0 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.owned-option:hover {
+  border-color: var(--color-purple-400);
+  color: var(--color-text);
+}
+
+.owned-option:has(.owned-option__input:checked) {
+  border-color: var(--color-accent);
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.owned-option:has(.owned-option__input:focus-visible) {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* A checkbox in the app's purple: a rounded square, filled with a tick
+   when ticked. */
+.owned-option__input {
+  flex: none;
+  display: grid;
+  place-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  border: 2px solid var(--color-text-muted);
+  border-radius: 5px;
+  background-color: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.owned-option__input::before {
+  content: '';
+  width: 0.625rem;
+  height: 0.625rem;
+  background-color: var(--color-text);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='4 12.5 9.5 18 20 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='4 12.5 9.5 18 20 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  transform: scale(0);
+  transition: transform 0.15s ease;
+}
+
+.owned-option__input:checked {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+}
+
+.owned-option__input:checked::before {
+  transform: scale(1);
+}
+
+.owned-option__input:focus-visible {
+  outline: none;
+}
+
+/* Inter sits high in its line box, so a centred line still reads above the
+   box beside it: trimmed to the capitals and the baseline, the letters
+   themselves are what gets centred. */
+.owned-option__text {
+  text-box: trim-both cap alphabetic;
+}
+
 .history-list {
   display: grid;
   gap: 0.5rem;
@@ -6847,6 +6954,40 @@ button.turntable__power:focus-visible {
 .history-item__label {
   flex: none;
   margin-left: 0;
+}
+
+/* An album owned on vinyl or CD: an outlined pill, so it doesn't read as a
+   second "Suggested". A button above the overlay link - it opens the Edit
+   album modal. Its tap area reaches past the slim pill. */
+.history-item__owned {
+  position: relative;
+  z-index: 3;
+  /* The border stands in for the filled label's vertical padding. */
+  padding: 0 calc(0.5rem - 1px);
+  border: 1px solid var(--color-purple-300);
+  background-color: transparent;
+  color: var(--color-purple-100);
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.history-item__owned::before {
+  content: '';
+  position: absolute;
+  inset: -0.5rem -0.25rem;
+}
+
+.history-item__owned:hover,
+.history-item__owned:active {
+  background-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.history-item__owned:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 /* A phone's narrow card would cut the name to almost nothing, so there the

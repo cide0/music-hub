@@ -111,7 +111,9 @@ public/js/           notice.js, storage.js, google.js, sync.js, navbar.js, auth.
                      vinyl-catalog.js (the Store's mystery vinyls + the
                      wheel exclusives), sfx.js (synthesised sounds),
                      rating-dialog.js (the Edit rating modal: Albums'
-                     history pen + the Collection's rating pill),
+                     history pen + the Collection's rating pill; only
+                     Albums also asks owned on vinyl / CD - the entry's
+                     `owned`),
                      tear.js (a cover or card torn in two, with its
                      ripping sound: Albums + Collection),
                      unbox.js (album picker + Mystery Vinyl unboxing, every

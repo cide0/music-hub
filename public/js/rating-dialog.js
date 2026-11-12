@@ -2,16 +2,22 @@
  * The Edit rating modal (views/partials/rating-dialog.ejs) for an album in
  * the Album Suggester's history: opened by the rating pills of the Albums
  * page's history and the Collection's cards. The caller stores the rating
- * it hands back.
+ * it hands back. Opened with `{ owned: true }` (only the Albums page) it
+ * also asks whether the album is owned on vinyl, on CD, or both.
  */
 window.MusicHub = window.MusicHub || {};
 
 (function (MusicHub) {
   'use strict';
 
+  // What an album can be owned on - an entry's `owned` lists them.
+  var OWNED = ['vinyl', 'cd'];
+
   var els = null;
   // Gets the rating saved in the modal that is open right now.
   var onSave = null;
+  // Whether the modal open right now shows the owned checkboxes.
+  var withOwned = false;
 
   /** '' -> null (unrated), a whole number 1-100, or undefined when invalid. */
   function parse(raw) {
@@ -26,13 +32,29 @@ window.MusicHub = window.MusicHub || {};
     return rating >= 1 && rating <= 100 ? rating : undefined;
   }
 
+  /**
+   * What an entry is owned on, in OWNED's order: [], ['vinyl'], ['cd'] or
+   * both. An `owned` saved as a single string (before both could be picked)
+   * reads as a list of one.
+   */
+  function ownedOf(entry) {
+    var stored = entry ? entry.owned : null;
+    var list = Array.isArray(stored) ? stored : [stored];
+    return OWNED.filter(function (format) {
+      return list.indexOf(format) !== -1;
+    });
+  }
+
   function bind() {
     var bound = {
       dialog: document.getElementById('rating-dialog'),
+      title: document.getElementById('rating-dialog-title'),
       text: document.getElementById('rating-dialog-text'),
       input: document.getElementById('rating-dialog-input'),
+      owned: document.getElementById('rating-dialog-owned'),
       error: document.getElementById('rating-dialog-error'),
     };
+    bound.ownedInputs = bound.owned.querySelectorAll('input[type="checkbox"]');
     document.getElementById('rating-form').addEventListener('submit', function (event) {
       event.preventDefault();
       save();
@@ -43,6 +65,14 @@ window.MusicHub = window.MusicHub || {};
     return bound;
   }
 
+  function checkedOwned() {
+    return OWNED.filter(function (format) {
+      return Array.prototype.some.call(els.ownedInputs, function (input) {
+        return input.checked && input.value === format;
+      });
+    });
+  }
+
   function save() {
     var rating = parse(els.input.value);
     if (rating === undefined) {
@@ -50,25 +80,39 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
     els.dialog.close();
-    onSave(rating);
+    if (withOwned) {
+      onSave(rating, checkedOwned());
+    } else {
+      onSave(rating);
+    }
   }
 
   /**
-   * Opens the modal on a history `entry` (its albumName, artistName and
-   * rating). Saving calls `save(rating)` with the new rating - a whole
-   * number 1-100, or null when the field was emptied to take it away.
+   * Opens the modal on a history `entry` (its albumName, artistName, rating
+   * and owned). Saving calls `save(rating)` with the new rating - a whole
+   * number 1-100, or null when the field was emptied to take it away. With
+   * `options.owned` the modal also shows the vinyl / CD checkboxes, and
+   * `save` gets what's ticked as a second argument, like ownedOf: [],
+   * ['vinyl'], ['cd'] or ['vinyl', 'cd'].
    */
-  function open(entry, save) {
+  function open(entry, save, options) {
     els = els || bind();
     onSave = save;
+    withOwned = Boolean(options && options.owned);
+    els.title.textContent = withOwned ? 'Edit album' : 'Edit rating';
     els.text.textContent = entry.albumName + ' by ' + entry.artistName
-      + '. Leave it empty to take the rating away.';
+      + '. Leave the rating empty to take it away.';
     els.input.value = typeof entry.rating === 'number' ? String(entry.rating) : '';
+    els.owned.hidden = !withOwned;
+    var owned = ownedOf(entry);
+    Array.prototype.forEach.call(els.ownedInputs, function (input) {
+      input.checked = owned.indexOf(input.value) !== -1;
+    });
     MusicHub.notice.hide(els.error);
     els.dialog.showModal();
     els.input.focus();
     els.input.select();
   }
 
-  MusicHub.ratingDialog = { open: open, parse: parse };
+  MusicHub.ratingDialog = { open: open, parse: parse, ownedOf: ownedOf };
 })(window.MusicHub);

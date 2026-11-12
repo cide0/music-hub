@@ -88,6 +88,10 @@ window.MusicHub = window.MusicHub || {};
   var pool = [];
   var history = [];
   var sort = { key: 'date', dir: 'desc' };
+  // 'all' | 'suggested' | 'vinyl' | 'cd': every album, only the ones picked
+  // here, or only the ones owned on vinyl / on CD (one owned on both shows
+  // under either).
+  var historyFilter = 'all';
   // What the history search box holds, as typed.
   var historyQuery = '';
   // The history starts closed on every visit; the toggle beside its count opens it.
@@ -1450,6 +1454,40 @@ window.MusicHub = window.MusicHub || {};
       || (typeof entry.rating === 'number' && String(entry.rating).indexOf(query) !== -1);
   }
 
+  /** Picked here (it has a rarity) rather than added by its link. */
+  function isSuggested(entry) {
+    return TIERS.some(function (tier) { return tier.name === entry.rarity; });
+  }
+
+  var FILTERS = {
+    all: { test: function () { return true; }, none: 'No albums' },
+    suggested: { test: isSuggested, none: 'No suggested albums' },
+    vinyl: {
+      test: function (entry) { return MusicHub.ratingDialog.ownedOf(entry).indexOf('vinyl') !== -1; },
+      none: 'No albums you own on vinyl',
+    },
+    cd: {
+      test: function (entry) { return MusicHub.ratingDialog.ownedOf(entry).indexOf('cd') !== -1; },
+      none: 'No albums you own on CD',
+    },
+  };
+
+  /** A filter only with an album to show - otherwise back to All. */
+  function renderFilterControls() {
+    Array.prototype.forEach.call(els.filterButtons, function (button) {
+      var key = button.getAttribute('data-filter');
+      button.disabled = key !== 'all' && !history.some(FILTERS[key].test);
+      if (button.disabled && historyFilter === key) {
+        historyFilter = 'all';
+      }
+    });
+    Array.prototype.forEach.call(els.filterButtons, function (button) {
+      var active = button.getAttribute('data-filter') === historyFilter;
+      button.classList.toggle('filter-button--active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
   function albumsLabel(count) {
     return count + (count === 1 ? ' album' : ' albums');
   }
@@ -1593,13 +1631,34 @@ window.MusicHub = window.MusicHub || {};
 
   /* ------------------------------------------------------ editing a rating */
 
+  /** The rating and whether it's owned on vinyl, CD or both (only asked here). */
   function openRatingDialog(entry) {
-    MusicHub.ratingDialog.open(entry, function (rating) {
+    MusicHub.ratingDialog.open(entry, function (rating, owned) {
       // The stored entry itself, so the change lands in the history.
       entry.rating = rating;
+      if (owned.length) {
+        entry.owned = owned;
+      } else {
+        delete entry.owned;
+      }
       saveHistory();
       renderHistory();
+    }, { owned: true });
+  }
+
+  var OWNED_LABELS = { vinyl: 'Vinyl', cd: 'CD' };
+
+  /** The label of an album owned on vinyl or on CD (one each); it opens the Edit album modal too. */
+  function ownedLabel(entry, format) {
+    var label = el('button', 'history-item__label history-item__owned', OWNED_LABELS[format]);
+    label.type = 'button';
+    label.title = 'Edit album';
+    label.setAttribute('aria-label', 'You own ' + entry.albumName + ' on '
+      + (format === 'cd' ? 'CD' : 'vinyl') + ' - edit the album');
+    label.addEventListener('click', function () {
+      openRatingDialog(entry);
     });
+    return label;
   }
 
   function historyItem(entry) {
@@ -1607,7 +1666,9 @@ window.MusicHub = window.MusicHub || {};
     // Only a picked album has a rarity - one added by its link has none.
     // Entries from before rarities were kept have none either, and stay
     // app purple.
-    var suggested = TIERS.some(function (tier) { return tier.name === entry.rarity; });
+    var suggested = isSuggested(entry);
+    var owned = MusicHub.ratingDialog.ownedOf(entry);
+    var labelled = suggested || owned.length > 0;
     if (suggested) {
       item.dataset.rarity = entry.rarity;
     }
@@ -1620,12 +1681,17 @@ window.MusicHub = window.MusicHub || {};
     item.appendChild(link);
 
     item.appendChild(cover(entry.imageUrl, 'history-item__cover'));
-    var text = el('div', 'history-item__text' + (suggested ? ' history-item__text--labelled' : ''));
-    if (suggested) {
-      // The name alone shortens with an ellipsis, so the label stays.
+    var text = el('div', 'history-item__text' + (labelled ? ' history-item__text--labelled' : ''));
+    if (labelled) {
+      // The name alone shortens with an ellipsis, so the labels stay.
       var title = el('p', 'history-item__title history-item__title--labelled');
       title.appendChild(el('span', 'history-item__name', entry.albumName));
-      title.appendChild(el('span', 'history-item__label', 'Suggested'));
+      if (suggested) {
+        title.appendChild(el('span', 'history-item__label', 'Suggested'));
+      }
+      owned.forEach(function (format) {
+        title.appendChild(ownedLabel(entry, format));
+      });
       text.appendChild(title);
     } else {
       text.appendChild(el('p', 'history-item__title', entry.albumName));
@@ -1684,13 +1750,15 @@ window.MusicHub = window.MusicHub || {};
 
   function renderHistory() {
     var query = searchable(historyQuery.trim());
+    renderFilterControls();
+    var filter = FILTERS[historyFilter];
     var shown = sortHistory(history, sort).filter(function (entry) {
-      return matchesQuery(entry, query);
+      return filter.test(entry) && matchesQuery(entry, query);
     });
 
     els.historyClear.disabled = !history.length;
     els.historyCount.hidden = !history.length;
-    els.historyCount.textContent = query
+    els.historyCount.textContent = query || historyFilter !== 'all'
       ? shown.length + ' of ' + albumsLabel(history.length)
       : albumsLabel(history.length);
     els.historyToggle.hidden = !history.length;
@@ -1704,6 +1772,7 @@ window.MusicHub = window.MusicHub || {};
     els.historyControls.hidden = !history.length;
     els.historyEmpty.hidden = history.length > 0;
     els.historyNoMatch.hidden = !history.length || shown.length > 0;
+    els.historyNoMatch.textContent = filter.none + ' match \u201c' + historyQuery.trim() + '\u201d.';
     els.historyList.hidden = !shown.length;
     renderSortControls();
 
@@ -1728,6 +1797,15 @@ window.MusicHub = window.MusicHub || {};
     sort = key === sort.key
       ? { key: key, dir: sort.dir === 'desc' ? 'asc' : 'desc' }
       : { key: key, dir: 'desc' };
+    renderHistory();
+  }
+
+  function onFilterClick(event) {
+    var button = event.target.closest('[data-filter]');
+    if (!button || button.disabled) {
+      return;
+    }
+    historyFilter = button.getAttribute('data-filter');
     renderHistory();
   }
 
@@ -1774,6 +1852,8 @@ window.MusicHub = window.MusicHub || {};
     els.historyEmpty = document.getElementById('history-empty');
     els.sortGroup = document.getElementById('history-sort');
     els.sortButtons = els.sortGroup.querySelectorAll('[data-sort]');
+    els.filterGroup = document.getElementById('history-filters');
+    els.filterButtons = els.filterGroup.querySelectorAll('[data-filter]');
     els.historyClear = document.getElementById('history-clear');
     els.historyCount = document.getElementById('history-count');
     els.historyToolbar = document.getElementById('history-toolbar');
@@ -1806,6 +1886,7 @@ window.MusicHub = window.MusicHub || {};
     });
     els.revealListened.addEventListener('click', openListenedDialog);
     els.sortGroup.addEventListener('click', onSortClick);
+    els.filterGroup.addEventListener('click', onFilterClick);
     els.historyClear.addEventListener('click', clearHistory);
     els.addDialog = document.getElementById('add-album-dialog');
     els.addLink = document.getElementById('add-album-link');

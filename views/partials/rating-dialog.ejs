@@ -1,5 +1,6 @@
 <!-- An album's rating in the album history, changed with the Albums page's
-     rating pill or the Collection's (public/js/rating-dialog.js). -->
+     rating pill or the Collection's (public/js/rating-dialog.js). Only the
+     Albums page shows the "I own it on" vinyl / CD checkboxes too. -->
 <dialog class="modal modal--confirm" id="rating-dialog" aria-labelledby="rating-dialog-title" aria-describedby="rating-dialog-text">
   <button type="button" class="icon-button modal__close" data-modal-close aria-label="Close" title="Close">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -13,6 +14,19 @@
       <span class="rating-field__label">Rating <span class="rating-field__optional">(1–100)</span></span>
       <input type="number" class="text-input rating-field__input" id="rating-dialog-input" min="1" max="100" step="1" inputmode="numeric" />
     </label>
+    <fieldset class="owned-field" id="rating-dialog-owned" hidden>
+      <legend class="rating-field__label">I own it on</legend>
+      <div class="owned-field__options">
+        <label class="owned-option">
+          <input type="checkbox" class="owned-option__input" name="rating-dialog-owned" value="vinyl" />
+          <span class="owned-option__text">Vinyl</span>
+        </label>
+        <label class="owned-option">
+          <input type="checkbox" class="owned-option__input" name="rating-dialog-owned" value="cd" />
+          <span class="owned-option__text">CD</span>
+        </label>
+      </div>
+    </fieldset>
     <p class="form-error" id="rating-dialog-error" role="alert" hidden></p>
     <div class="modal__actions">
       <button type="button" class="button button--ghost" id="rating-cancel">Cancel</button>
