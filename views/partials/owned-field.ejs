@@ -1,0 +1,16 @@
+<!-- The "I own it on" vinyl / CD checkboxes of an album in the album history:
+     the Edit album modal and the Albums page's two "add to history" modals.
+     Read and set with MusicHub.ratingDialog.readOwned / setOwned. -->
+<fieldset class="owned-field" id="<%= id %>"<%= locals.hidden ? ' hidden' : '' %>>
+  <legend class="rating-field__label">I own it on <span class="rating-field__optional">(optional)</span></legend>
+  <div class="owned-field__options">
+    <label class="owned-option">
+      <input type="checkbox" class="owned-option__input" name="<%= id %>" value="vinyl" />
+      <span class="owned-option__text">Vinyl</span>
+    </label>
+    <label class="owned-option">
+      <input type="checkbox" class="owned-option__input" name="<%= id %>" value="cd" />
+      <span class="owned-option__text">CD</span>
+    </label>
+  </div>
+</fieldset>

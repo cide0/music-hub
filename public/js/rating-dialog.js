@@ -3,7 +3,9 @@
  * the Album Suggester's history: opened by the rating pills of the Albums
  * page's history and the Collection's cards. The caller stores the rating
  * it hands back. Opened with `{ owned: true }` (only the Albums page) it
- * also asks whether the album is owned on vinyl, on CD, or both.
+ * also asks whether the album is owned on vinyl, on CD, or both - the
+ * readOwned / setOwned helpers serve the same checkboxes in the Albums
+ * page's "add to history" modals too.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -45,6 +47,39 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
+  function ownedInputs(fieldset) {
+    return fieldset.querySelectorAll('input[type="checkbox"]');
+  }
+
+  /**
+   * What's ticked in an "I own it on" fieldset (views/partials/owned-field.ejs),
+   * like ownedOf: [], ['vinyl'], ['cd'] or ['vinyl', 'cd'].
+   */
+  function readOwned(fieldset) {
+    var inputs = ownedInputs(fieldset);
+    return OWNED.filter(function (format) {
+      return Array.prototype.some.call(inputs, function (input) {
+        return input.checked && input.value === format;
+      });
+    });
+  }
+
+  /** Ticks an "I own it on" fieldset's boxes to match `owned` (a list like ownedOf's). */
+  function setOwned(fieldset, owned) {
+    Array.prototype.forEach.call(ownedInputs(fieldset), function (input) {
+      input.checked = (owned || []).indexOf(input.value) !== -1;
+    });
+  }
+
+  /** Sets (or, for an empty list, removes) a history entry's `owned`. */
+  function applyOwned(entry, owned) {
+    if (owned && owned.length) {
+      entry.owned = owned;
+    } else {
+      delete entry.owned;
+    }
+  }
+
   function bind() {
     var bound = {
       dialog: document.getElementById('rating-dialog'),
@@ -54,7 +89,6 @@ window.MusicHub = window.MusicHub || {};
       owned: document.getElementById('rating-dialog-owned'),
       error: document.getElementById('rating-dialog-error'),
     };
-    bound.ownedInputs = bound.owned.querySelectorAll('input[type="checkbox"]');
     document.getElementById('rating-form').addEventListener('submit', function (event) {
       event.preventDefault();
       save();
@@ -65,14 +99,6 @@ window.MusicHub = window.MusicHub || {};
     return bound;
   }
 
-  function checkedOwned() {
-    return OWNED.filter(function (format) {
-      return Array.prototype.some.call(els.ownedInputs, function (input) {
-        return input.checked && input.value === format;
-      });
-    });
-  }
-
   function save() {
     var rating = parse(els.input.value);
     if (rating === undefined) {
@@ -81,7 +107,7 @@ window.MusicHub = window.MusicHub || {};
     }
     els.dialog.close();
     if (withOwned) {
-      onSave(rating, checkedOwned());
+      onSave(rating, readOwned(els.owned));
     } else {
       onSave(rating);
     }
@@ -104,15 +130,19 @@ window.MusicHub = window.MusicHub || {};
       + '. Leave the rating empty to take it away.';
     els.input.value = typeof entry.rating === 'number' ? String(entry.rating) : '';
     els.owned.hidden = !withOwned;
-    var owned = ownedOf(entry);
-    Array.prototype.forEach.call(els.ownedInputs, function (input) {
-      input.checked = owned.indexOf(input.value) !== -1;
-    });
+    setOwned(els.owned, ownedOf(entry));
     MusicHub.notice.hide(els.error);
     els.dialog.showModal();
     els.input.focus();
     els.input.select();
   }
 
-  MusicHub.ratingDialog = { open: open, parse: parse, ownedOf: ownedOf };
+  MusicHub.ratingDialog = {
+    open: open,
+    parse: parse,
+    ownedOf: ownedOf,
+    readOwned: readOwned,
+    setOwned: setOwned,
+    applyOwned: applyOwned,
+  };
 })(window.MusicHub);

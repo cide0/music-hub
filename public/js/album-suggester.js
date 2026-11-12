@@ -1301,6 +1301,7 @@ window.MusicHub = window.MusicHub || {};
     els.dialogText.textContent = 'This removes ' + current.name + ' by ' + current.artistName
       + ' from your Saved Albums on Spotify.';
     els.rating.value = '';
+    MusicHub.ratingDialog.setOwned(els.listenedOwned, []);
     els.dialogError.hidden = true;
     els.dialog.showModal();
     els.rating.focus();
@@ -1314,6 +1315,7 @@ window.MusicHub = window.MusicHub || {};
     els.dialogSubmit.disabled = on;
     els.dialogCancel.disabled = on;
     els.rating.disabled = on;
+    els.listenedOwned.disabled = on;
     els.dialogSubmit.textContent = on ? 'Removing…' : 'Add to history';
   }
 
@@ -1331,6 +1333,7 @@ window.MusicHub = window.MusicHub || {};
     }
 
     var album = current;
+    var owned = MusicHub.ratingDialog.readOwned(els.listenedOwned);
     els.dialogError.hidden = true;
     setRemoving(true);
     unsaveAlbum(album)
@@ -1349,7 +1352,7 @@ window.MusicHub = window.MusicHub || {};
         if (already) {
           showHistoryNotice(album.name + ' is already in your album history, so it wasn\u2019t added again.');
         } else {
-          history.push({
+          var entry = {
             spotifyAlbumId: album.id,
             albumName: album.name,
             artistName: album.artistName,
@@ -1359,7 +1362,9 @@ window.MusicHub = window.MusicHub || {};
             rating: rating,
             // The tier it was picked with - its colour in the history.
             rarity: album.tier,
-          });
+          };
+          MusicHub.ratingDialog.applyOwned(entry, owned);
+          history.push(entry);
           saveHistory();
           renderHistory();
         }
@@ -1551,6 +1556,7 @@ window.MusicHub = window.MusicHub || {};
   function openAddDialog() {
     els.addLink.value = '';
     els.addRating.value = '';
+    MusicHub.ratingDialog.setOwned(els.addOwned, []);
     els.addError.hidden = true;
     els.addDialog.showModal();
     els.addLink.focus();
@@ -1593,6 +1599,7 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
 
+    var owned = MusicHub.ratingDialog.readOwned(els.addOwned);
     setAddingAlbum(true);
     MusicHub.auth.spotifyFetch('/albums/' + encodeURIComponent(id))
       .then(function (response) {
@@ -1607,7 +1614,7 @@ window.MusicHub = window.MusicHub || {};
       })
       .then(function (data) {
         var album = toAlbum(data, null);
-        history.push({
+        var entry = {
           spotifyAlbumId: album.id,
           albumName: album.name,
           artistName: album.artistName,
@@ -1615,7 +1622,9 @@ window.MusicHub = window.MusicHub || {};
           spotifyUrl: album.spotifyUrl,
           listenedAt: new Date().toISOString(),
           rating: rating,
-        });
+        };
+        MusicHub.ratingDialog.applyOwned(entry, owned);
+        history.push(entry);
         saveHistory();
         historyOpen = true;
         renderHistory();
@@ -1636,11 +1645,7 @@ window.MusicHub = window.MusicHub || {};
     MusicHub.ratingDialog.open(entry, function (rating, owned) {
       // The stored entry itself, so the change lands in the history.
       entry.rating = rating;
-      if (owned.length) {
-        entry.owned = owned;
-      } else {
-        delete entry.owned;
-      }
+      MusicHub.ratingDialog.applyOwned(entry, owned);
       saveHistory();
       renderHistory();
     }, { owned: true });
@@ -1845,6 +1850,7 @@ window.MusicHub = window.MusicHub || {};
     els.dialog = document.getElementById('listened-dialog');
     els.dialogText = document.getElementById('listened-dialog-text');
     els.rating = document.getElementById('listened-rating');
+    els.listenedOwned = document.getElementById('listened-owned');
     els.dialogError = document.getElementById('listened-error');
     els.dialogSubmit = document.getElementById('listened-submit');
     els.dialogCancel = document.getElementById('listened-cancel');
@@ -1891,6 +1897,7 @@ window.MusicHub = window.MusicHub || {};
     els.addDialog = document.getElementById('add-album-dialog');
     els.addLink = document.getElementById('add-album-link');
     els.addRating = document.getElementById('add-album-rating');
+    els.addOwned = document.getElementById('add-album-owned');
     els.addError = document.getElementById('add-album-error');
     els.addSubmit = document.getElementById('add-album-submit');
     els.addCancel = document.getElementById('add-album-cancel');

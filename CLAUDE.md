@@ -82,7 +82,7 @@ routes/api.js        Third-party proxies; GET /api/concerts (Ticketmaster),
                      GET /api/discogs/releases + /random-collection-item
 routes/pages.js      Page routes; / redirects to /concert-date-fetcher
 views/               EJS pages + partials/ (head, navbar, daily-wheel, unbox,
-                     rating-dialog)
+                     rating-dialog, owned-field)
 public/css/          variables.css (palette) + style.css
 public/js/           notice.js, storage.js, google.js, sync.js, navbar.js, auth.js,
                      followed-artists.js, wallet.js (every page; notice.js =
@@ -113,7 +113,9 @@ public/js/           notice.js, storage.js, google.js, sync.js, navbar.js, auth.
                      rating-dialog.js (the Edit rating modal: Albums'
                      history pen + the Collection's rating pill; only
                      Albums also asks owned on vinyl / CD - the entry's
-                     `owned`),
+                     `owned`; its readOwned / setOwned serve the same
+                     checkboxes, partials/owned-field.ejs, in Albums'
+                     two "add to history" modals),
                      tear.js (a cover or card torn in two, with its
                      ripping sound: Albums + Collection),
                      unbox.js (album picker + Mystery Vinyl unboxing, every

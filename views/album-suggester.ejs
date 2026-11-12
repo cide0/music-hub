@@ -177,6 +177,7 @@
           <span class="rating-field__label">Rating <span class="rating-field__optional">(optional, 1–100)</span></span>
           <input type="number" class="text-input rating-field__input" id="listened-rating" min="1" max="100" step="1" inputmode="numeric" />
         </label>
+        <%- include('partials/owned-field', { id: 'listened-owned' }) %>
         <p class="form-error" id="listened-error" role="alert" hidden></p>
         <div class="modal__actions">
           <button type="button" class="button button--ghost" id="listened-cancel">Cancel</button>
@@ -207,6 +208,7 @@
           <span class="rating-field__label">Rating <span class="rating-field__optional">(optional, 1–100)</span></span>
           <input type="number" class="text-input rating-field__input" id="add-album-rating" min="1" max="100" step="1" inputmode="numeric" />
         </label>
+        <%- include('partials/owned-field', { id: 'add-album-owned' }) %>
         <p class="form-error" id="add-album-error" role="alert" hidden></p>
         <div class="modal__actions">
           <button type="button" class="button button--ghost" id="add-album-cancel">Cancel</button>
