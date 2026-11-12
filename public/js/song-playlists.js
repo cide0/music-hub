@@ -14,6 +14,11 @@
  * takes the songs that have been on it longest off again, so it stays at
  * that size; the only time the app reads a playlist's songs from Spotify.
  * Liked Songs never rotates.
+ *
+ * The one thing kept for good: the playlists the modal last added a song
+ * to, most recent first (RECENT_KEY) - the modal lists those right below
+ * the ones the song is on. The + doesn't count; it adds to the same
+ * Settings playlists every time.
  */
 window.MusicHub = window.MusicHub || {};
 
@@ -27,6 +32,10 @@ window.MusicHub = window.MusicHub || {};
   var MAX_ROTATION = 10000;
   // How many songs one DELETE /playlists/{id}/items may take off.
   var REMOVE_BATCH = 100;
+  // The playlist ids the modal last added a song to, most recent first.
+  var RECENT_KEY = 'recentSongPlaylists';
+  // How many of them are kept.
+  var RECENT_MAX = 50;
 
   /* ------------------------------------------------------------- memory */
 
@@ -59,6 +68,41 @@ window.MusicHub = window.MusicHub || {};
   /** Every playlist a song can go on: Liked Songs first, then the stored list (playlists.js). */
   function choices() {
     return [LIKED].concat(MusicHub.playlists.list() || []);
+  }
+
+  /* ------------------------------------------------------------- recent */
+
+  function recentIds() {
+    var ids = MusicHub.storage.read(RECENT_KEY, []);
+    return Array.isArray(ids) ? ids.filter(function (id) { return typeof id === 'string'; }) : [];
+  }
+
+  /** The modal put a song on these playlists: they go to the top of the recent ones, in this order. */
+  function noteAdded(ids) {
+    if (!ids.length) {
+      return;
+    }
+    var rest = recentIds().filter(function (id) { return ids.indexOf(id) === -1; });
+    MusicHub.storage.write(RECENT_KEY, ids.concat(rest).slice(0, RECENT_MAX));
+  }
+
+  /**
+   * `playlists` with the ones the modal last added a song to first, most
+   * recent on top; the rest keep their order.
+   */
+  function recentFirst(playlists) {
+    var recent = recentIds();
+    function rank(playlist) {
+      var index = recent.indexOf(playlist.id);
+      return index === -1 ? recent.length : index;
+    }
+    return playlists.map(function (playlist, index) {
+      return { playlist: playlist, rank: rank(playlist), index: index };
+    }).sort(function (a, b) {
+      return a.rank - b.rank || a.index - b.index;
+    }).map(function (entry) {
+      return entry.playlist;
+    });
   }
 
   /** The playlists chosen in Settings for the + : [{ id, name, rotation? }]. */
@@ -294,6 +338,8 @@ window.MusicHub = window.MusicHub || {};
     validRotation: validRotation,
     rotationOf: rotationOf,
     choices: choices,
+    recentFirst: recentFirst,
+    noteAdded: noteAdded,
     defaultIds: defaultIds,
     playlistsOf: playlistsOf,
     isSaved: isSaved,

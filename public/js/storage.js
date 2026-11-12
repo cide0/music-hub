@@ -23,6 +23,8 @@ window.MusicHub = window.MusicHub || {};
     'followedArtists',
     // The Spotify playlists the user can add to, as Settings' refresh button last fetched them.
     'spotifyPlaylists',
+    // The playlists the Collection's song modal last added a song to (song-playlists.js).
+    'recentSongPlaylists',
     // Coins, bought Store items, the equipped styles and unboxed vinyls.
     'store',
     // The user's choices on the Settings page - see getSetting / setSetting.

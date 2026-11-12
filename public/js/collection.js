@@ -1531,10 +1531,14 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
-  /** The song's playlists: every one there is, ticked where the song is on it. */
+  /**
+   * The song's playlists: every one there is, ticked where the song is on
+   * it. The ticked ones on top, then the ones the modal last added a song
+   * to, most recent first, then the rest in the usual order.
+   */
   function fillSongChecklist() {
     dialogInitial = MusicHub.songPlaylists.playlistsOf(dialogSong.uri);
-    songChecklist.setPlaylists(MusicHub.songPlaylists.choices(), dialogInitial);
+    songChecklist.setPlaylists(MusicHub.songPlaylists.recentFirst(MusicHub.songPlaylists.choices()), dialogInitial);
     applySongSearch();
     updateSongSubmit();
   }
@@ -1568,6 +1572,9 @@ window.MusicHub = window.MusicHub || {};
     MusicHub.notice.hide(els.songError);
     MusicHub.songPlaylists.change(song.uri, diff.add, diff.remove).then(function (result) {
       setSaveBusy(false);
+      MusicHub.songPlaylists.noteAdded(diff.add.filter(function (id) {
+        return result.failed.indexOf(id) === -1;
+      }));
       if (saveSong && saveSong.uri === song.uri) {
         paintSave(!wasSaved);
       }
