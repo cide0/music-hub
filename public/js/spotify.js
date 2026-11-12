@@ -252,6 +252,22 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * Plays the album from its track at `index` (0 for the first),
+   * `positionMs` into it, where the user's Spotify is playing - or was last.
+   */
+  function playAlbumAt(albumId, index, positionMs) {
+    return playerRequest('/me/player/play', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context_uri: 'spotify:album:' + albumId,
+        offset: { position: index },
+        position_ms: Math.max(0, Math.round(positionMs)),
+      }),
+    });
+  }
+
+  /**
    * What the user's Spotify is up to: the track (`item`), how far into it
    * (`progress_ms`), whether it's playing (`is_playing`) and what from
    * (`context`) - or null when it isn't playing a track anywhere.
@@ -291,6 +307,7 @@ window.MusicHub = window.MusicHub || {};
     // A GET that retries like every call here; its error says it couldn't load `what`.
     getJson: spotifyJson,
     playAlbum: playAlbum,
+    playAlbumAt: playAlbumAt,
     pausePlayback: pausePlayback,
     resumePlayback: resumePlayback,
     skipToNext: skipToNext,

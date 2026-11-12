@@ -46,6 +46,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Shows the rating you gave each album on the Albums page (click it to edit it, or the empty dashed label to rate an album that has none yet), can be sorted by date or rating, and searched by style, album, artist or rating.
   - The record player's power button pauses and resumes the album on Spotify. Pausing or resuming in Spotify itself switches the record player off or on too.
   - The progress bar under the record shows the time played and the song's length. Click or drag on it to jump to that part of the song.
+  - Grab the tonearm by its head and drag it: picking it up pauses the album, and while you hold it over the record the track and time under the needle show. Put the needle down anywhere on the record to play the album from that point, or let go off the record to send the arm back to its rest.
   - Add the song that's currently playing to your playlists right from the record player.
   - Playlists can be set to rotate, so they only keep your newest songs.
 - **Settings:** Export and import your data, choose the Concerts page's cities, manage the Google login and Drive sync, set your Gallery folder, Spotify playlists and Discogs username, and turn the sound effects on or off.

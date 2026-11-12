@@ -35,6 +35,24 @@ window.MusicHub = window.MusicHub || {};
   // and carries it over at least this slowly.
   var ARM_GLIDE_MS = 250;
   var ARM_SKIP_MS = 450;
+  // Moved by hand (setArmDraggable), the arm reaches from a little outside
+  // its rest to just past the last groove.
+  var ARM_DRAG_MIN_DEG = 0;
+  var ARM_DRAG_MAX_DEG = ARM_END_DEG + 3;
+  // The crackle of the needle dragged across the record: its loudness at
+  // full speed, and the speed that's full (degrees of arm swing per ms).
+  var CRACKLE_PEAK = 1;
+  var CRACKLE_FULL_DEG_PER_MS = 0.06;
+  // Moved by hand over the record, the needle is drawn onto the start of
+  // each track (setTrackMarks): held right on it within SNAP_HOLD_PX of it
+  // (of the needle's travel), and pulled towards it, less and less, out to
+  // SNAP_PULL_PX - each kept to a share of the way to the next track's
+  // start (SNAP_HOLD_SHARE, SNAP_PULL_SHARE), so short tracks stay
+  // reachable.
+  var SNAP_HOLD_PX = 5;
+  var SNAP_PULL_PX = 14;
+  var SNAP_HOLD_SHARE = 0.25;
+  var SNAP_PULL_SHARE = 0.42;
   var POWER_PRESS_MS = 240;
   // A record at 33 1/3 rpm turns once every 1.8s; the platter reaches that
   // over SPIN_UP_MS.
@@ -192,6 +210,12 @@ window.MusicHub = window.MusicHub || {};
    * `options.fromEdge`: the needle starts nearer the record's rim.
    * `options.onSeek`: called with the point of the song (0 to 1) picked
    * on the progress groove, while it's seekable (setSeekable).
+   * `options.onArmDrop`: called when the arm, moved by hand by its
+   * headshell (setArmDraggable), is let go - with how far through the
+   * album the needle was put down (0 to 1), or null when it went back to
+   * its rest. `options.onArmLift`: called as the arm's picked up.
+   * `options.onArmMove`: called as it's moved, with how far through the
+   * album the needle is over (0 to 1), or null while it's off the record.
    */
   function build(vinyl, options) {
     var o = options || {};
@@ -249,7 +273,8 @@ window.MusicHub = window.MusicHub || {};
 
     // The arm's mount, fixed to the plinth; the arm turns on its bearing,
     // the counterweight on the rod behind it.
-    plinth.appendChild(el('span', 'turntable__mount'));
+    var mount = el('span', 'turntable__mount');
+    plinth.appendChild(mount);
     var arm = el('div', 'turntable__arm');
     arm.appendChild(armRod());
     arm.appendChild(el('span', 'turntable__counterweight'));
@@ -257,16 +282,17 @@ window.MusicHub = window.MusicHub || {};
     // The headshell: its finger lift, the cartridge and the stylus at its
     // tip - the needle's point, at the headshell's bottom centre.
     var head = el('span', 'turntable__head');
+    var stylus = el('span', 'turntable__stylus');
     head.appendChild(el('span', 'turntable__lift'));
     head.appendChild(el('span', 'turntable__cartridge'));
-    head.appendChild(el('span', 'turntable__stylus'));
+    head.appendChild(stylus);
     arm.appendChild(head);
     plinth.appendChild(arm);
 
     root.appendChild(plinth);
     var parts = {
-      root: root, record: record, disc: record.querySelector('.vinyl__disc'), cap: cap,
-      arm: arm, head: head, power: power, powerOn: powerOn, prev: prev, next: next,
+      root: root, record: record, vinyl: vinyl, disc: record.querySelector('.vinyl__disc'), cap: cap,
+      mount: mount, arm: arm, head: head, stylus: stylus, power: power, powerOn: powerOn, prev: prev, next: next,
       progressBar: progress && progress.bar, progressFill: progress && progress.fill,
       progressTimes: progress && progress.times, timePlayed: progress && progress.played,
       timeLength: progress && progress.length,
@@ -289,11 +315,253 @@ window.MusicHub = window.MusicHub || {};
       needle: null,
       armFreeAt: 0,
       needleTimer: 0,
+      // Whether the arm can be moved by hand (setArmDraggable), and the
+      // drag going on (null while there's none).
+      armDraggable: false,
+      drag: null,
+      // Where on the record each track starts (setTrackMarks), as
+      // fractions of the album.
+      trackMarks: [],
     };
     if (progress && o.onSeek) {
       wireSeeking(parts, o.onSeek);
     }
+    if (o.onArmDrop) {
+      wireArmDrag(parts, o);
+    }
     return parts;
+  }
+
+  /* -------------------------------------------------- the arm by hand */
+
+  /** The point `node` is centred on, on the screen. */
+  function centre(node) {
+    var rect = node.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, r: rect.width / 2 };
+  }
+
+  /** The angle (degrees, clockwise from the right) from `from` to `to`. */
+  function angleTo(from, to) {
+    return Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI;
+  }
+
+  /** Whether the needle's point is over the record (its label included). */
+  function needleOverRecord(parts) {
+    var stylus = centre(parts.stylus);
+    var record = centre(parts.vinyl);
+    return Math.hypot(stylus.x - record.x, stylus.y - record.y) <= record.r;
+  }
+
+  /** How far through the album the needle is at `deg` - 0 out to where the album starts. */
+  function fractionAt(parts, deg) {
+    return Math.min(1, Math.max(0, (deg - parts.startDeg) / (ARM_END_DEG - parts.startDeg)));
+  }
+
+  /**
+   * The head raised off the record (`up`) or lowered onto it, after `delay`
+   * ms - held where it is while it waits ('both'): the animation it replaces
+   * is already gone, and the head would otherwise snap to its resting size.
+   */
+  function moveHead(parts, up, delay) {
+    var from = current(parts.head, 'scale', up ? 1 : 1.25);
+    swap(parts, 'head', [
+      parts.head.animate([{ scale: from }, { scale: up ? 1.25 : 1 }], {
+        delay: delay || 0, duration: TIMING.lower, easing: up ? 'ease-out' : 'ease-in', fill: 'both',
+      }),
+    ]);
+  }
+
+  /** The arm swinging from `fromDeg` back to its rest, and the head lowered there. */
+  function armToRest(parts, fromDeg) {
+    var duration = Math.max(ARM_GLIDE_MS, swingMs(fromDeg, ARM_REST_DEG));
+    parts.armFreeAt = performance.now() + duration;
+    swap(parts, 'arm', [
+      parts.arm.animate([{ rotate: fromDeg + 'deg' }, { rotate: ARM_REST_DEG + 'deg' }], {
+        duration: duration, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'both',
+      }),
+    ]);
+    moveHead(parts, false, duration);
+  }
+
+  /**
+   * The arm moved by hand, by its headshell: pressed, the head lifts and
+   * the arm follows the pointer round its pivot - the needle crackling
+   * while it's dragged across the record. Let go over the record, the
+   * needle's lowered there and `o.onArmDrop` is told how far through the
+   * album that is; let go anywhere else, the arm swings back to its rest
+   * and it's told null. `o.onArmLift` and `o.onArmMove` (build) hear of
+   * it being picked up and moved.
+   */
+  function wireArmDrag(parts, o) {
+    var head = parts.head;
+    var onDrop = o.onArmDrop;
+
+    head.addEventListener('pointerdown', function (event) {
+      if (!parts.armDraggable || parts.drag || event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      head.setPointerCapture(event.pointerId);
+      var deg = current(parts.arm, 'rotate', ARM_REST_DEG);
+      window.clearTimeout(parts.needleTimer);
+      // Held by the hand from here: the style, not an animation.
+      swap(parts, 'arm', []);
+      parts.arm.style.rotate = deg + 'deg';
+      var pivot = centre(parts.mount);
+      var stylus = centre(parts.stylus);
+      parts.drag = {
+        pivot: pivot, grabDeg: deg, grabAngle: angleTo(pivot, { x: event.clientX, y: event.clientY }),
+        deg: deg, at: event.timeStamp, crackle: startCrackle(), over: undefined, mark: -1,
+        // The degrees the arm turns for each px the needle travels.
+        degPerPx: 180 / (Math.PI * Math.max(1, Math.hypot(stylus.x - pivot.x, stylus.y - pivot.y))),
+      };
+      parts.root.classList.add('turntable--arm-dragging');
+      moveHead(parts, true, 0);
+      if (o.onArmLift) {
+        o.onArmLift();
+      }
+    });
+
+    head.addEventListener('pointermove', function (event) {
+      var drag = parts.drag;
+      if (!drag || !head.hasPointerCapture(event.pointerId)) {
+        return;
+      }
+      // Turned by as much as the pointer has gone round the pivot since
+      // it took hold - the long way round never counts.
+      var turned = angleTo(drag.pivot, { x: event.clientX, y: event.clientY }) - drag.grabAngle;
+      turned = ((turned + 540) % 360) - 180;
+      var deg = Math.min(ARM_DRAG_MAX_DEG, Math.max(ARM_DRAG_MIN_DEG, drag.grabDeg + turned));
+      var snap = snapToTrack(parts, deg, drag.degPerPx);
+      deg = snap.deg;
+      // A soft tick as it settles onto a track's start.
+      if (snap.mark !== drag.mark) {
+        drag.mark = snap.mark;
+        if (snap.mark !== -1) {
+          snapSound();
+        }
+      }
+      parts.arm.style.rotate = deg + 'deg';
+      var speed = Math.abs(deg - drag.deg) / Math.max(1, event.timeStamp - drag.at);
+      drag.deg = deg;
+      drag.at = event.timeStamp;
+      var onRecord = needleOverRecord(parts);
+      crackle(drag.crackle, onRecord ? Math.min(1, speed / CRACKLE_FULL_DEG_PER_MS) : 0);
+      var over = onRecord ? fractionAt(parts, deg) : null;
+      if (over !== drag.over && o.onArmMove) {
+        drag.over = over;
+        o.onArmMove(over);
+      }
+    });
+
+    // Let go, or taken away by the browser - put down where it is.
+    head.addEventListener('pointerup', function () {
+      endArmDrag(parts, onDrop, true);
+    });
+    head.addEventListener('pointercancel', function () {
+      endArmDrag(parts, onDrop, true);
+    });
+    head.addEventListener('lostpointercapture', function () {
+      endArmDrag(parts, onDrop, true);
+    });
+  }
+
+  /**
+   * The arm let go of (`commit`) - lowered onto the record or swung back
+   * to its rest, and `onDrop` told which - or the drag called off, the arm
+   * going back to where it was before: the album's place on the record
+   * while it's switched on, else its rest.
+   */
+  function endArmDrag(parts, onDrop, commit) {
+    var drag = parts.drag;
+    if (!drag) {
+      return;
+    }
+    parts.drag = null;
+    stopCrackle(drag.crackle);
+    parts.root.classList.remove('turntable--arm-dragging');
+    var deg = drag.deg;
+    var onRecord = commit && needleOverRecord(parts);
+    // Held where it was let go by an animation, as everywhere else.
+    swap(parts, 'arm', [
+      parts.arm.animate([{ rotate: deg + 'deg' }, { rotate: deg + 'deg' }], { duration: 1, fill: 'forwards' }),
+    ]);
+    parts.arm.style.rotate = '';
+    parts.armFreeAt = performance.now();
+
+    if (onRecord) {
+      moveHead(parts, false, 0);
+      needleSound(TIMING.lower / 1000);
+      onDrop(fractionAt(parts, deg));
+    } else if (commit || !parts.on) {
+      armToRest(parts, deg);
+      if (commit) {
+        onDrop(null);
+      }
+    } else {
+      followNeedle(parts, false, false);
+      moveHead(parts, false, Math.max(0, parts.armFreeAt - performance.now()));
+    }
+  }
+
+  /**
+   * Where the arm, turned to `deg` by hand, goes: onto the start of the
+   * nearest track if it's close enough (SNAP_HOLD_PX), drawn part of the
+   * way towards it a little further out (SNAP_PULL_PX, eased so it never
+   * jumps), else just where it was turned. Returns { deg, mark }: the
+   * track it's held on (its index), or -1.
+   */
+  function snapToTrack(parts, deg, degPerPx) {
+    var span = ARM_END_DEG - parts.startDeg;
+    var marks = parts.trackMarks.map(function (fraction) {
+      return parts.startDeg + span * fraction;
+    });
+    var nearest = -1;
+    marks.forEach(function (markDeg, i) {
+      if (nearest === -1 || Math.abs(deg - markDeg) < Math.abs(deg - marks[nearest])) {
+        nearest = i;
+      }
+    });
+    if (nearest === -1) {
+      return { deg: deg, mark: -1 };
+    }
+    var markDeg = marks[nearest];
+    var gap = Math.min(
+      nearest > 0 ? markDeg - marks[nearest - 1] : Infinity,
+      nearest < marks.length - 1 ? marks[nearest + 1] - markDeg : Infinity);
+    var hold = Math.min(SNAP_HOLD_PX * degPerPx, gap * SNAP_HOLD_SHARE);
+    var pull = Math.min(SNAP_PULL_PX * degPerPx, gap * SNAP_PULL_SHARE);
+    var off = Math.abs(deg - markDeg);
+    if (off <= hold) {
+      return { deg: markDeg, mark: nearest };
+    }
+    if (off >= pull) {
+      return { deg: deg, mark: -1 };
+    }
+    // From right on the mark at the hold's edge to right under the
+    // pointer at the pull's, smoothly.
+    var t = (off - hold) / (pull - hold);
+    return { deg: markDeg + (deg - markDeg) * t * t * (3 - 2 * t), mark: -1 };
+  }
+
+  /**
+   * Where on the record each track starts - fractions of the album (0 to
+   * 1), the first track's 0 - for the needle moved by hand to settle onto.
+   */
+  function setTrackMarks(parts, fractions) {
+    parts.trackMarks = fractions.slice();
+  }
+
+  /**
+   * Lets the arm be moved by hand by its headshell, or stops it - a drag
+   * going on is called off.
+   */
+  function setArmDraggable(parts, draggable) {
+    parts.armDraggable = draggable;
+    parts.root.classList.toggle('turntable--arm-draggable', draggable);
+    if (!draggable && parts.drag) {
+      endArmDrag(parts, null, false);
+    }
   }
 
   /**
@@ -459,7 +727,8 @@ window.MusicHub = window.MusicHub || {};
    */
   function followNeedle(parts, still, lift) {
     window.clearTimeout(parts.needleTimer);
-    if (!parts.on) {
+    // Held by hand, it goes where it's let go of.
+    if (!parts.on || parts.drag) {
       return;
     }
     var now = performance.now();
@@ -691,11 +960,17 @@ window.MusicHub = window.MusicHub || {};
    * back to its rest. On: the light comes on, the platter spins up and the
    * arm swings over and lowers the needle. With `options.still` (reduced
    * motion) the arm and light just move there and the platter doesn't turn.
+   * With `options.armMoved`, it's the arm moved by hand that switches it:
+   * put down on the record (on) or back on its rest (off) - no press of
+   * the power button, and the arm stays where it was put, only gliding on
+   * to where the album has got to. While the arm is held by hand, it's
+   * left where it is.
    */
   function setPower(parts, on, options) {
     if (parts.on === on) {
       return;
     }
+    var armMoved = !!(options && options.armMoved);
     markOn(parts, on);
     // Off, the song stops where it is - the page's next look at Spotify
     // sets it going again once it's back on.
@@ -713,7 +988,7 @@ window.MusicHub = window.MusicHub || {};
     var headScale = current(parts.head, 'scale', 1);
     var light = current(parts.powerOn, 'opacity', on ? 0 : 1);
 
-    if (!still) {
+    if (!still && !armMoved) {
       parts.power.animate([{ scale: '1' }, { scale: '0.86' }, { scale: '1' }], {
         duration: POWER_PRESS_MS, easing: 'ease-out',
       });
@@ -729,7 +1004,13 @@ window.MusicHub = window.MusicHub || {};
     var targetDeg = on ? needleDeg(parts, now + armDelay) : ARM_REST_DEG;
     var armMs = swingMs(armDeg, targetDeg);
     window.clearTimeout(parts.needleTimer);
-    if (on) {
+    if (parts.drag || (armMoved && !on)) {
+      // Left to the hand, or already on its way to its rest.
+    } else if (armMoved) {
+      // Already down on the record: on from there to where the album is.
+      var glideMs = still || Math.abs(needleDeg(parts, now) - armDeg) < 0.1 ? 0 : ARM_GLIDE_MS;
+      swap(parts, 'arm', armOnto(parts, armDeg, needleDeg(parts, now + glideMs), 0, glideMs));
+    } else if (on) {
       targetDeg = needleDeg(parts, now + (armDelay + armMs) * time);
       swap(parts, 'arm', armOnto(parts, armDeg, targetDeg, armDelay * time, armMs * time));
     } else {
@@ -740,13 +1021,17 @@ window.MusicHub = window.MusicHub || {};
       ]);
     }
     // Raised straight away, and lowered again once the arm is there: onto
-    // the record, or onto its rest.
-    swap(parts, 'head', [
-      parts.head.animate([{ scale: headScale }, { scale: 1.25 }], { duration: TIMING.lower * time, easing: 'ease-out', fill: 'forwards' }),
-      parts.head.animate([{ scale: 1.25 }, { scale: 1 }], {
-        delay: (armDelay + armMs) * time, duration: TIMING.lower * time, easing: 'ease-in', fill: 'forwards',
-      }),
-    ]);
+    // the record, or onto its rest. Moved by hand, it's lifted and lowered
+    // by the hand.
+    var handled = armMoved || !!parts.drag;
+    if (!handled) {
+      swap(parts, 'head', [
+        parts.head.animate([{ scale: headScale }, { scale: 1.25 }], { duration: TIMING.lower * time, easing: 'ease-out', fill: 'forwards' }),
+        parts.head.animate([{ scale: 1.25 }, { scale: 1 }], {
+          delay: (armDelay + armMs) * time, duration: TIMING.lower * time, easing: 'ease-in', fill: 'forwards',
+        }),
+      ]);
+    }
 
     if (still) {
       swap(parts, 'spin', []);
@@ -754,7 +1039,9 @@ window.MusicHub = window.MusicHub || {};
     }
     if (on) {
       swap(parts, 'spin', spinUp(parts, discDeg, 0));
-      needleSound((armDelay + armMs + TIMING.lower) / 1000);
+      if (!handled) {
+        needleSound((armDelay + armMs + TIMING.lower) / 1000);
+      }
     } else {
       // Only a platter that has got going coasts; one still waiting to
       // start just stays where it is.
@@ -768,7 +1055,9 @@ window.MusicHub = window.MusicHub || {};
         }),
       ]);
     }
-    clickSound(0);
+    if (!armMoved) {
+      clickSound(0);
+    }
   }
 
   /*
@@ -824,6 +1113,16 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
+  /** A soft, low tick: the needle settling onto a track's start. */
+  function snapSound() {
+    var ctx = audio();
+    if (ctx) {
+      var at = ctx.currentTime;
+      tone(ctx, at, 220, 140, 0.07, 0.04);
+      noise(ctx, at, 'lowpass', 1200, 0.7, 0.06, 0.0005, 0.008);
+    }
+  }
+
   /** The needle touching down, `inS` seconds from now. */
   function needleSound(inS) {
     var ctx = audio();
@@ -832,6 +1131,142 @@ window.MusicHub = window.MusicHub || {};
       noise(ctx, at, 'highpass', 2500, 0.7, 0.35, 0.0005, 0.004);
       tone(ctx, at, 180, 120, 0.12, 0.05);
     }
+  }
+
+  /*
+   * The needle dragged across the record: the crackle of a well-played
+   * record's surface - clicks scattered at random, most of them faint, now
+   * and then a few in a quick cluster, and a louder pop here and there -
+   * over a very faint hiss. It's never sped up or pitched: only as loud as
+   * the arm's moving fast, and silent while it's still or off the record.
+   */
+  var crackleBuffers = new WeakMap();
+
+  /** Seconds to the next of `perS` random events a second. */
+  function nextEventS(perS) {
+    return -Math.log(1 - Math.random()) / perS;
+  }
+
+  function crackleBuffer(ctx) {
+    var buffer = crackleBuffers.get(ctx);
+    if (buffer) {
+      return buffer;
+    }
+    var rate = ctx.sampleRate;
+    var length = Math.floor(rate * 4);
+    buffer = ctx.createBuffer(1, length, rate);
+    var data = buffer.getChannelData(0);
+
+    // A click: a sharp edge `amp` high, either way up, dying away over
+    // `tauS` - a few samples for a tick, a millisecond for a pop.
+    function click(atS, amp, tauS) {
+      var at = Math.floor(atS * rate);
+      var decay = Math.exp(-1 / (tauS * rate));
+      var value = Math.random() < 0.5 ? -amp : amp;
+      for (var i = at; i < length && Math.abs(value) > 0.001; i += 1) {
+        data[i] += value;
+        value *= decay;
+      }
+    }
+
+    var t;
+    // The faint ticks: dozens a second, nearly all quiet (cubed).
+    for (t = nextEventS(55); t < length / rate; t += nextEventS(55)) {
+      click(t, 0.03 + 0.45 * Math.pow(Math.random(), 3), 0.00004 + Math.random() * 0.00012);
+    }
+    // The clusters: a few a second, 3 to 9 clicks within ~20ms.
+    for (t = nextEventS(3); t < length / rate; t += nextEventS(3)) {
+      var clicks = 3 + Math.floor(Math.random() * 7);
+      var at = t;
+      for (var c = 0; c < clicks; c += 1) {
+        click(at, 0.08 + 0.35 * Math.pow(Math.random(), 2), 0.00006 + Math.random() * 0.00015);
+        at += 0.0005 + Math.random() * 0.004;
+      }
+    }
+    // The pops: one every second or so, louder and fuller.
+    for (t = nextEventS(0.9); t < length / rate; t += nextEventS(0.9)) {
+      click(t, 0.45 + 0.35 * Math.random(), 0.0004 + Math.random() * 0.0008);
+    }
+    // The hiss, barely there.
+    for (var i = 0; i < length; i += 1) {
+      data[i] += (Math.random() * 2 - 1) * 0.01;
+    }
+    // Faded in and out over a few ms where the loop joins, so it never clicks there.
+    var fade = Math.floor(rate * 0.005);
+    for (var f = 0; f < fade; f += 1) {
+      data[f] *= f / fade;
+      data[length - 1 - f] *= f / fade;
+    }
+    crackleBuffers.set(ctx, buffer);
+    return buffer;
+  }
+
+  /** The crackle, started silent - null without sound. */
+  function startCrackle() {
+    var ctx = audio();
+    if (!ctx) {
+      return null;
+    }
+    var source = ctx.createBufferSource();
+    source.buffer = crackleBuffer(ctx);
+    source.loop = true;
+    // Started somewhere new each time, so no two drags crackle the same.
+    var offset = Math.random() * source.buffer.duration;
+    // No thump under it, no fizz over it, and a little warmth in the
+    // middle, like an old record's.
+    var low = ctx.createBiquadFilter();
+    low.type = 'highpass';
+    low.frequency.value = 150;
+    var warmth = ctx.createBiquadFilter();
+    warmth.type = 'peaking';
+    warmth.frequency.value = 1400;
+    warmth.Q.value = 0.8;
+    warmth.gain.value = 4;
+    var high = ctx.createBiquadFilter();
+    high.type = 'lowpass';
+    high.frequency.value = 6000;
+    high.Q.value = 0.6;
+    var gain = ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(low).connect(warmth).connect(high).connect(gain).connect(MusicHub.wallet.audioOutput());
+    source.start(0, offset);
+    return { ctx: ctx, source: source, gain: gain };
+  }
+
+  /** From where the crackle's loudness is now, on to `to`, settling with `tau` s. */
+  function crackleTo(sound, to, at, tau) {
+    var gain = sound.gain.gain;
+    if (gain.cancelAndHoldAtTime) {
+      gain.cancelAndHoldAtTime(at);
+    } else {
+      gain.cancelScheduledValues(at);
+      gain.setValueAtTime(gain.value, at);
+    }
+    gain.setTargetAtTime(to, at, tau);
+  }
+
+  /**
+   * The crackle at `level` (0 to 1) of its loudest for a moment, dying
+   * away unless the next move keeps it up.
+   */
+  function crackle(sound, level) {
+    if (!sound) {
+      return;
+    }
+    var at = sound.ctx.currentTime;
+    // Even a slow drag is heard (the square root); it carries on a moment
+    // between moves, so a steady drag crackles steadily.
+    crackleTo(sound, CRACKLE_PEAK * Math.sqrt(level), at, 0.02);
+    sound.gain.gain.setTargetAtTime(0, at + 0.12, 0.08);
+  }
+
+  function stopCrackle(sound) {
+    if (!sound) {
+      return;
+    }
+    var at = sound.ctx.currentTime;
+    crackleTo(sound, 0, at, 0.015);
+    sound.source.stop(at + 0.15);
   }
 
   /** The set-up's sounds: the record landing, the power button, the needle. */
@@ -857,6 +1292,8 @@ window.MusicHub = window.MusicHub || {};
     setNeedle: setNeedle,
     setProgress: setProgress,
     setSeekable: setSeekable,
+    setArmDraggable: setArmDraggable,
+    setTrackMarks: setTrackMarks,
     playSounds: playSounds,
   };
 })(window.MusicHub);

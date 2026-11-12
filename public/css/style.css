@@ -6036,6 +6036,24 @@ button.turntable__power:focus-visible {
     0 0 12px var(--color-purple-300);
 }
 
+/* While the arm can be moved by hand (turntable.js setArmDraggable), the
+   headshell is its handle - with some room round it for a finger. */
+.turntable--arm-draggable .turntable__head {
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.turntable--arm-draggable .turntable__head::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.turntable--arm-dragging .turntable__head {
+  cursor: grabbing;
+}
+
 /* The collar where the rod goes into the headshell. */
 .turntable__head::before {
   content: '';

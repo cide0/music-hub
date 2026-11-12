@@ -52,6 +52,9 @@ window.MusicHub = window.MusicHub || {};
   // Back past a track's first few seconds starts it again, as on a CD
   // player - before that, it's the track before.
   var RESTART_AFTER_MS = 3000;
+  // The needle put down at the very end of the album plays the last
+  // track's last few seconds rather than nothing.
+  var DROP_END_MARGIN_MS = 3000;
   // Listening pays: LISTEN_COINS for every LISTEN_MS of the album played
   // with the page open in front - counted each LISTEN_TICK_MS, flying out
   // of the record into the balance. A wheel exclusive on the turntable
@@ -797,6 +800,11 @@ window.MusicHub = window.MusicHub || {};
    * asking again.
    */
   function showPlayback(state, askedAt) {
+    // The tonearm in hand shows where it's held; Spotify's had its say
+    // once it's put down.
+    if (player.armHeld) {
+      return POLL_MS;
+    }
     var still = reducedMotion();
     if (player.expect) {
       var arrived = state && onAlbum(state) && reachedSkip(state, albumProgress(state));
@@ -883,7 +891,12 @@ window.MusicHub = window.MusicHub || {};
     }, delay);
   }
 
-  /** The track buttons work while the album is on and the turntable switched on. */
+  /**
+   * The track buttons work while the album is on and the turntable switched
+   * on. The tonearm can be moved by hand once the album has started and
+   * its tracks are known (to tell where on the record which one is) - on
+   * or off, and even with Spotify on something else, to put the album back on.
+   */
   function updateTrackButtons() {
     if (!playerParts) {
       return;
@@ -892,6 +905,7 @@ window.MusicHub = window.MusicHub || {};
     playerParts.prev.disabled = !usable;
     playerParts.next.disabled = !usable;
     MusicHub.turntable.setSeekable(playerParts, usable);
+    MusicHub.turntable.setArmDraggable(playerParts, !!(player && player.started && player.tracks && player.tracks.length));
   }
 
   /**
@@ -989,6 +1003,143 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /**
+   * Where `fraction` of the way through the album is: the track (its
+   * index) and how far into it - kept off the album's very end
+   * (DROP_END_MARGIN_MS).
+   */
+  function albumPoint(fraction) {
+    var tracks = player.tracks;
+    var totalMs = albumMs(tracks.length);
+    var albumAtMs = Math.max(0, Math.min(fraction * totalMs, totalMs - DROP_END_MARGIN_MS));
+    // A needle settled onto a track's start lands on it, not a rounding
+    // error short of it, at the end of the one before.
+    var index = 0;
+    while (index < tracks.length - 1 && albumMs(index + 1) <= albumAtMs + 1) {
+      index += 1;
+    }
+    var track = tracks[index];
+    var positionMs = Math.max(0, Math.min(albumAtMs - albumMs(index), track.durationMs));
+    return { index: index, track: track, positionMs: positionMs < 1 ? 0 : positionMs, totalMs: totalMs };
+  }
+
+  /**
+   * The tonearm picked up: the music stops, as the needle leaves the
+   * record - Spotify pauses, if it's playing the album, and the groove
+   * and the track line hold still. The turntable stays on, the platter
+   * turning, until the arm's put down.
+   */
+  function liftNeedle() {
+    if (!player) {
+      return;
+    }
+    var run = playRun;
+    player.armHeld = true;
+    player.liftPaused = false;
+    window.clearTimeout(pollTimer);
+    if (!player.playing || player.elsewhere || !playerParts.on) {
+      return;
+    }
+    player.liftPaused = true;
+    player.playing = false;
+    var at = player.at;
+    if (at) {
+      var playedMs = Math.min(at.durationMs, at.progressMs + (at.playing ? Date.now() - at.time : 0));
+      player.at = { index: at.index, progressMs: playedMs, playing: false, time: Date.now(), durationMs: at.durationMs };
+      MusicHub.turntable.setProgress(playerParts, playedMs / at.durationMs, 0, at.durationMs);
+    }
+    els.track.classList.add('player__track--paused');
+    powerRequest(MusicHub.spotify.pausePlayback()).catch(function (err) {
+      // Turned down when nothing's playing: it's paused all the same.
+      if (run === playRun && err.code !== 'failed') {
+        console.warn('Could not pause on Spotify', err);
+      }
+    });
+  }
+
+  /**
+   * The tonearm moved over the record: the track under the needle shows
+   * in the track line, and the point in it in the groove and the time
+   * under it - off the record, the last one stays.
+   */
+  function hoverNeedle(fraction) {
+    if (!player || fraction === null) {
+      return;
+    }
+    var point = albumPoint(fraction);
+    showTrack(point.index + 1, player.tracks.length, point.track, false);
+    MusicHub.turntable.setProgress(playerParts, point.positionMs / point.track.durationMs, 0, point.track.durationMs);
+  }
+
+  /**
+   * The tonearm moved by hand and let go. Back on its rest (`fraction`
+   * null), the turntable switches off and Spotify pauses, as with the power
+   * button. Put down on the record, the album plays from there -
+   * `fraction` of the way through it, worked out from its track lengths:
+   * the track line, the groove and the arm go there straight away, the
+   * turntable switches on if it was off, and Spotify is asked a moment
+   * later whether it got there.
+   */
+  function dropNeedle(fraction) {
+    if (!player) {
+      return;
+    }
+    var run = playRun;
+    var liftPaused = player.liftPaused;
+    player.armHeld = false;
+    player.liftPaused = false;
+    if (fraction === null) {
+      if (liftPaused) {
+        // Spotify's already paused: only the turntable to switch off.
+        switchTurntable(false, { armMoved: true });
+        setStatus('Paused on Spotify');
+      } else if (playerParts.on) {
+        setTurntable(false, { armMoved: true });
+      }
+      // Back to the track Spotify's really on, from the one last held over.
+      watchPlayback(run, POLL_AFTER_POWER_MS);
+      return;
+    }
+    var album = player.vinyl.album;
+    var tracks = player.tracks;
+    var point = albumPoint(fraction);
+    var totalMs = point.totalMs;
+    var index = point.index;
+    var track = point.track;
+    var positionMs = point.positionMs;
+    player.at = { index: index, progressMs: positionMs, playing: true, time: Date.now(), durationMs: track.durationMs };
+    player.expect = { index: index, positionMs: positionMs, at: Date.now() };
+    player.fraction = (albumMs(index) + positionMs) / totalMs;
+    player.playing = true;
+    player.elsewhere = false;
+    player.offAlbum = 0;
+    showTrack(index + 1, tracks.length, track, true);
+    MusicHub.turntable.setNeedle(playerParts, player.fraction, 1 / totalMs, { still: reducedMotion() });
+    if (playerParts.on) {
+      updateTrackButtons();
+    } else {
+      switchTurntable(true, { armMoved: true });
+    }
+    MusicHub.turntable.setProgress(playerParts, positionMs / track.durationMs, 1 / track.durationMs, track.durationMs);
+    els.actions.hidden = true;
+    els.actions.textContent = '';
+    setStatus('Playing on Spotify');
+
+    powerRequest(MusicHub.spotify.playAlbumAt(album.id, index, positionMs)).then(function () {
+      if (run === playRun) {
+        watchPlayback(run, POLL_AFTER_SKIP_MS);
+      }
+    }).catch(function (err) {
+      if (run !== playRun) {
+        return;
+      }
+      console.warn('Could not play from the needle on Spotify', err);
+      player.expect = null;
+      showPlaybackError(err, album);
+      watchPlayback(run, 0);
+    });
+  }
+
+  /**
    * Play: the collection makes way for the turntable, the record drops
    * onto it and spins - and the album starts on the user's Spotify
    * straight away, so the music comes in about as the platter gets going.
@@ -1024,6 +1175,9 @@ window.MusicHub = window.MusicHub || {};
       trackButtons: true,
       fromEdge: true,
       onSeek: seek,
+      onArmDrop: dropNeedle,
+      onArmLift: liftNeedle,
+      onArmMove: hoverNeedle,
     });
     playerParts.power.addEventListener('click', togglePower);
     playerParts.prev.addEventListener('click', function () {
@@ -1042,10 +1196,12 @@ window.MusicHub = window.MusicHub || {};
     // while Spotify catches up (`expect`). Whether Spotify is playing the
     // album, as last asked, and how long it's been listened to towards
     // the next coins. How many of the page's own plays, pauses and resumes
-    // Spotify hasn't answered yet, and when it last answered one.
+    // Spotify hasn't answered yet, and when it last answered one. Whether
+    // the tonearm's held by hand, and whether picking it up paused Spotify.
     player = {
       vinyl: vinyl, record: record, started: false, tracks: null, fraction: 0, elsewhere: false, offAlbum: 0,
       at: null, expect: null, playing: false, listenedMs: 0, powerPending: 0, powerAt: 0,
+      armHeld: false, liftPaused: false,
     };
     startListenClock();
     updateTrackButtons();
@@ -1053,6 +1209,12 @@ window.MusicHub = window.MusicHub || {};
     MusicHub.spotify.getAlbumTracks(album.id).then(function (tracks) {
       if (run === playRun) {
         player.tracks = tracks;
+        // Each track's start on the record, for the tonearm to settle onto.
+        var totalMs = albumMs(tracks.length);
+        MusicHub.turntable.setTrackMarks(playerParts, totalMs ? tracks.map(function (track, i) {
+          return albumMs(i) / totalMs;
+        }) : []);
+        updateTrackButtons();
       }
     }).catch(function (err) {
       console.warn('Could not load the album\u2019s tracks', err);
@@ -1076,10 +1238,13 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * Switches the turntable off or on - the platter, the arm and the track
-   * buttons - without telling Spotify.
+   * buttons - without telling Spotify. `options.armMoved`: it's the tonearm
+   * moved by hand that switched it (turntable.js setPower).
    */
-  function switchTurntable(on) {
-    MusicHub.turntable.setPower(playerParts, on, { still: reducedMotion() });
+  function switchTurntable(on, options) {
+    MusicHub.turntable.setPower(playerParts, on, {
+      still: reducedMotion(), armMoved: !!(options && options.armMoved),
+    });
     // Ordinary patterns only move while it plays; a wheel exclusive's art
     // keeps going with the platter stopped.
     MusicHub.vinyl.setPlaying(player.record, (on || isExclusive(player.vinyl)) && !reducedMotion());
@@ -1103,9 +1268,16 @@ window.MusicHub = window.MusicHub || {};
    * back and Spotify pauses; on, it all starts again and Spotify resumes.
    */
   function togglePower() {
+    setTurntable(!playerParts.on);
+  }
+
+  /**
+   * Switches the turntable on or off and Spotify with it - resumed or
+   * paused. `options` as for switchTurntable.
+   */
+  function setTurntable(on, options) {
     var run = playRun;
-    var on = !playerParts.on;
-    switchTurntable(on);
+    switchTurntable(on, options);
 
     if (!player.started) {
       // Nothing on Spotify to pause; switched on, it has another go.
