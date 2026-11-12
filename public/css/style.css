@@ -9129,6 +9129,213 @@ button.turntable__power:focus-visible {
   display: none;
 }
 
+/* The arrows to the vinyl before and after (collection.js switchVinyl):
+   big and round like the Albums history's toggle, halfway down the
+   turntable, each centred in the room beside it - the plinth is 1.45
+   times its height wide, centred. Over the jukebox while it turns. */
+.player__deck {
+  --switch-size: 56px;
+  --switch-side: max(0.5rem, (100% - 1.45 * (var(--reel-cover) + 1.5rem)) / 4 - var(--switch-size) / 2);
+}
+
+.player__switch {
+  position: absolute;
+  top: calc(var(--deck-top) + (100% - var(--deck-top)) / 2);
+  z-index: 6;
+  width: var(--switch-size);
+  min-width: var(--switch-size);
+  height: var(--switch-size);
+  min-height: var(--switch-size);
+  padding: 0;
+  translate: 0 -50%;
+  border-color: var(--color-purple-800);
+  border-radius: 50%;
+  background-color: var(--color-surface);
+}
+
+.player__switch--prev {
+  left: var(--switch-side);
+}
+
+.player__switch--next {
+  right: var(--switch-side);
+}
+
+.player__switch[hidden] {
+  display: none;
+}
+
+.player__switch svg {
+  width: 30px;
+  height: 30px;
+  transition: translate 0.2s ease;
+}
+
+.player__switch[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+/* Hovered, the chevron leans the way it goes. */
+@media (hover: hover) {
+  .player__switch--prev:hover:not([aria-disabled='true']) svg {
+    translate: -3px 0;
+  }
+
+  .player__switch--next:hover:not([aria-disabled='true']) svg {
+    translate: 3px 0;
+  }
+}
+
+/* The album it goes to and its artist, below it - on hover, or with the
+   keyboard's focus on it. Touch screens can't hover, so it never shows
+   there. */
+.player__switch-label {
+  position: absolute;
+  top: calc(100% + 0.625rem);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  width: max-content;
+  max-width: 9.5rem;
+  padding: 0.5rem 0.75rem;
+  translate: -50% -0.25rem;
+  border: 1px solid var(--color-purple-800);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface-raised);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-black) 55%, transparent);
+  font-weight: 400;
+  line-height: 1.3;
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, translate 0.15s ease, visibility 0.15s;
+}
+
+.player__switch-eyebrow {
+  color: var(--color-purple-200);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.player__switch-album {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.player__switch-artist {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .player__switch:hover:not([aria-disabled='true']) .player__switch-label {
+    translate: -50% 0;
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.player__switch:focus-visible:not([aria-disabled='true']) .player__switch-label {
+  translate: -50% 0;
+  opacity: 1;
+  visibility: visible;
+}
+
+/* The jukebox (collection.js switchVinyl): a backdrop dimming the page,
+   the deck lifted above it to stay bright, and over both a big wheel of
+   records across the whole page - its top record right over the platter,
+   the rest of its rim running down either side. collection.js sizes,
+   places and turns it. The navbar sits at 10. */
+.jukebox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: radial-gradient(ellipse at 50% 30%,
+    color-mix(in srgb, var(--color-purple-950) 55%, transparent),
+    color-mix(in srgb, var(--color-black) 82%, transparent) 75%);
+}
+
+.player__deck--jukebox {
+  z-index: 31;
+}
+
+.jukebox {
+  position: fixed;
+  inset: 0;
+  z-index: 32;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.jukebox__wheel {
+  position: absolute;
+  width: 0;
+  height: 0;
+  will-change: rotate;
+}
+
+/* Each record round the rim, its slot turned to face out from the hub. */
+.jukebox__slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  translate: -50% -50%;
+}
+
+.jukebox__record {
+  position: absolute;
+  inset: 0;
+}
+
+/* Dims a record further down the rim (collection.js jukeboxShade). */
+.jukebox__shade {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background-color: var(--color-black);
+  pointer-events: none;
+}
+
+/* As on the platter (.turntable__record .vinyl), so the record dropped
+   from the wheel's top lines up with it exactly. */
+.jukebox__record .vinyl {
+  inset: 4%;
+  border-radius: 50%;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--color-black) 60%, transparent);
+}
+
+/* No room beside the turntable: smaller arrows over the deck's edges,
+   still a comfortable size to tap. */
+@media (max-width: 1000px) {
+  .player__deck {
+    --switch-size: 44px;
+    --switch-side: 0.375rem;
+  }
+
+  .player__switch {
+    background-color: color-mix(in srgb, var(--color-surface) 85%, transparent);
+  }
+
+  .player__switch svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
 /* Room beside the turntable for what's playing: about 10rem either side. */
 @media (min-width: 1001px) {
   .player {

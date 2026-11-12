@@ -917,7 +917,9 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * Plays the set-up on `parts` (from build()). The record turns until
-   * `options.spinUntil` ms from the start - or, left out, for good.
+   * `options.spinUntil` ms from the start - or, left out, for good. With
+   * `options.lifted` the record's already in sight where its drop starts
+   * (the Collection's jukebox holds it there), so it doesn't fade in.
    */
   function play(parts, options) {
     var o = options || {};
@@ -927,7 +929,7 @@ window.MusicHub = window.MusicHub || {};
     // settling flat on the platter with a small give. Landed at 60% of
     // the way through (playSounds).
     parts.record.animate([
-      { transform: 'translateY(-14%) scale(1.3)', opacity: 0, easing: 'linear' },
+      { transform: 'translateY(-14%) scale(1.3)', opacity: o.lifted ? 1 : 0, easing: 'linear' },
       { offset: 0.15, transform: 'translateY(-11.2%) scale(1.24)', opacity: 1, easing: 'cubic-bezier(0.45, 0, 0.9, 0.6)' },
       { offset: 0.6, transform: 'none', easing: 'ease-out' },
       { offset: 0.8, transform: 'scale(1.012)', easing: 'ease-in-out' },
@@ -987,11 +989,12 @@ window.MusicHub = window.MusicHub || {};
    * put down on the record (on) or back on its rest (off) - no press of
    * the power button, and the arm stays where it was put, only gliding on
    * to where the album has got to. While the arm is held by hand, it's
-   * left where it is.
+   * left where it is. Returns how many ms until the arm's swing is over
+   * and its head lowered again - 0 when there was nothing to switch.
    */
   function setPower(parts, on, options) {
     if (parts.on === on) {
-      return;
+      return 0;
     }
     var armMoved = !!(options && options.armMoved);
     markOn(parts, on);
@@ -1047,6 +1050,7 @@ window.MusicHub = window.MusicHub || {};
     // the record, or onto its rest. Moved by hand, it's lifted and lowered
     // by the hand.
     var handled = armMoved || !!parts.drag;
+    var settledMs = handled ? 0 : (armDelay + armMs + TIMING.lower) * time;
     if (!handled) {
       swap(parts, 'head', [
         parts.head.animate([{ scale: headScale }, { scale: 1.25 }], { duration: TIMING.lower * time, easing: 'ease-out', fill: 'forwards' }),
@@ -1058,7 +1062,7 @@ window.MusicHub = window.MusicHub || {};
 
     if (still) {
       swap(parts, 'spin', []);
-      return;
+      return settledMs;
     }
     if (on) {
       swap(parts, 'spin', spinUp(parts, discDeg, 0));
@@ -1081,6 +1085,7 @@ window.MusicHub = window.MusicHub || {};
     if (!armMoved) {
       clickSound(0);
     }
+    return settledMs;
   }
 
   /*

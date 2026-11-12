@@ -83,6 +83,14 @@ window.MusicHub = window.MusicHub || {};
   var activeFilter = 'all';
   // The vinyl the remove dialog is asking about.
   var pendingRemoval = null;
+  // The vinyls the grid shows, in its order (render), and the ones the
+  // player's arrows go round - those of them with an album to play, as
+  // they were when Play was pressed.
+  var shownVinyls = [];
+  var queue = [];
+  // The jukebox turning to another vinyl (switchVinyl): { timers, nodes }
+  // - null while it isn't.
+  var switching = null;
 
   function el(tag, className, text) {
     var node = document.createElement(tag);
@@ -568,6 +576,7 @@ window.MusicHub = window.MusicHub || {};
     els.count.textContent = MusicHub.wallet.format(all.length) + ' of '
       + MusicHub.wallet.format(MusicHub.vinylCatalog.size) + ' collected';
     renderSort();
+    shownVinyls = shown;
     shown.forEach(function (vinyl) {
       var node = card(vinyl);
       cardOf.set(vinyl, node);
@@ -1151,9 +1160,24 @@ window.MusicHub = window.MusicHub || {};
       + '&type=release&format=Vinyl';
   }
 
-  function openPlayer(vinyl) {
+  /** A vinyl pressed for an album, which the player can play. */
+  function playable(vinyl) {
+    return !!(vinyl.album && vinyl.album.id);
+  }
+
+  /**
+   * `options.switched`: turned to by the jukebox (switchVinyl) - the
+   * arrows keep going round the same vinyls, and the focus stays on the
+   * arrow pressed. `options.lifted`: the record's already showing at the
+   * top of the jukebox's wheel, where its drop starts.
+   */
+  function openPlayer(vinyl, options) {
+    var switched = !!(options && options.switched);
     var album = vinyl.album;
     var run = ++playRun;
+    if (!switched) {
+      queue = shownVinyls.filter(playable);
+    }
 
     // The album's name opens it in the Spotify app.
     els.title.textContent = '';
@@ -1223,15 +1247,18 @@ window.MusicHub = window.MusicHub || {};
 
     els.view.hidden = true;
     els.player.hidden = false;
-    window.scrollTo({ top: 0 });
-    els.back.focus({ preventScroll: true });
+    updateSwitchButtons();
+    if (!switched) {
+      window.scrollTo({ top: 0 });
+      els.back.focus({ preventScroll: true });
+    }
 
     if (reducedMotion()) {
       MusicHub.turntable.showPlaying(playerParts);
       return;
     }
     MusicHub.turntable.playSounds();
-    MusicHub.turntable.play(playerParts);
+    MusicHub.turntable.play(playerParts, { lifted: !!(options && options.lifted) });
     // Lava, smash and peppermint patterns move while it plays.
     MusicHub.vinyl.setPlaying(record, true);
   }
@@ -1643,23 +1670,335 @@ window.MusicHub = window.MusicHub || {};
     });
   }
 
-  function closePlayer() {
+  /**
+   * Stops following the album on the turntable - Spotify's answers about
+   * it ignored from here on, no more coins for it - and forgets which
+   * playlists its songs went on (only kept while the album plays).
+   */
+  function stopPlaying() {
     playRun += 1;
     window.clearTimeout(pollTimer);
     window.clearInterval(listenTimer);
+    saveSong = null;
+    MusicHub.songPlaylists.forget();
+    if (els.songDialog.open) {
+      els.songDialog.close();
+    }
+  }
+
+  function closePlayer() {
+    cancelSwitch();
+    stopPlaying();
     if (playerParts) {
       playerParts.root.remove();
       playerParts = null;
     }
     player = null;
-    saveSong = null;
-    // Which playlists the songs went on is only kept while the album plays.
-    MusicHub.songPlaylists.forget();
-    if (els.songDialog.open) {
-      els.songDialog.close();
-    }
     els.player.hidden = true;
     els.view.hidden = false;
+  }
+
+  /* -------------------------------------------------------- the jukebox */
+
+  /*
+   * The arrows either side of the turntable go to the vinyl before or
+   * after this one, round from the last to the first. The record lifts
+   * off the platter to the top of a big jukebox wheel across the whole
+   * page, the vinyls after it running down its rim to the left and the
+   * ones before it down to the right. The wheel turns one record's worth
+   * the way the arrow points, bringing the one picked up to the top -
+   * right over the platter, just where a record dropped from Play starts
+   * - and it drops from there, its album starting on Spotify.
+   */
+  var JUKEBOX_SLOTS_EACH_SIDE = 4;
+  // Times in ms from the arrow pressed.
+  // The record lifts `afterArmMs` once the tonearm's back on its rest,
+  // the page dimming round the deck over `showMs`; the wheel turns
+  // `spinGapMs` after it's up, and the drop follows the turn's end by
+  // `settleMs`, however late that comes.
+  var JUKEBOX = {
+    showMs: 350,
+    afterArmMs: 120,
+    liftMs: 500,
+    spinGapMs: 50,
+    spinMs: 950,
+    settleMs: 150,
+    hideMs: 500,
+  };
+  // ease-in-out (sine): the wheel eases off and eases into place.
+  var JUKEBOX_EASING = 'cubic-bezier(0.37, 0, 0.63, 1)';
+  // The records on the wheel: as big as the record on the platter at the
+  // start of its drop (turntable.js play: translateY(-14%) scale(1.3)),
+  // with a little room between them round the rim. The wheel's at least
+  // this many records' widths round, and reaches this far down the page.
+  var DROP_SCALE = 1.3;
+  var DROP_RISE = 0.14;
+  var JUKEBOX_GAP = 1.08;
+  var JUKEBOX_MIN_RADIUS = 1.6;
+  var JUKEBOX_PAGE_RADIUS = 0.75;
+
+  var JUKEBOX_SOUNDS = {
+    // The record lifted off the platter: a soft breath of air.
+    lift: function (ctx, at) {
+      MusicHub.sfx.noise(ctx, at, 0.45, 'bandpass', 500, 0.8, 0.035, 0.2, 1400);
+    },
+    // The wheel turning: a whoosh swelling and fading with its speed.
+    spin: function (ctx, at) {
+      var half = JUKEBOX.spinMs / 2000;
+      MusicHub.sfx.noise(ctx, at, half, 'lowpass', 250, 0.9, 0.09, half * 0.9, 1300);
+      MusicHub.sfx.noise(ctx, at + half, half, 'lowpass', 1300, 0.9, 0.09, 0.02, 220);
+    },
+    // Come to rest, the record picked: a soft wooden tock and a little
+    // bell, the jukebox's selection made.
+    pick: function (ctx, at) {
+      MusicHub.sfx.tone(ctx, at, 520, 390, 0.14, 0.09);
+      MusicHub.sfx.tone(ctx, at, 1040, 900, 0.03, 0.04, 'triangle');
+      MusicHub.sfx.chime(ctx, at + 0.05, [784, 1175], 0.035);
+    },
+  };
+
+  /** The vinyl `step` on from the one playing, round the queue. */
+  function queueNeighbour(step) {
+    var count = queue.length;
+    var at = Math.max(0, queue.indexOf(player.vinyl));
+    return queue[(((at + step) % count) + count) % count];
+  }
+
+  /**
+   * The arrows: only with another vinyl to go to, each naming the album
+   * it goes to; unusable (aria-disabled, so the focus stays on the one
+   * pressed) while the jukebox turns.
+   */
+  function updateSwitchButtons() {
+    var usable = !!player && queue.length > 1;
+    [[els.prevVinyl, -1, 'Previous'], [els.nextVinyl, 1, 'Next']].forEach(function (arrow) {
+      var button = arrow[0];
+      button.hidden = !usable;
+      if (!usable) {
+        return;
+      }
+      var album = queueNeighbour(arrow[1]).album;
+      button.querySelector('.player__switch-album').textContent = album.name;
+      button.querySelector('.player__switch-artist').textContent = album.artist;
+      button.setAttribute('aria-label', arrow[2] + ' vinyl: ' + album.name + ' by ' + album.artist);
+      button.setAttribute('aria-disabled', switching ? 'true' : 'false');
+    });
+  }
+
+  function cancelSwitch() {
+    if (!switching) {
+      return;
+    }
+    switching.timers.forEach(window.clearTimeout);
+    switching.nodes.forEach(function (node) {
+      node.getAnimations({ subtree: true }).forEach(function (animation) {
+        animation.cancel();
+      });
+      node.remove();
+    });
+    els.deck.classList.remove('player__deck--jukebox');
+    switching = null;
+  }
+
+  /** How dim a record is `deg` round the rim from the top: dimmer further down. */
+  function jukeboxShade(deg) {
+    return 0.45 * Math.min(1, Math.abs(deg) / 90);
+  }
+
+  /**
+   * The jukebox over the page: a backdrop dimming everything but the
+   * deck, and the wheel - its top record where the record on the platter
+   * starts its drop, the rest of its rim running down the page either
+   * side, records round it every `stepDeg`. The record `k` on from the one
+   * playing sits `k` steps round to the left, so turning the wheel
+   * clockwise (`forward`) brings the next one up to the top, and the
+   * other way the one before.
+   */
+  function buildJukebox(parts) {
+    // The cap shares the record's box on the platter, and never moves.
+    var box = parts.cap.getBoundingClientRect();
+    var size = box.width * DROP_SCALE;
+    var top = {
+      x: box.left + box.width / 2,
+      y: box.top + box.height / 2 - box.height * DROP_RISE,
+    };
+    var radius = Math.max(size * JUKEBOX_MIN_RADIUS, window.innerHeight * JUKEBOX_PAGE_RADIUS);
+    var stepDeg = (size * JUKEBOX_GAP / radius) * 180 / Math.PI;
+
+    var backdrop = el('div', 'jukebox-backdrop');
+    var overlay = el('div', 'jukebox');
+    overlay.setAttribute('aria-hidden', 'true');
+    var wheel = el('div', 'jukebox__wheel');
+    wheel.style.left = top.x + 'px';
+    wheel.style.top = (top.y + radius) + 'px';
+    var slots = [];
+    for (var k = -JUKEBOX_SLOTS_EACH_SIDE; k <= JUKEBOX_SLOTS_EACH_SIDE; k += 1) {
+      var slot = el('div', 'jukebox__slot');
+      slot.style.width = size + 'px';
+      slot.style.height = size + 'px';
+      slot.style.transform = 'rotate(' + (-k * stepDeg) + 'deg) translateY(' + (-radius) + 'px)';
+      // The record's own box inside the slot, for the lift onto it.
+      var holder = el('div', 'jukebox__record');
+      var record = renderRecord(queueNeighbour(k));
+      MusicHub.vinyl.setPlaying(record, false);
+      holder.appendChild(record);
+      // Dimmed by a shade over it rather than a filter, which would
+      // redraw the whole record on every frame of the turn.
+      var shade = el('span', 'jukebox__shade');
+      shade.style.opacity = jukeboxShade(-k * stepDeg);
+      holder.appendChild(shade);
+      slot.appendChild(holder);
+      slots.push({ node: slot, holder: holder, shade: shade, deg: -k * stepDeg, step: k });
+      wheel.appendChild(slot);
+    }
+    overlay.appendChild(wheel);
+    return {
+      backdrop: backdrop, overlay: overlay, wheel: wheel, slots: slots, stepDeg: stepDeg, box: box,
+    };
+  }
+
+  /**
+   * Turns the wheel `deg` round, starting `delay` ms from now - each
+   * record's shade following it. Resolves once it's there.
+   */
+  function turnJukebox(jukebox, deg, delay) {
+    var timing = {
+      delay: delay, duration: JUKEBOX.spinMs, easing: JUKEBOX_EASING, fill: 'forwards',
+    };
+    jukebox.slots.forEach(function (slot) {
+      slot.shade.animate([
+        { opacity: jukeboxShade(slot.deg) }, { opacity: jukeboxShade(slot.deg + deg) },
+      ], timing);
+    });
+    return jukebox.wheel.animate([{ rotate: '0deg' }, { rotate: deg + 'deg' }], timing).finished;
+  }
+
+  /** An arrow: to the vinyl after this one (`forward`) or the one before. */
+  function switchVinyl(forward) {
+    if (!player || !playerParts || switching || queue.length < 2) {
+      return;
+    }
+    var target = queueNeighbour(forward ? 1 : -1);
+    var leaving = playerParts;
+    var wasStarted = player.started;
+    stopPlaying();
+    hideTrack();
+    els.actions.hidden = true;
+    els.actions.textContent = '';
+
+    if (reducedMotion()) {
+      openPlayer(target, { switched: true });
+      return;
+    }
+
+    setStatus('Changing records\u2026');
+    // The music stops while the records change - Spotify turns a pause
+    // down when it's paused already, which is just as good.
+    if (wasStarted) {
+      MusicHub.spotify.pausePlayback().catch(function (err) {
+        if (err.code !== 'failed') {
+          console.warn('Could not pause on Spotify', err);
+        }
+      });
+    }
+    // The old turntable can't be used meanwhile: it switches off, and the
+    // record only lifts once the tonearm's back on its rest.
+    leaving.root.inert = true;
+    var armMs = MusicHub.turntable.setPower(leaving, false);
+    MusicHub.vinyl.setPlaying(leaving.vinyl, false);
+    var liftAt = armMs + JUKEBOX.afterArmMs;
+    var spinAt = liftAt + JUKEBOX.liftMs + JUKEBOX.spinGapMs;
+
+    var jukebox = buildJukebox(leaving);
+    var sign = forward ? 1 : -1;
+    switching = { timers: [], nodes: [jukebox.backdrop, jukebox.overlay] };
+    var job = switching;
+    // The deck stays bright between the backdrop and the wheel.
+    els.deck.classList.add('player__deck--jukebox');
+    document.body.appendChild(jukebox.backdrop);
+    document.body.appendChild(jukebox.overlay);
+    updateSwitchButtons();
+
+    function later(fn, delay) {
+      job.timers.push(window.setTimeout(fn, delay));
+    }
+
+    // Nothing of the jukebox shows until the arm's on its rest: then the
+    // page dims round the deck as the record lifts.
+    jukebox.backdrop.animate([{ opacity: 0 }, { opacity: 1 }], {
+      delay: liftAt, duration: JUKEBOX.showMs, easing: 'ease-out', fill: 'backwards',
+    });
+    // The wheel's other records roll in from below; the top one is the
+    // record on the platter, lifted onto it - from the platter's own box
+    // (1 / DROP_SCALE of the slot) up to the top of the wheel.
+    var front = null;
+    jukebox.slots.forEach(function (slot) {
+      if (slot.step === 0) {
+        front = slot;
+        return;
+      }
+      slot.holder.animate([
+        { opacity: 0, transform: 'translateY(30%)' },
+        { opacity: 1, transform: 'none' },
+      ], {
+        delay: liftAt + Math.abs(slot.step) * 60,
+        duration: JUKEBOX.liftMs,
+        easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)',
+        fill: 'backwards',
+      });
+    });
+    var riseBy = jukebox.box.height * DROP_RISE;
+    // Until then the record stays on the platter, under the arm - the
+    // wheel's copy of it only takes over as it lifts.
+    front.node.animate([{ opacity: 0 }, { opacity: 0 }], { duration: liftAt });
+    front.holder.animate([
+      { transform: 'translateY(' + riseBy + 'px) scale(' + (1 / DROP_SCALE) + ')', easing: 'cubic-bezier(0.4, 0, 0.2, 1)' },
+      { transform: 'none' },
+    ], { delay: liftAt, duration: JUKEBOX.liftMs, fill: 'backwards' });
+    leaving.cap.animate([{ opacity: 1 }, { opacity: 0 }], {
+      delay: liftAt, duration: 1, fill: 'forwards',
+    });
+    leaving.record.animate([{ opacity: 1 }, { opacity: 0 }], {
+      delay: liftAt, duration: 1, fill: 'forwards',
+    });
+    MusicHub.sfx.play(JUKEBOX_SOUNDS, 'lift', liftAt / 1000);
+    MusicHub.sfx.play(JUKEBOX_SOUNDS, 'spin', spinAt / 1000);
+
+    // One record's worth round, the way the arrow points; come to rest,
+    // the record now at the top drops onto the platter from right there -
+    // the turntable's own drop, starting where it is - while the wheel
+    // and the backdrop fade away round it.
+    turnJukebox(jukebox, sign * jukebox.stepDeg, spinAt).then(function () {
+      if (switching !== job) {
+        return;
+      }
+      MusicHub.sfx.play(JUKEBOX_SOUNDS, 'pick');
+      later(drop, JUKEBOX.settleMs);
+    }, function () {
+      // Cancelled (cancelSwitch).
+    });
+
+    function drop() {
+      jukebox.slots.forEach(function (slot) {
+        if (slot.step === sign) {
+          slot.node.style.visibility = 'hidden';
+        }
+      });
+      jukebox.overlay.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: JUKEBOX.hideMs, easing: 'ease-out', fill: 'forwards',
+      });
+      jukebox.backdrop.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: JUKEBOX.hideMs, easing: 'ease-in-out', fill: 'forwards',
+      });
+      openPlayer(target, { switched: true, lifted: true });
+      later(function () {
+        jukebox.backdrop.remove();
+        jukebox.overlay.remove();
+        els.deck.classList.remove('player__deck--jukebox');
+        switching = null;
+        updateSwitchButtons();
+      }, JUKEBOX.hideMs);
+    }
   }
 
   MusicHub.sync.ready(function () {
@@ -1709,6 +2048,14 @@ window.MusicHub = window.MusicHub || {};
     });
 
     els.back.addEventListener('click', closePlayer);
+    els.prevVinyl = document.getElementById('player-prev-vinyl');
+    els.nextVinyl = document.getElementById('player-next-vinyl');
+    els.prevVinyl.addEventListener('click', function () {
+      switchVinyl(false);
+    });
+    els.nextVinyl.addEventListener('click', function () {
+      switchVinyl(true);
+    });
     initSongPlaylists();
     els.search.addEventListener('input', function () {
       setQuery(els.search.value);
@@ -1741,7 +2088,7 @@ window.MusicHub = window.MusicHub || {};
 
   // Back in the tab: catch up on what Spotify played meanwhile.
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && player && player.started) {
+    if (!document.hidden && player && player.started && !switching) {
       watchPlayback(playRun, 0);
     }
   });

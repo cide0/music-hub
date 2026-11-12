@@ -92,6 +92,30 @@
               </div>
             </div>
             <span class="player__count" id="player-count" hidden></span>
+            <!-- The vinyl before and after this one in the collection, as the
+                 grid had them - round from the last back to the first. Each
+                 turns the jukebox (collection.js switchVinyl); hovered, it
+                 names the album it goes to. -->
+            <button type="button" class="icon-button player__switch player__switch--prev" id="player-prev-vinyl" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 6 9 12 15 18" />
+              </svg>
+              <span class="player__switch-label" aria-hidden="true">
+                <span class="player__switch-eyebrow">Previous</span>
+                <span class="player__switch-album"></span>
+                <span class="player__switch-artist"></span>
+              </span>
+            </button>
+            <button type="button" class="icon-button player__switch player__switch--next" id="player-next-vinyl" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 6 15 12 9 18" />
+              </svg>
+              <span class="player__switch-label" aria-hidden="true">
+                <span class="player__switch-eyebrow">Next</span>
+                <span class="player__switch-album"></span>
+                <span class="player__switch-artist"></span>
+              </span>
+            </button>
           </div>
           <div class="player__info">
             <p class="player__status" id="player-status" role="status"></p>

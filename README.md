@@ -48,6 +48,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - The record player's power button pauses and resumes the album on Spotify. Pausing or resuming in Spotify itself switches the record player off or on too.
   - The progress bar under the record shows the time played and the song's length. Click or drag on it to jump to that part of the song.
   - Grab the tonearm by its head and drag it: picking it up pauses the album, and while you hold it over the record the track and time under the needle show. Put the needle down anywhere on the record to play the album from that point, or let go off the record to send the arm back to its rest.
+  - The big arrows left and right of the record player switch to the previous or next vinyl in your collection (in the order the collection was showing, going round from the last to the first). Hover one to see which album it goes to. The album pauses, the tonearm goes back to its rest, and the record lifts onto the top of a jukebox wheel of your records spanning the page, the wheel turns one record that way, and the new one drops onto the platter as its album starts on Spotify.
   - Add the song that's currently playing to your playlists right from the record player.
   - Playlists can be set to rotate, so they only keep your newest songs.
 - **Settings:** Export and import your data, choose the Concerts page's cities, manage the Google login and Drive sync, set your Gallery folder, Spotify playlists and Discogs username, and turn the sound effects on or off.
