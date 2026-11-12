@@ -385,7 +385,17 @@ window.MusicHub = window.MusicHub || {};
       // The album's name, with the user's rating from the album history
       // on the right of the same line.
       var heading = el('div', 'vinyl-card__heading');
-      heading.appendChild(el('h3', 'release-card__title', album.name));
+      var title = el('h3', 'release-card__title');
+      // A link for the keyboard; a click anywhere on the card opens it too.
+      if (album.id) {
+        var titleLink = el('a', 'vinyl-card__title-link', album.name);
+        titleLink.href = 'spotify:album:' + album.id;
+        titleLink.title = 'Open in Spotify';
+        title.appendChild(titleLink);
+      } else {
+        title.textContent = album.name;
+      }
+      heading.appendChild(title);
       // Only an album in the history has a rating to show - an unrated
       // one gets an empty dashed pill to give it one.
       if (album.id in ratings) {
@@ -442,6 +452,22 @@ window.MusicHub = window.MusicHub || {};
     }
     body.appendChild(foot);
     node.appendChild(body);
+
+    // The whole card opens the album in Spotify - all but its buttons and
+    // the title's own link, and not a click that ends selecting text.
+    if (album && album.id) {
+      node.classList.add('vinyl-card--linked');
+      node.addEventListener('click', function (event) {
+        if (event.target.closest('button, a')) {
+          return;
+        }
+        var selection = window.getSelection();
+        if (selection && !selection.isCollapsed && node.contains(selection.anchorNode)) {
+          return;
+        }
+        MusicHub.spotify.openInApp('spotify:album:' + album.id);
+      });
+    }
     return node;
   }
 

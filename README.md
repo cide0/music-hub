@@ -42,7 +42,7 @@ There is no database, so everything the app saves is stored in your browser. On 
   - Click an album's rating to change it; an album you haven't rated yet shows an empty dashed label to click instead.
   - The history can be searched by album, artist or rating (typing 7 also finds the albums rated 78).
 - **Store:** Spend the coins you earn around the app on username styles, a golden record player, Mystery Vinyls or extra spins on the Wheel of Fortune.
-- **Collection:** Your collection of unboxed vinyls. Press **Play** on any of them to put it on the record player and start the album on your Spotify.
+- **Collection:** Your collection of unboxed vinyls. Press **Play** on any of them to put it on the record player and start the album on your Spotify, or click anywhere else on its card to open the album in Spotify.
   - Shows the rating you gave each album on the Albums page (click it to edit it, or the empty dashed label to rate an album that has none yet), can be sorted by date or rating, and searched by style, album, artist or rating.
   - The record player's power button pauses and resumes the album on Spotify. Pausing or resuming in Spotify itself switches the record player off or on too.
   - The progress bar under the record shows the time played and the song's length. Click or drag on it to jump to that part of the song.

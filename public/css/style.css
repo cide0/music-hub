@@ -8610,6 +8610,22 @@ button.turntable__power:focus-visible {
   min-width: 0;
 }
 
+/* A click anywhere on the card opens the album in Spotify. */
+.vinyl-card--linked {
+  cursor: pointer;
+}
+
+.vinyl-card__title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.vinyl-card__title-link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .vinyl-card__foot {
   /* At the card's foot - remove on the left, play on the right - and clear
      of the text above however short it is. */
