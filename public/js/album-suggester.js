@@ -1625,21 +1625,19 @@ window.MusicHub = window.MusicHub || {};
     text.appendChild(el('p', 'history-item__date', 'Listened ' + formatDate(entry.listenedAt)));
     item.appendChild(text);
 
-    if (typeof entry.rating === 'number') {
-      var rating = el('span', 'history-item__rating', String(entry.rating));
-      rating.setAttribute('aria-label', 'Rated ' + entry.rating + ' out of 100');
-      item.appendChild(rating);
-    }
-
-    // The Gallery's pen, to change (or take away) the rating.
-    var editButton = el('button', 'icon-button history-item__edit', '\u270E');
-    editButton.type = 'button';
-    editButton.setAttribute('aria-label', 'Edit the rating of ' + entry.albumName);
-    editButton.title = 'Edit rating';
-    editButton.addEventListener('click', function () {
+    // The rating pill opens the modal to change (or take away) the rating;
+    // an unrated album gets an empty dashed one to give it one.
+    var rated = typeof entry.rating === 'number';
+    var rating = el('button', 'rating-pill' + (rated ? '' : ' rating-pill--empty'), rated ? String(entry.rating) : '');
+    rating.type = 'button';
+    rating.setAttribute('aria-label', rated
+      ? 'Rated ' + entry.rating + ' out of 100 - edit the rating of ' + entry.albumName
+      : 'Rate ' + entry.albumName);
+    rating.title = rated ? 'Edit rating' : 'Add a rating';
+    rating.addEventListener('click', function () {
       openRatingDialog(entry);
     });
-    item.appendChild(editButton);
+    item.appendChild(rating);
 
     var remove = el('button', 'icon-button history-item__remove');
     remove.type = 'button';

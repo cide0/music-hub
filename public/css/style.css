@@ -6853,16 +6853,63 @@ button.turntable__power:focus-visible {
   font-size: 0.8125rem;
 }
 
-/* In the buttons' purple. Unrated albums have no pill at all. */
-.history-item__rating {
+/* An album's rating, in the buttons' purple: the Albums page's history
+   and the Collection's cards. Clicking it opens the Edit rating modal.
+   Above the history entry's overlay link and sheen. */
+.rating-pill {
+  position: relative;
+  z-index: 3;
   flex: none;
   min-width: 3rem;
-  padding: 0.25rem 0.625rem;
+  height: 2.125rem;
+  padding: 0 0.625rem;
+  border: none;
   border-radius: var(--radius-pill);
   background-color: var(--color-primary);
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
   font-weight: 700;
+  line-height: 2.125rem;
   font-variant-numeric: tabular-nums;
   text-align: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.rating-pill:hover,
+.rating-pill:active {
+  background-color: var(--color-primary-hover);
+}
+
+/* An unrated album's: an empty outline of the same size in the same
+   purple, in a few long dashes. A dashed border can't set its dashes'
+   length, so the outline is the purple fill masked by an SVG stroke -
+   its viewBox is the pill's size, 3rem x 2.125rem, and pathLength makes
+   the dash pattern exactly 8 dashes all the way round. */
+.rating-pill--empty {
+  width: 3rem;
+  background-color: transparent;
+}
+
+.rating-pill--empty::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-primary);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 34'%3E%3Crect x='1' y='1' width='46' height='32' rx='16' fill='none' stroke='black' stroke-width='2' pathLength='100' stroke-dasharray='8.5 4' stroke-dashoffset='2'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 34'%3E%3Crect x='1' y='1' width='46' height='32' rx='16' fill='none' stroke='black' stroke-width='2' pathLength='100' stroke-dasharray='8.5 4' stroke-dashoffset='2'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  transition: background-color 0.15s ease;
+}
+
+.rating-pill--empty:hover,
+.rating-pill--empty:active {
+  background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.rating-pill--empty:hover::before,
+.rating-pill--empty:active::before {
+  background-color: var(--color-primary-hover);
 }
 
 /* The foil sheen's colour wash in the entry's rarity, rather than the
@@ -6888,9 +6935,8 @@ button.turntable__power:focus-visible {
 }
 
 /* Above the overlay link and the sheen. */
-/* Shared with the history entry's pen and the Setlists page's remove
-   buttons: its past concerts, each song and each track picked for one. */
-.history-item__edit,
+/* Shared with the Setlists page's remove buttons: its past concerts, each
+   song and each track picked for one. */
 .history-item__remove,
 .past-show__remove,
 .song__remove {
@@ -8561,27 +8607,6 @@ button.turntable__power:focus-visible {
 
 .vinyl-card__heading .release-card__title {
   min-width: 0;
-}
-
-.vinyl-card__rating {
-  flex: none;
-  min-width: 3rem;
-  padding: 0.25rem 0.625rem;
-  border: none;
-  border-radius: var(--radius-pill);
-  background-color: var(--color-primary);
-  color: inherit;
-  font: inherit;
-  font-size: 1rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-  cursor: pointer;
-}
-
-.vinyl-card__rating:hover,
-.vinyl-card__rating:active {
-  background-color: var(--color-primary-hover);
 }
 
 .vinyl-card__foot {

@@ -268,14 +268,40 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /** A record only the Daily Spin hands out (vinyl-catalog.js). */
-  /** The album history's ratings (1-100) by Spotify album id. */
+  /**
+   * The album history entry whose rating a vinyl's album shows: the last
+   * rated one, else the last one at all (unrated), else null when the
+   * album isn't in the history (any more).
+   */
+  function historyEntry(listened, albumId) {
+    var rated = null;
+    var any = null;
+    listened.forEach(function (entry) {
+      if (entry && entry.spotifyAlbumId === albumId) {
+        any = entry;
+        if (typeof entry.rating === 'number') {
+          rated = entry;
+        }
+      }
+    });
+    return rated || any;
+  }
+
+  /**
+   * The album history's ratings by Spotify album id: 1-100, or null for an
+   * album that's in the history unrated. Albums not in it have no key.
+   */
   function loadRatings() {
     var stored = MusicHub.storage.read(HISTORY_KEY, null);
     var listened = stored && Array.isArray(stored.listened) ? stored.listened : [];
     var byId = {};
     listened.forEach(function (entry) {
-      if (entry && entry.spotifyAlbumId && typeof entry.rating === 'number') {
-        byId[entry.spotifyAlbumId] = entry.rating;
+      if (entry && entry.spotifyAlbumId) {
+        var rating = typeof entry.rating === 'number' ? entry.rating : null;
+        // A rated entry wins over an unrated one, as historyEntry picks them.
+        if (rating !== null || !(entry.spotifyAlbumId in byId)) {
+          byId[entry.spotifyAlbumId] = rating;
+        }
       }
     });
     return byId;
@@ -283,18 +309,12 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * Opens the Albums page's Edit rating modal on the vinyl's album. The
-   * change lands in the album history entry whose rating the pill shows -
-   * the last one, as loadRatings reads them.
+   * change lands in the album history entry whose rating the pill shows.
    */
   function editRating(vinyl) {
     var stored = MusicHub.storage.read(HISTORY_KEY, null);
     var listened = stored && Array.isArray(stored.listened) ? stored.listened : [];
-    var entry = null;
-    listened.forEach(function (candidate) {
-      if (candidate && candidate.spotifyAlbumId === vinyl.album.id && typeof candidate.rating === 'number') {
-        entry = candidate;
-      }
-    });
+    var entry = historyEntry(listened, vinyl.album.id);
     if (!entry) {
       return;
     }
@@ -366,13 +386,18 @@ window.MusicHub = window.MusicHub || {};
       // on the right of the same line.
       var heading = el('div', 'vinyl-card__heading');
       heading.appendChild(el('h3', 'release-card__title', album.name));
-      var rated = ratingOf(vinyl);
-      if (rated !== null) {
+      // Only an album in the history has a rating to show - an unrated
+      // one gets an empty dashed pill to give it one.
+      if (album.id in ratings) {
+        var rated = ratingOf(vinyl);
         // Opens the Albums page's modal to change (or take away) the rating.
-        var rating = el('button', 'vinyl-card__rating', String(rated));
+        var rating = el('button', 'rating-pill' + (rated === null ? ' rating-pill--empty' : ''),
+          rated === null ? '' : String(rated));
         rating.type = 'button';
-        rating.setAttribute('aria-label', 'Rated ' + rated + ' out of 100 - edit the rating');
-        rating.title = 'Edit rating';
+        rating.setAttribute('aria-label', rated === null
+          ? 'Rate ' + album.name
+          : 'Rated ' + rated + ' out of 100 - edit the rating of ' + album.name);
+        rating.title = rated === null ? 'Add a rating' : 'Edit rating';
         rating.addEventListener('click', function () {
           editRating(vinyl);
         });

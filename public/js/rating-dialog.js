@@ -1,7 +1,8 @@
 /*
  * The Edit rating modal (views/partials/rating-dialog.ejs) for an album in
- * the Album Suggester's history: opened by the Albums page's pen and the
- * Collection's rating pill. The caller stores the rating it hands back.
+ * the Album Suggester's history: opened by the rating pills of the Albums
+ * page's history and the Collection's cards. The caller stores the rating
+ * it hands back.
  */
 window.MusicHub = window.MusicHub || {};
 
