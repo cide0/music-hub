@@ -5793,6 +5793,25 @@ button.turntable__power:focus-visible {
   filter: brightness(1.2);
 }
 
+/* A mouse over the seekable groove (turntable.js wireSeeking): a dark
+   gray hint from the start up to the pointer - where a click would go -
+   under the fill, so it shows past the point the song is at. Its leading
+   end stays round, like the fill's. */
+.turntable__progress-hint {
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--color-text-muted) 26%, transparent);
+  clip-path: inset(0 calc(100% - var(--progress-hint, 0%)) 0 0 round var(--radius-pill));
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.turntable__progress--hinting .turntable__progress-hint {
+  opacity: 1;
+}
+
 .turntable__progress:focus-visible {
   outline-offset: 3px;
 }

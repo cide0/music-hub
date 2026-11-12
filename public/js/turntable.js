@@ -155,7 +155,8 @@ window.MusicHub = window.MusicHub || {};
    * up round the fill alone. Under it, the time played and the song's
    * length, once setProgress knows the length. Made seekable
    * (setSeekable), it's a slider: clicked, dragged or moved with the arrow
-   * keys, it hands the point picked to `options.onSeek`.
+   * keys, it hands the point picked to `options.onSeek`, and a mouse
+   * over it shows a gray hint up to the point a click would go to.
    */
   function progressBar() {
     var bar = el('div', 'turntable__progress');
@@ -165,6 +166,8 @@ window.MusicHub = window.MusicHub || {};
     bar.setAttribute('aria-valuemax', '100');
     bar.setAttribute('aria-valuenow', '0');
     bar.setAttribute('aria-disabled', 'true');
+    // Before the fill's window, so the fill is drawn over it.
+    bar.appendChild(el('span', 'turntable__progress-hint'));
     var windowEl = el('span', 'turntable__progress-window');
     var fill = el('span', 'turntable__progress-fill');
     windowEl.appendChild(fill);
@@ -569,10 +572,21 @@ window.MusicHub = window.MusicHub || {};
    * picks that point, a drag carries it along (the fill and the time
    * played following it), and letting go hands it to `onSeek` (0 to 1).
    * The arrow keys move it SEEK_KEY_MS at a time, Home and End to either
-   * end of the song.
+   * end of the song. A mouse over it (not dragging) shows the gray hint
+   * up to the point a click would pick.
    */
   function wireSeeking(parts, onSeek) {
     var bar = parts.progressBar;
+
+    function hint(event) {
+      var show = event.pointerType === 'mouse' && parts.seekable && parts.seekTo === null && !!songLength(parts);
+      bar.classList.toggle('turntable__progress--hinting', show);
+      if (show) {
+        var rect = bar.getBoundingClientRect();
+        var fraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+        bar.style.setProperty('--progress-hint', (fraction * 100) + '%');
+      }
+    }
 
     function pick(event) {
       var rect = bar.getBoundingClientRect();
@@ -606,14 +620,20 @@ window.MusicHub = window.MusicHub || {};
       bar.setPointerCapture(event.pointerId);
       bar.classList.add('turntable__progress--seeking');
       pick(event);
+      hint(event);
     });
     bar.addEventListener('pointermove', function (event) {
       if (parts.seekTo !== null && bar.hasPointerCapture(event.pointerId)) {
         pick(event);
       }
+      hint(event);
     });
-    bar.addEventListener('pointerup', function () {
+    bar.addEventListener('pointerleave', function () {
+      bar.classList.remove('turntable__progress--hinting');
+    });
+    bar.addEventListener('pointerup', function (event) {
       done(true);
+      hint(event);
     });
     bar.addEventListener('pointercancel', function () {
       done(false);
@@ -660,6 +680,9 @@ window.MusicHub = window.MusicHub || {};
       parts.seekTo = null;
       bar.classList.remove('turntable__progress--seeking');
       redrawProgress(parts);
+    }
+    if (!seekable) {
+      bar.classList.remove('turntable__progress--hinting');
     }
   }
 
