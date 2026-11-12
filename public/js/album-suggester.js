@@ -313,6 +313,13 @@ window.MusicHub = window.MusicHub || {};
     return 'spotify:album:' + album.id;
   }
 
+  /** A history entry's vinyl releases on Discogs - a plain search, no API call. */
+  function discogsSearchUrl(entry) {
+    return 'https://www.discogs.com/search/?q='
+      + encodeURIComponent(entry.artistName + ' ' + entry.albumName)
+      + '&type=release&format=Vinyl';
+  }
+
   /* --------------------------------------------------------------- views */
 
   var VIEWS = ['loading', 'error', 'empty', 'idle', 'reel', 'reveal'];
@@ -1638,6 +1645,19 @@ window.MusicHub = window.MusicHub || {};
       openRatingDialog(entry);
     });
     item.appendChild(rating);
+
+    // The album's vinyl releases on Discogs, as on the Collection's player.
+    var discogs = el('a', 'icon-button history-item__discogs');
+    discogs.href = discogsSearchUrl(entry);
+    discogs.target = '_blank';
+    discogs.rel = 'noopener noreferrer';
+    discogs.setAttribute('aria-label', 'Find ' + entry.albumName + ' on vinyl on Discogs (opens in a new tab)');
+    discogs.title = 'Find vinyl on Discogs';
+    discogs.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+      + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />'
+      + '<polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>';
+    item.appendChild(discogs);
 
     var remove = el('button', 'icon-button history-item__remove');
     remove.type = 'button';

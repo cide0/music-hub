@@ -6937,6 +6937,7 @@ button.turntable__power:focus-visible {
 /* Above the overlay link and the sheen. */
 /* Shared with the Setlists page's remove buttons: its past concerts, each
    song and each track picked for one. */
+.history-item__discogs,
 .history-item__remove,
 .past-show__remove,
 .song__remove {
@@ -6952,6 +6953,7 @@ button.turntable__power:focus-visible {
   background-color: var(--color-surface);
 }
 
+.history-item__discogs svg,
 .history-item__remove svg,
 .past-show__remove svg,
 .song__remove svg {
