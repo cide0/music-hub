@@ -6751,7 +6751,7 @@ button.turntable__power:focus-visible {
 }
 
 .history-search {
-  width: 260px;
+  width: 290px;
   max-width: 100%;
 }
 
@@ -8573,7 +8573,7 @@ button.turntable__power:focus-visible {
 
 /* Filters the collection as you type. Sized like .release-search. */
 .collection-search {
-  width: 280px;
+  width: 330px;
   max-width: 100%;
 }
 
@@ -8585,8 +8585,7 @@ button.turntable__power:focus-visible {
   }
 }
 
-/* Filters the Gallery's artist folders as you type. Sized like
-   .collection-search. */
+/* Filters the Gallery's artist folders as you type. */
 .gallery-search {
   width: 280px;
   max-width: 100%;

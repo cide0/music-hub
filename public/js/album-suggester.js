@@ -1442,10 +1442,12 @@ window.MusicHub = window.MusicHub || {};
     return String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   }
 
+  /** The album, the artist, or the rating - "7" finds the albums rated 7, 78 or 97 too. */
   function matchesQuery(entry, query) {
     return !query
       || searchable(entry.albumName).indexOf(query) !== -1
-      || searchable(entry.artistName).indexOf(query) !== -1;
+      || searchable(entry.artistName).indexOf(query) !== -1
+      || (typeof entry.rating === 'number' && String(entry.rating).indexOf(query) !== -1);
   }
 
   function albumsLabel(count) {

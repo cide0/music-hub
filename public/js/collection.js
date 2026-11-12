@@ -450,10 +450,14 @@ window.MusicHub = window.MusicHub || {};
     return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
-  /** The style, the album and the artist; every word typed has to match one of them. */
+  /**
+   * The style, the album, the artist and the rating; every word typed has to
+   * match one of them - "7" finds the vinyls rated 7, 78 or 97 too.
+   */
   function matchesQuery(vinyl) {
     var album = vinyl.album || {};
-    var haystack = searchable([vinyl.format, album.name, album.artist].join(' '));
+    // An unrated vinyl's null rating joins as nothing.
+    var haystack = searchable([vinyl.format, album.name, album.artist, ratingOf(vinyl)].join(' '));
     return searchable(query).split(/\s+/).filter(Boolean).every(function (word) {
       return haystack.indexOf(word) !== -1;
     });
