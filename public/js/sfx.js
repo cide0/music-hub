@@ -62,14 +62,19 @@ window.MusicHub = window.MusicHub || {};
 
   /**
    * Plays `sounds[name]` (a function of ctx, start time and level) `delay`
-   * seconds from now - nothing without Web Audio.
+   * seconds from now - nothing without Web Audio. A sound that fails is
+   * only logged, so it never stops what it was played along with.
    */
   function play(sounds, name, delay, level) {
     var ctx = wallet.audioContext();
     if (!ctx) {
       return;
     }
-    sounds[name](ctx, ctx.currentTime + (delay || 0), level === undefined ? 1 : level);
+    try {
+      sounds[name](ctx, ctx.currentTime + (delay || 0), level === undefined ? 1 : level);
+    } catch (err) {
+      console.warn('Could not play the sound "' + name + '"', err);
+    }
   }
 
   MusicHub.sfx = {

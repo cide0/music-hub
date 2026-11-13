@@ -1846,17 +1846,17 @@ window.MusicHub = window.MusicHub || {};
       for (var i = 0; i < data.length; i += 1) {
         data[i] = Math.random() * 2 - 1;
       }
-      var rumble = ctx.createBufferSource();
-      rumble.buffer = buffer;
+      var source = ctx.createBufferSource();
+      source.buffer = buffer;
       var filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.Q.value = 0.7;
       filter.frequency.setValueCurveAtTime(curve(rumble.lowHz, rumble.highHz), at, length);
       var level = ctx.createGain();
       level.gain.setValueCurveAtTime(curve(0, rumble.level, 0.0001), at, length);
-      rumble.connect(filter).connect(level).connect(MusicHub.wallet.audioOutput());
-      rumble.start(at);
-      rumble.stop(at + length);
+      source.connect(filter).connect(level).connect(MusicHub.wallet.audioOutput());
+      source.start(at);
+      source.stop(at + length);
       // Turned a fraction f of the way at t = acos(1 - 2f) / pi of the turn.
       var detents = 7;
       for (var k = 1; k < detents; k += 1) {
