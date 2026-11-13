@@ -1191,6 +1191,7 @@ window.MusicHub = window.MusicHub || {};
     var spec = MusicHub.vinyl.describe(vinyl.format);
     var record = renderRecord(vinyl);
     if (playerParts) {
+      MusicHub.turntable.silence(playerParts);
       playerParts.root.remove();
     }
     playerParts = MusicHub.turntable.build(record, {
@@ -1257,8 +1258,8 @@ window.MusicHub = window.MusicHub || {};
       MusicHub.turntable.showPlaying(playerParts);
       return;
     }
-    MusicHub.turntable.playSounds();
     MusicHub.turntable.play(playerParts, { lifted: !!(options && options.lifted) });
+    MusicHub.turntable.playSounds(playerParts);
     // Lava, smash and peppermint patterns move while it plays.
     MusicHub.vinyl.setPlaying(record, true);
   }
@@ -1690,6 +1691,7 @@ window.MusicHub = window.MusicHub || {};
     cancelSwitch();
     stopPlaying();
     if (playerParts) {
+      MusicHub.turntable.silence(playerParts);
       playerParts.root.remove();
       playerParts = null;
     }

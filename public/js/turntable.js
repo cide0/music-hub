@@ -318,6 +318,8 @@ window.MusicHub = window.MusicHub || {};
       needle: null,
       armFreeAt: 0,
       needleTimer: 0,
+      // The needle's touch-down still to come, on the audio clock (needleSound).
+      pendingNeedle: null,
       // Whether the arm can be moved by hand (setArmDraggable), and the
       // drag going on (null while there's none).
       armDraggable: false,
@@ -494,7 +496,7 @@ window.MusicHub = window.MusicHub || {};
 
     if (onRecord) {
       moveHead(parts, false, 0);
-      needleSound(TIMING.lower / 1000);
+      needleSound(parts, TIMING.lower / 1000);
       onDrop(fractionAt(parts, deg));
     } else if (commit || !parts.on) {
       armToRest(parts, deg);
@@ -692,6 +694,10 @@ window.MusicHub = window.MusicHub || {};
       animation.cancel();
     });
     parts.anims[key] = animations;
+    // The head's lowering called off: so is the needle's touch-down with it.
+    if (key === 'head') {
+      cancelNeedleSound(parts);
+    }
   }
 
   /** Where a part is right now, mid-animation or not ('rotate' in degrees, or 'scale'). */
@@ -775,7 +781,7 @@ window.MusicHub = window.MusicHub || {};
           delay: delay + duration, duration: TIMING.lower, easing: 'ease-in', fill: 'forwards',
         }),
       ]);
-      needleSound((delay + duration + TIMING.lower) / 1000);
+      needleSound(parts, (delay + duration + TIMING.lower) / 1000);
     }
   }
 
@@ -1067,7 +1073,7 @@ window.MusicHub = window.MusicHub || {};
     if (on) {
       swap(parts, 'spin', spinUp(parts, discDeg, 0));
       if (!handled) {
-        needleSound((armDelay + armMs + TIMING.lower) / 1000);
+        needleSound(parts, (armDelay + armMs + TIMING.lower) / 1000);
       }
     } else {
       // Only a platter that has got going coasts; one still waiting to
@@ -1094,7 +1100,7 @@ window.MusicHub = window.MusicHub || {};
    * down - the same as the Suggester's, timed on the audio clock from now.
    * Played through the wallet's audio context and limiter.
    */
-  function tone(ctx, at, from, to, peak, decay) {
+  function tone(ctx, at, from, to, peak, decay, dest) {
     var osc = ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(from, at);
@@ -1103,12 +1109,12 @@ window.MusicHub = window.MusicHub || {};
     gain.gain.setValueAtTime(0.0001, at);
     gain.gain.exponentialRampToValueAtTime(peak, at + 0.002);
     gain.gain.exponentialRampToValueAtTime(0.0001, at + decay);
-    osc.connect(gain).connect(MusicHub.wallet.audioOutput());
+    osc.connect(gain).connect(dest || MusicHub.wallet.audioOutput());
     osc.start(at);
     osc.stop(at + decay + 0.01);
   }
 
-  function noise(ctx, at, type, frequency, q, peak, attack, decay) {
+  function noise(ctx, at, type, frequency, q, peak, attack, decay, dest) {
     var buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.1), ctx.sampleRate);
     var data = buffer.getChannelData(0);
     for (var i = 0; i < data.length; i += 1) {
@@ -1124,7 +1130,7 @@ window.MusicHub = window.MusicHub || {};
     gain.gain.setValueAtTime(0.0001, at);
     gain.gain.exponentialRampToValueAtTime(peak, at + attack);
     gain.gain.exponentialRampToValueAtTime(0.0001, at + attack + decay);
-    source.connect(filter).connect(gain).connect(MusicHub.wallet.audioOutput());
+    source.connect(filter).connect(gain).connect(dest || MusicHub.wallet.audioOutput());
     source.start(at);
     source.stop(at + attack + decay + 0.01);
   }
@@ -1151,13 +1157,30 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
-  /** The needle touching down, `inS` seconds from now. */
-  function needleSound(inS) {
+  /**
+   * The needle touching down on `parts`' record, `inS` seconds from now -
+   * called off (cancelNeedleSound) if the head's lowering is, so it's only
+   * heard when the needle really gets there.
+   */
+  function needleSound(parts, inS) {
+    cancelNeedleSound(parts);
     var ctx = audio();
     if (ctx) {
       var at = ctx.currentTime + inS;
-      noise(ctx, at, 'highpass', 2500, 0.7, 0.35, 0.0005, 0.004);
-      tone(ctx, at, 180, 120, 0.12, 0.05);
+      var out = ctx.createGain();
+      out.connect(MusicHub.wallet.audioOutput());
+      noise(ctx, at, 'highpass', 2500, 0.7, 0.35, 0.0005, 0.004, out);
+      tone(ctx, at, 180, 120, 0.12, 0.05, out);
+      parts.pendingNeedle = { ctx: ctx, out: out, at: at };
+    }
+  }
+
+  /** Silences a needle touch-down on `parts` that's still to come; one already heard is left to ring out. */
+  function cancelNeedleSound(parts) {
+    var sound = parts.pendingNeedle;
+    parts.pendingNeedle = null;
+    if (sound && sound.ctx.currentTime < sound.at) {
+      sound.out.disconnect();
     }
   }
 
@@ -1297,8 +1320,12 @@ window.MusicHub = window.MusicHub || {};
     sound.source.stop(at + 0.15);
   }
 
-  /** The set-up's sounds: the record landing, the power button, the needle. */
-  function playSounds() {
+  /**
+   * The set-up's sounds: the record landing, the power button, the needle.
+   * Called right after play(parts), so the needle's touch-down goes with
+   * the head's lowering it started.
+   */
+  function playSounds(parts) {
     var ctx = audio();
     if (!ctx) {
       return;
@@ -1307,7 +1334,12 @@ window.MusicHub = window.MusicHub || {};
     tone(ctx, landAt, 120, 60, 0.4, 0.18);
     noise(ctx, landAt, 'lowpass', 900, 0.7, 0.25, 0.001, 0.05);
     clickSound((TIMING.spinFrom - POWER_PRESS_MS / 2) / 1000);
-    needleSound(TIMING.needleAt / 1000);
+    needleSound(parts, TIMING.needleAt / 1000);
+  }
+
+  /** The turntable taken away: no sound of it still to come. */
+  function silence(parts) {
+    cancelNeedleSound(parts);
   }
 
   MusicHub.turntable = {
@@ -1323,5 +1355,6 @@ window.MusicHub = window.MusicHub || {};
     setArmDraggable: setArmDraggable,
     setTrackMarks: setTrackMarks,
     playSounds: playSounds,
+    silence: silence,
   };
 })(window.MusicHub);
