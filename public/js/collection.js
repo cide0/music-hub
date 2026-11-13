@@ -861,10 +861,19 @@ window.MusicHub = window.MusicHub || {};
    * the list gets out of the way of the tonearm going there - until the
    * pointer leaves it, or comes back onto the count. From the keyboard
    * it stays open.
+   *
+   * It's scrolled to the track playing only as it opens - never while
+   * it's open: a click on a track focuses it, and scrolling then would
+   * move the track out from under the pointer before the click lands.
    */
   function initTrackList() {
+    // Hidden, the list takes no pointer, so the pointer comes in over the count.
     els.trackCountWrap.addEventListener('mouseenter', fitTrackList);
-    els.trackCountWrap.addEventListener('focusin', fitTrackList);
+    els.trackCountWrap.addEventListener('focusin', function (event) {
+      if (event.target === els.trackCount) {
+        fitTrackList();
+      }
+    });
     // Back over the count, it shows again - the pointer can get there
     // from the hidden list without ever leaving the corner.
     function undismiss() {
@@ -872,8 +881,17 @@ window.MusicHub = window.MusicHub || {};
     }
     els.trackCountWrap.addEventListener('mouseleave', undismiss);
     els.trackCount.addEventListener('pointerenter', function () {
-      undismiss();
-      fitTrackList();
+      if (els.trackCountWrap.classList.contains('player__count-wrap--dismissed')) {
+        undismiss();
+        fitTrackList();
+      }
+    });
+    // Pressed with the mouse, a track isn't focused - the browser would
+    // scroll one half out of sight into view, out from under the pointer.
+    els.trackList.addEventListener('mousedown', function (event) {
+      if (event.target.closest('.player__tracklist-button')) {
+        event.preventDefault();
+      }
     });
     els.trackList.addEventListener('click', function (event) {
       var button = event.target.closest('.player__tracklist-button');
