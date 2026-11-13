@@ -1744,18 +1744,44 @@ window.MusicHub = window.MusicHub || {};
     lift: function (ctx, at) {
       MusicHub.sfx.noise(ctx, at, 0.45, 'bandpass', 500, 0.8, 0.035, 0.2, 1400);
     },
-    // The wheel turning: a whoosh swelling and fading with its speed.
+    // The wheel turning: a well-oiled carousel - the soft rumble of its
+    // bearing, swelling and settling with the wheel's speed (the sine
+    // ease's own speed curve), and muted detents rolling past, spaced
+    // evenly round the turn so they quicken and slow with it.
     spin: function (ctx, at) {
-      var half = JUKEBOX.spinMs / 2000;
-      MusicHub.sfx.noise(ctx, at, half, 'lowpass', 250, 0.9, 0.09, half * 0.9, 1300);
-      MusicHub.sfx.noise(ctx, at + half, half, 'lowpass', 1300, 0.9, 0.09, 0.02, 220);
-    },
-    // Come to rest, the record picked: a soft wooden tock and a little
-    // bell, the jukebox's selection made.
-    pick: function (ctx, at) {
-      MusicHub.sfx.tone(ctx, at, 520, 390, 0.14, 0.09);
-      MusicHub.sfx.tone(ctx, at, 1040, 900, 0.03, 0.04, 'triangle');
-      MusicHub.sfx.chime(ctx, at + 0.05, [784, 1175], 0.035);
+      var length = JUKEBOX.spinMs / 1000;
+      var points = 48;
+      function curve(from, to, floor) {
+        var values = new Float32Array(points);
+        for (var i = 0; i < points; i += 1) {
+          var speed = Math.sin(Math.PI * i / (points - 1));
+          values[i] = Math.max(floor || 0, from + (to - from) * speed);
+        }
+        return values;
+      }
+      var buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * length), ctx.sampleRate);
+      var data = buffer.getChannelData(0);
+      for (var i = 0; i < data.length; i += 1) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      var rumble = ctx.createBufferSource();
+      rumble.buffer = buffer;
+      var filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.Q.value = 0.7;
+      filter.frequency.setValueCurveAtTime(curve(140, 420), at, length);
+      var level = ctx.createGain();
+      level.gain.setValueCurveAtTime(curve(0, 0.16, 0.0001), at, length);
+      rumble.connect(filter).connect(level).connect(MusicHub.wallet.audioOutput());
+      rumble.start(at);
+      rumble.stop(at + length);
+      // Turned a fraction f of the way at t = acos(1 - 2f) / pi of the turn.
+      var detents = 7;
+      for (var k = 1; k < detents; k += 1) {
+        var t = at + length * Math.acos(1 - 2 * k / detents) / Math.PI;
+        MusicHub.sfx.noise(ctx, t, 0.035, 'lowpass', 900, 0.7, 0.05, 0.002);
+        MusicHub.sfx.tone(ctx, t, 330, 240, 0.035, 0.05);
+      }
     },
   };
 
@@ -1974,7 +2000,6 @@ window.MusicHub = window.MusicHub || {};
       if (switching !== job) {
         return;
       }
-      MusicHub.sfx.play(JUKEBOX_SOUNDS, 'pick');
       later(drop, JUKEBOX.settleMs);
     }, function () {
       // Cancelled (cancelSwitch).
