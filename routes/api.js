@@ -9,6 +9,9 @@ const router = Router();
 
 const TICKETMASTER_URL = 'https://app.ticketmaster.com/discovery/v2/events.json';
 const LASTFM_URL = 'https://ws.audioscrobbler.com/2.0/';
+// Last.fm decodes the query twice, so a "+" in a name (Florence + The Machine)
+// would arrive as a space and find nothing - it has to go over as %252B.
+const lastfmArtistName = (name) => name.replace(/\+/g, '%2B');
 
 /** Ticketmaster returns several sizes; take a reasonably large 16:9 one. */
 function pickImage(images) {
@@ -123,10 +126,13 @@ router.get('/api/similar-artists', async (req, res) => {
   try {
     const params = new URLSearchParams({
       method: 'artist.getsimilar',
-      artist,
+      artist: lastfmArtistName(artist),
       api_key: requireEnv('LASTFM_API_KEY'),
       format: 'json',
       limit: '30',
+      // Same as the tags: a name Last.fm only knows under another spelling
+      // would otherwise come back empty - and leave the artist unconnected.
+      autocorrect: '1',
     });
 
     const response = await fetch(`${LASTFM_URL}?${params.toString()}`);
@@ -179,7 +185,7 @@ router.get('/api/artist-tags', async (req, res) => {
   try {
     const params = new URLSearchParams({
       method: 'artist.gettoptags',
-      artist,
+      artist: lastfmArtistName(artist),
       api_key: requireEnv('LASTFM_API_KEY'),
       format: 'json',
       autocorrect: '1',

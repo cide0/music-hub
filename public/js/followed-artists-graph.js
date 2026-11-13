@@ -748,16 +748,22 @@ window.MusicHub = window.MusicHub || {};
         cached[artist.spotifyArtistId] = artist;
       });
 
-      // "Update" only fetches the newly-followed artists; a full generation
-      // fetches everyone. Genres are fetched for anyone who hasn't got them
-      // yet, whichever mode this is.
+      // "Update" fetches the newly-followed artists, plus everyone still
+      // without a single connection or with no similar artists of their own -
+      // Last.fm's similarity data grows, so they may have found some since. A
+      // full generation fetches everyone. Genres are fetched for anyone who
+      // hasn't got them yet, whichever mode this is.
+      var isolated = isolatedArtistIds(graph.artists, graph.edges);
       var jobs = followed.map(function (artist) {
         var previous = cached[artist.id];
         // An empty answer is asked again next time - Last.fm's tags grow.
         var tagsKnown = previous && previous.genres && previous.genres.length;
         return {
           artist: artist,
-          needSimilar: mode === 'update' ? !previous || previous.similarPending : true,
+          needSimilar: mode === 'update'
+            ? !previous || previous.similarPending || !!isolated[artist.id]
+              || !previous.similarArtistNames.length
+            : true,
           needTags: !tagsKnown,
         };
       }).filter(function (job) {
@@ -776,12 +782,12 @@ window.MusicHub = window.MusicHub || {};
         // Nothing changed, so leave the drawn graph (and its layout) alone -
         // but concert folders may well have been added in the meantime.
         refreshConcertBadges();
-        setMessage('No newly followed or unfollowed artists — the graph is already up to date.');
+        setMessage(changeSummary(0, 0, 0, 0));
         return null;
       }
 
       return fetchArtistData(jobs, run).then(function (fetched) {
-        return { followed: followed, fetched: fetched, cached: cached, mode: mode };
+        return { followed: followed, fetched: fetched, cached: cached, isolated: isolated, mode: mode };
       });
     }).then(function (outcome) {
       // Cancelled: keep the graph exactly as it was and drop this run's work.
@@ -823,9 +829,17 @@ window.MusicHub = window.MusicHub || {};
       }).length;
       // Artists that were already here without a genre and got one this time.
       var tagged = artists.filter(function (artist) {
-        var previous = outcome.cached[artist.id];
+        var previous = outcome.cached[artist.spotifyArtistId];
         return previous && !(previous.genres && previous.genres.length)
           && artist.genres.length;
+      }).length;
+
+      var edges = computeEdges(artists);
+      // Artists that were already here without a connection and have one now.
+      var nowIsolated = isolatedArtistIds(artists, edges);
+      var connected = artists.filter(function (artist) {
+        return outcome.cached[artist.spotifyArtistId] && outcome.isolated[artist.spotifyArtistId]
+          && !nowIsolated[artist.spotifyArtistId];
       }).length;
 
       graph = {
@@ -833,14 +847,14 @@ window.MusicHub = window.MusicHub || {};
         // Genres are fetched as part of this run.
         genresLoadedAt: new Date().toISOString(),
         artists: artists,
-        edges: computeEdges(artists),
+        edges: edges,
       };
       save();
       renderControls();
       if (outcome.mode === 'update') {
         // Only the changed artists come and go; the rest keep their places.
         updateDrawnGraph();
-        setMessage(changeSummary(added, removed, tagged));
+        setMessage(changeSummary(added, removed, tagged, connected));
       } else {
         render();
       }
@@ -2346,7 +2360,7 @@ window.MusicHub = window.MusicHub || {};
   }
 
   /** "Added 3 artists, removed 1 artist" - the toast after an update. */
-  function changeSummary(added, removed, tagged) {
+  function changeSummary(added, removed, tagged, connected) {
     function artists(count) {
       return count + (count === 1 ? ' artist' : ' artists');
     }
@@ -2360,8 +2374,11 @@ window.MusicHub = window.MusicHub || {};
     if (tagged) {
       parts.push('found genres for ' + artists(tagged));
     }
+    if (connected) {
+      parts.push('found connections for ' + artists(connected));
+    }
     if (!parts.length) {
-      return 'No newly followed or unfollowed artists — the graph is already up to date.';
+      return 'No new artists, genres or connections — the graph is already up to date.';
     }
     var text = parts.join(', ');
     return text.charAt(0).toUpperCase() + text.slice(1);
