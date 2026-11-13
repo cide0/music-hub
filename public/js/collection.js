@@ -1742,6 +1742,73 @@ window.MusicHub = window.MusicHub || {};
   var JUKEBOX_MIN_RADIUS = 1.6;
   var JUKEBOX_PAGE_RADIUS = 0.75;
 
+  // The wheel's bearing (JUKEBOX_SOUNDS.spin, and turned by hand
+  // wheelRumble): lowpassed noise, opening from `lowHz` to `highHz` and
+  // swelling to `level` at full speed - the top speed of the arrows' turn,
+  // `peakSteps` records a second (the sine ease peaks at pi / 2 times its
+  // average).
+  var JUKEBOX_RUMBLE = {
+    lowHz: 140,
+    highHz: 420,
+    level: 0.16,
+    peakSteps: (Math.PI / 2) * (1000 / JUKEBOX.spinMs),
+  };
+
+  /**
+   * The bearing's rumble as the wheel's turned by hand: a loop of noise
+   * kept going, following the wheel's speed (`set`, 0 to 1 of full speed)
+   * - and quiet again if it's not heard from for a moment, the wheel held
+   * still. Nothing without Web Audio, or with the sounds off.
+   */
+  function wheelRumble() {
+    var ctx = MusicHub.wallet.audioContext();
+    if (!ctx) {
+      return { set: function () {}, stop: function () {} };
+    }
+    var buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < data.length; i += 1) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    var source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    var filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.7;
+    filter.frequency.value = JUKEBOX_RUMBLE.lowHz;
+    var level = ctx.createGain();
+    level.gain.value = 0.0001;
+    source.connect(filter).connect(level).connect(MusicHub.wallet.audioOutput());
+    source.start();
+    var quiet = 0;
+    var stopped = false;
+    function set(speed) {
+      if (stopped) {
+        return;
+      }
+      var amount = Math.min(1, Math.max(0, speed));
+      var now = ctx.currentTime;
+      level.gain.setTargetAtTime(Math.max(0.0001, JUKEBOX_RUMBLE.level * amount), now, 0.05);
+      filter.frequency.setTargetAtTime(
+        JUKEBOX_RUMBLE.lowHz + (JUKEBOX_RUMBLE.highHz - JUKEBOX_RUMBLE.lowHz) * amount, now, 0.05);
+      window.clearTimeout(quiet);
+      if (amount > 0) {
+        quiet = window.setTimeout(function () { set(0); }, 90);
+      }
+    }
+    function stop() {
+      if (stopped) {
+        return;
+      }
+      stopped = true;
+      window.clearTimeout(quiet);
+      level.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.05);
+      source.stop(ctx.currentTime + 0.4);
+    }
+    return { set: set, stop: stop };
+  }
+
   var JUKEBOX_SOUNDS = {
     // A record coming up to the top as the wheel's turned by hand: one
     // muted detent of the spin's.
@@ -1764,6 +1831,7 @@ window.MusicHub = window.MusicHub || {};
     // evenly round the turn so they quicken and slow with it.
     spin: function (ctx, at) {
       var length = JUKEBOX.spinMs / 1000;
+      var rumble = JUKEBOX_RUMBLE;
       var points = 48;
       function curve(from, to, floor) {
         var values = new Float32Array(points);
@@ -1783,9 +1851,9 @@ window.MusicHub = window.MusicHub || {};
       var filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.Q.value = 0.7;
-      filter.frequency.setValueCurveAtTime(curve(140, 420), at, length);
+      filter.frequency.setValueCurveAtTime(curve(rumble.lowHz, rumble.highHz), at, length);
       var level = ctx.createGain();
-      level.gain.setValueCurveAtTime(curve(0, 0.16, 0.0001), at, length);
+      level.gain.setValueCurveAtTime(curve(0, rumble.level, 0.0001), at, length);
       rumble.connect(filter).connect(level).connect(MusicHub.wallet.audioOutput());
       rumble.start(at);
       rumble.stop(at + length);
@@ -2186,6 +2254,10 @@ window.MusicHub = window.MusicHub || {};
     var wheelTravel = 0;
     var turnFrame = 0;
     var closing = false;
+    // The bearing's rumble (wheelRumble), from the first turn; when and
+    // where the wheel was last turned to, for its speed.
+    var rumble = null;
+    var lastTurn = null;
     var caption = el('div', 'jukebox__caption');
     caption.setAttribute('role', 'status');
     var captionAlbum = el('span', 'jukebox__caption-album');
@@ -2214,6 +2286,10 @@ window.MusicHub = window.MusicHub || {};
       document.removeEventListener('keydown', onKey);
       window.cancelAnimationFrame(turnFrame);
       turnFrame = 0;
+      if (rumble) {
+        rumble.stop();
+        rumble = null;
+      }
     }
 
     function restorePlatter() {
@@ -2349,6 +2425,18 @@ window.MusicHub = window.MusicHub || {};
      * tick each time another comes up to the top.
      */
     function setAngle(deg) {
+      // The rumble follows how fast it's turning, as the arrows' turn does.
+      var now = performance.now();
+      if (lastTurn && now > lastTurn.at) {
+        var stepsPerS = (Math.abs(deg - lastTurn.deg) / jukebox.stepDeg) * 1000 / (now - lastTurn.at);
+        if (!rumble && stepsPerS > 0) {
+          rumble = wheelRumble();
+        }
+        if (rumble) {
+          rumble.set(stepsPerS / JUKEBOX_RUMBLE.peakSteps);
+        }
+      }
+      lastTurn = { at: now, deg: deg };
       jukebox.angle = deg;
       jukebox.wheel.style.rotate = deg + 'deg';
       var center = Math.round(deg / jukebox.stepDeg);
@@ -2372,6 +2460,7 @@ window.MusicHub = window.MusicHub || {};
       window.cancelAnimationFrame(turnFrame);
       turnFrame = 0;
       aim = step;
+      lastTurn = { at: performance.now(), deg: jukebox.angle };
       var from = jukebox.angle;
       var to = step * jukebox.stepDeg;
       var ms = motion * Math.min(BROWSE.maxTurnMs,
@@ -2414,6 +2503,7 @@ window.MusicHub = window.MusicHub || {};
         samples: [{ t: e.timeStamp, deg: jukebox.angle }],
       };
       overlay.setPointerCapture(e.pointerId);
+      lastTurn = null;
     }
 
     function turnMove(e) {
