@@ -2194,14 +2194,10 @@ window.MusicHub = window.MusicHub || {};
       && queue.length > 1);
   }
 
-  /** The record grabbable (style.css) and the hint under the deck, while it can be picked up. */
+  /** The record grabbable (style.css) while it can be picked up. */
   function updateGrab() {
-    var can = canBrowse();
     if (playerParts) {
-      playerParts.root.classList.toggle('turntable--grabbable', can);
-    }
-    if (els.grabHint) {
-      els.grabHint.hidden = !can;
+      playerParts.root.classList.toggle('turntable--grabbable', canBrowse());
     }
   }
 
@@ -2262,12 +2258,8 @@ window.MusicHub = window.MusicHub || {};
     caption.setAttribute('role', 'status');
     var captionAlbum = el('span', 'jukebox__caption-album');
     var captionArtist = el('span', 'jukebox__caption-artist');
-    var touch = window.matchMedia && window.matchMedia('(hover: none)').matches;
     caption.appendChild(captionAlbum);
     caption.appendChild(captionArtist);
-    caption.appendChild(el('span', 'jukebox__caption-hint', touch
-      ? 'Swipe to turn \u00b7 tap the top record to play it'
-      : 'Drag to turn \u00b7 click the top record to play it \u00b7 Esc puts it back'));
 
     function later(fn, delay) {
       job.timers.push(window.setTimeout(fn, delay));
@@ -2685,7 +2677,6 @@ window.MusicHub = window.MusicHub || {};
     els.trackLabel = document.getElementById('player-track-label');
     els.trackCount = document.getElementById('player-count');
     els.actions = document.getElementById('player-actions');
-    els.grabHint = document.getElementById('player-grab-hint');
 
     els.toolbar = document.getElementById('collection-toolbar');
     els.search = document.getElementById('collection-search');

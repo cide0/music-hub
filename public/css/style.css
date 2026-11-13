@@ -9361,8 +9361,8 @@ button.turntable__power:focus-visible {
   cursor: grabbing;
 }
 
-/* The record at the top: what it is, and how to go on - at the bottom of
-   the page, over the wheel's hub. */
+/* The record at the top: its album and artist, at the bottom of the
+   page, over the wheel's hub. */
 .jukebox__caption {
   position: absolute;
   bottom: max(1rem, env(safe-area-inset-bottom));
@@ -9398,12 +9398,6 @@ button.turntable__power:focus-visible {
 .jukebox__caption-artist {
   color: var(--color-text-muted);
   font-size: 0.875rem;
-}
-
-.jukebox__caption-hint {
-  margin-top: 0.25rem;
-  color: var(--color-purple-200);
-  font-size: 0.75rem;
 }
 
 /* Room beside the turntable for what's playing: about 10rem either side. */
@@ -9455,17 +9449,6 @@ button.turntable__power:focus-visible {
   margin: 0.75rem 0 0;
   color: var(--color-text-soft);
   font-size: 0.9375rem;
-}
-
-/* Under the status while the record can be picked up off the platter. */
-.player__grab-hint {
-  margin: 0.25rem 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-}
-
-.player__grab-hint[hidden] {
-  display: none;
 }
 
 .player__actions {
