@@ -9112,23 +9112,132 @@ button.turntable__power:focus-visible {
 }
 
 /* The track's place in the album, "5/20", in the deck's top-right corner. */
-.player__count {
+.player__count-wrap {
   position: absolute;
   top: 1.25rem;
   right: 1.5rem;
-  z-index: 4;
+  z-index: 7;
+}
+
+.player__count-wrap[hidden] {
+  display: none;
+}
+
+.player__count {
+  display: block;
+  min-height: 0;
+  margin: 0;
   padding: 0.25rem 0.75rem;
   border: 1px solid var(--color-purple-700);
   border-radius: 999px;
   background-color: var(--color-purple-900);
   color: var(--color-purple-50);
+  font: inherit;
   font-size: 0.9375rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  cursor: default;
 }
 
-.player__count[hidden] {
-  display: none;
+.player__count-wrap--listed .player__count:hover,
+.player__count-wrap--open .player__count {
+  border-color: var(--color-purple-600);
+  background-color: var(--color-purple-800);
+}
+
+/* The album's tracks, below the count (collection.js showTrackList): on
+   hover, with the keyboard's focus in it, or tapped open on a touch
+   screen. Its top padding bridges the gap to the count, so the pointer
+   can move down onto the list without it closing. */
+.player__tracks {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  padding-top: 0.5rem;
+  translate: 0 -0.25rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, translate 0.15s ease, visibility 0.15s;
+}
+
+@media (hover: hover) {
+  .player__count-wrap--listed:hover .player__tracks {
+    translate: 0 0;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
+.player__count-wrap--listed:focus-within:has(:focus-visible) .player__tracks,
+.player__count-wrap--listed.player__count-wrap--open .player__tracks {
+  translate: 0 0;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.player__tracklist {
+  width: max-content;
+  min-width: 15rem;
+  max-width: min(24rem, calc(100vw - 5rem));
+  margin: 0;
+  padding: 0.375rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  border: 1px solid var(--color-purple-800);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface-raised);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-black) 55%, transparent);
+  scrollbar-color: var(--color-purple-700) transparent;
+  scrollbar-width: thin;
+}
+
+.player__tracklist-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: calc(var(--radius-card) - 0.25rem);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.player__tracklist-number {
+  flex: none;
+  min-width: 1.5em;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.player__tracklist-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.player__tracklist-length {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The song playing, in a lighter purple. */
+.player__tracklist-item--current {
+  background-color: var(--color-purple-700);
+  color: var(--color-purple-50);
+  font-weight: 700;
+}
+
+.player__tracklist-item--current .player__tracklist-number,
+.player__tracklist-item--current .player__tracklist-length {
+  color: var(--color-purple-100);
 }
 
 /* The arrows to the vinyl before and after (collection.js switchVinyl):

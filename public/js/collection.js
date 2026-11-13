@@ -780,13 +780,97 @@ window.MusicHub = window.MusicHub || {};
     els.track.classList.toggle('player__track--paused', !playing);
     els.song.hidden = false;
     els.trackCount.textContent = number + '/' + count;
-    els.trackCount.hidden = false;
+    els.trackCount.setAttribute('aria-label', 'Track ' + number + ' of ' + count + ': the album\u2019s tracks');
+    els.trackCountWrap.hidden = false;
+    showTrackList(number);
     showSaveButton(song);
   }
 
   function hideTrack() {
     els.song.hidden = true;
-    els.trackCount.hidden = true;
+    els.trackCountWrap.hidden = true;
+    els.trackCountWrap.classList.remove('player__count-wrap--open');
+  }
+
+  /** A track's length: "3:07". */
+  function formatTrackLength(ms) {
+    var seconds = Math.round(ms / 1000);
+    return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+  }
+
+  /**
+   * The list under the track count: the album's tracks, numbered as the
+   * count numbers them, track `number` highlighted - made again only for
+   * another album. Nothing until its tracks are known; till then the
+   * count shows no list.
+   */
+  function showTrackList(number) {
+    var tracks = player && player.tracks;
+    var list = els.trackList;
+    els.trackCountWrap.classList.toggle('player__count-wrap--listed', !!(tracks && tracks.length));
+    if (!tracks || !tracks.length) {
+      list.textContent = '';
+      delete list.dataset.album;
+      return;
+    }
+    if (list.dataset.album !== player.vinyl.album.id || list.children.length !== tracks.length) {
+      list.dataset.album = player.vinyl.album.id;
+      list.textContent = '';
+      tracks.forEach(function (track, i) {
+        var item = el('li', 'player__tracklist-item');
+        item.appendChild(el('span', 'player__tracklist-number', String(i + 1)));
+        item.appendChild(el('span', 'player__tracklist-name', track.name));
+        item.appendChild(el('span', 'player__tracklist-length', formatTrackLength(track.durationMs)));
+        list.appendChild(item);
+      });
+    }
+    Array.from(list.children).forEach(function (item, i) {
+      var current = i === number - 1;
+      item.classList.toggle('player__tracklist-item--current', current);
+      if (current) {
+        item.setAttribute('aria-current', 'true');
+      } else {
+        item.removeAttribute('aria-current');
+      }
+    });
+  }
+
+  /**
+   * The list about to show: no taller than the deck leaves room for below
+   * it, scrolled to the track playing.
+   */
+  function fitTrackList() {
+    var list = els.trackList;
+    var room = els.deck.getBoundingClientRect().bottom - list.getBoundingClientRect().top - 16;
+    list.style.maxHeight = Math.max(120, room) + 'px';
+    var current = list.querySelector('.player__tracklist-item--current');
+    if (current) {
+      list.scrollTop = current.offsetTop - (list.clientHeight - current.offsetHeight) / 2;
+    }
+  }
+
+  /**
+   * Hover or keyboard focus shows the list (style.css); a touch screen
+   * can't hover, so there a tap on the count opens and closes it, and a
+   * tap anywhere else closes it.
+   */
+  function initTrackList() {
+    els.trackCountWrap.addEventListener('mouseenter', fitTrackList);
+    els.trackCountWrap.addEventListener('focusin', fitTrackList);
+    els.trackCount.addEventListener('click', function () {
+      if (!window.matchMedia('(hover: none)').matches) {
+        return;
+      }
+      var open = els.trackCountWrap.classList.toggle('player__count-wrap--open');
+      if (open) {
+        fitTrackList();
+      }
+    });
+    document.addEventListener('pointerdown', function (event) {
+      if (!els.trackCountWrap.contains(event.target)) {
+        els.trackCountWrap.classList.remove('player__count-wrap--open');
+      }
+    });
   }
 
   /**
@@ -2688,6 +2772,8 @@ window.MusicHub = window.MusicHub || {};
     els.trackName = document.getElementById('player-track-name');
     els.trackLabel = document.getElementById('player-track-label');
     els.trackCount = document.getElementById('player-count');
+    els.trackCountWrap = document.getElementById('player-count-wrap');
+    els.trackList = document.getElementById('player-tracklist');
     els.actions = document.getElementById('player-actions');
 
     els.toolbar = document.getElementById('collection-toolbar');
@@ -2728,6 +2814,7 @@ window.MusicHub = window.MusicHub || {};
       switchVinyl(true);
     });
     initSongPlaylists();
+    initTrackList();
     els.search.addEventListener('input', function () {
       setQuery(els.search.value);
     });

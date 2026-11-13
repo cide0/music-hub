@@ -91,7 +91,15 @@
                 </button>
               </div>
             </div>
-            <span class="player__count" id="player-count" hidden></span>
+            <!-- Hovered (focused, or tapped on a touch screen), the track
+                 count shows the album's tracks, numbered, the one playing
+                 highlighted (collection.js showTrackList). -->
+            <div class="player__count-wrap" id="player-count-wrap" hidden>
+              <button type="button" class="player__count" id="player-count" aria-controls="player-tracklist"></button>
+              <div class="player__tracks">
+                <ol class="player__tracklist" id="player-tracklist" aria-label="The album's tracks"></ol>
+              </div>
+            </div>
             <!-- The vinyl before and after this one in the collection, as the
                  grid had them - round from the last back to the first. Each
                  turns the jukebox (collection.js switchVinyl); hovered, it
