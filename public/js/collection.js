@@ -88,8 +88,8 @@ window.MusicHub = window.MusicHub || {};
   // they were when Play was pressed.
   var shownVinyls = [];
   var queue = [];
-  // The jukebox turning to another vinyl (switchVinyl): { timers, nodes }
-  // - null while it isn't.
+  // The jukebox turning to another vinyl (switchVinyl), or turned by hand
+  // (grabRecord): { timers, nodes, cleanup } - null while it isn't.
   var switching = null;
 
   function el(tag, className, text) {
@@ -860,7 +860,7 @@ window.MusicHub = window.MusicHub || {};
     showTrack(progress.number, progress.count, state.item, state.is_playing);
     MusicHub.turntable.setNeedle(playerParts, progress.fraction,
       state.is_playing ? 1 / progress.totalMs : 0, { still: still });
-    if (state.is_playing !== playerParts.on && player.started && !player.powerPending
+    if (state.is_playing !== playerParts.on && player.started && !player.powerPending && !switching
       && askedAt - player.powerAt >= POWER_SETTLE_MS) {
       switchTurntable(state.is_playing);
       setStatus(state.is_playing ? 'Playing on Spotify' : 'Paused on Spotify');
@@ -1211,6 +1211,7 @@ window.MusicHub = window.MusicHub || {};
     playerParts.next.addEventListener('click', function () {
       skip(true);
     });
+    playerParts.record.addEventListener('pointerdown', grabRecord);
     els.deck.appendChild(playerParts.root);
     // Whether the album has actually started on Spotify: switching back on
     // then resumes it, where otherwise it tries to start it again. Its
@@ -1256,12 +1257,13 @@ window.MusicHub = window.MusicHub || {};
 
     if (reducedMotion()) {
       MusicHub.turntable.showPlaying(playerParts);
-      return;
+    } else {
+      MusicHub.turntable.play(playerParts, { lifted: !!(options && options.lifted) });
+      MusicHub.turntable.playSounds(playerParts);
+      // Lava, smash and peppermint patterns move while it plays.
+      MusicHub.vinyl.setPlaying(record, true);
     }
-    MusicHub.turntable.play(playerParts, { lifted: !!(options && options.lifted) });
-    MusicHub.turntable.playSounds(playerParts);
-    // Lava, smash and peppermint patterns move while it plays.
-    MusicHub.vinyl.setPlaying(record, true);
+    updateGrab();
   }
 
   /**
@@ -1277,6 +1279,7 @@ window.MusicHub = window.MusicHub || {};
     // keeps going with the platter stopped.
     MusicHub.vinyl.setPlaying(player.record, (on || isExclusive(player.vinyl)) && !reducedMotion());
     updateTrackButtons();
+    updateGrab();
   }
 
   /** Counts `request` (a play, pause or resume on Spotify) as pending until it's answered. */
@@ -1740,6 +1743,17 @@ window.MusicHub = window.MusicHub || {};
   var JUKEBOX_PAGE_RADIUS = 0.75;
 
   var JUKEBOX_SOUNDS = {
+    // A record coming up to the top as the wheel's turned by hand: one
+    // muted detent of the spin's.
+    detent: function (ctx, at) {
+      MusicHub.sfx.noise(ctx, at, 0.035, 'lowpass', 900, 0.7, 0.05, 0.002);
+      MusicHub.sfx.tone(ctx, at, 330, 240, 0.035, 0.05);
+    },
+    // The record put back down on the platter: a soft, low thud.
+    land: function (ctx, at) {
+      MusicHub.sfx.noise(ctx, at, 0.12, 'lowpass', 380, 0.8, 0.09, 0.004);
+      MusicHub.sfx.tone(ctx, at, 110, 70, 0.06, 0.12);
+    },
     // The record lifted off the platter: a soft breath of air.
     lift: function (ctx, at) {
       MusicHub.sfx.noise(ctx, at, 0.45, 'bandpass', 500, 0.8, 0.035, 0.2, 1400);
@@ -1811,6 +1825,7 @@ window.MusicHub = window.MusicHub || {};
       button.setAttribute('aria-label', arrow[2] + ' vinyl: ' + album.name + ' by ' + album.artist);
       button.setAttribute('aria-disabled', switching ? 'true' : 'false');
     });
+    updateGrab();
   }
 
   function cancelSwitch() {
@@ -1818,6 +1833,9 @@ window.MusicHub = window.MusicHub || {};
       return;
     }
     switching.timers.forEach(window.clearTimeout);
+    if (switching.cleanup) {
+      switching.cleanup();
+    }
     switching.nodes.forEach(function (node) {
       node.getAnimations({ subtree: true }).forEach(function (animation) {
         animation.cancel();
@@ -1840,7 +1858,8 @@ window.MusicHub = window.MusicHub || {};
    * side, records round it every `stepDeg`. The record `k` on from the one
    * playing sits `k` steps round to the left, so turning the wheel
    * clockwise (`forward`) brings the next one up to the top, and the
-   * other way the one before.
+   * other way the one before. Its records are only made as they're
+   * needed (jukeboxSlot, fillJukebox), so it can turn round any number.
    */
   function buildJukebox(parts) {
     // The cap shares the record's box on the platter, and never moves.
@@ -1855,34 +1874,67 @@ window.MusicHub = window.MusicHub || {};
 
     var backdrop = el('div', 'jukebox-backdrop');
     var overlay = el('div', 'jukebox');
-    overlay.setAttribute('aria-hidden', 'true');
     var wheel = el('div', 'jukebox__wheel');
+    wheel.setAttribute('aria-hidden', 'true');
     wheel.style.left = top.x + 'px';
     wheel.style.top = (top.y + radius) + 'px';
-    var slots = [];
-    for (var k = -JUKEBOX_SLOTS_EACH_SIDE; k <= JUKEBOX_SLOTS_EACH_SIDE; k += 1) {
-      var slot = el('div', 'jukebox__slot');
-      slot.style.width = size + 'px';
-      slot.style.height = size + 'px';
-      slot.style.transform = 'rotate(' + (-k * stepDeg) + 'deg) translateY(' + (-radius) + 'px)';
-      // The record's own box inside the slot, for the lift onto it.
-      var holder = el('div', 'jukebox__record');
-      var record = renderRecord(queueNeighbour(k));
-      MusicHub.vinyl.setPlaying(record, false);
-      holder.appendChild(record);
-      // Dimmed by a shade over it rather than a filter, which would
-      // redraw the whole record on every frame of the turn.
-      var shade = el('span', 'jukebox__shade');
-      shade.style.opacity = jukeboxShade(-k * stepDeg);
-      holder.appendChild(shade);
-      slot.appendChild(holder);
-      slots.push({ node: slot, holder: holder, shade: shade, deg: -k * stepDeg, step: k });
-      wheel.appendChild(slot);
-    }
     overlay.appendChild(wheel);
     return {
-      backdrop: backdrop, overlay: overlay, wheel: wheel, slots: slots, stepDeg: stepDeg, box: box,
+      backdrop: backdrop, overlay: overlay, wheel: wheel, slots: [], stepDeg: stepDeg, box: box,
+      size: size, radius: radius,
+      // How far it's turned by hand (setJukeboxAngle), the record at the
+      // top then, and how the record playing's label was turned on the
+      // platter - its copies on the wheel turned just the same.
+      angle: 0, center: 0, discRotate: '',
     };
+  }
+
+  /** The wheel's record `step` on from the one playing - made if it isn't there yet. */
+  function jukeboxSlot(jukebox, step) {
+    var found = jukebox.slots.filter(function (slot) { return slot.step === step; })[0];
+    if (found) {
+      return found;
+    }
+    var deg = -step * jukebox.stepDeg;
+    var slot = el('div', 'jukebox__slot');
+    slot.dataset.step = String(step);
+    slot.style.width = jukebox.size + 'px';
+    slot.style.height = jukebox.size + 'px';
+    slot.style.transform = 'rotate(' + deg + 'deg) translateY(' + (-jukebox.radius) + 'px)';
+    // The record's own box inside the slot, for the lift onto it.
+    var holder = el('div', 'jukebox__record');
+    var vinyl = queueNeighbour(step);
+    var record = renderRecord(vinyl);
+    MusicHub.vinyl.setPlaying(record, false);
+    var disc = record.querySelector('.vinyl__disc');
+    if (vinyl === player.vinyl && jukebox.discRotate && disc) {
+      disc.style.rotate = jukebox.discRotate;
+    }
+    holder.appendChild(record);
+    // Dimmed by a shade over it rather than a filter, which would
+    // redraw the whole record on every frame of the turn.
+    var shade = el('span', 'jukebox__shade');
+    shade.style.opacity = jukeboxShade(deg + jukebox.angle);
+    holder.appendChild(shade);
+    slot.appendChild(holder);
+    var entry = { node: slot, holder: holder, shade: shade, deg: deg, step: step };
+    jukebox.slots.push(entry);
+    jukebox.wheel.appendChild(slot);
+    return entry;
+  }
+
+  /** The records `reach` steps either side of `center` on the wheel, and no others. */
+  function fillJukebox(jukebox, center, reach) {
+    jukebox.slots = jukebox.slots.filter(function (slot) {
+      if (Math.abs(slot.step - center) <= reach) {
+        return true;
+      }
+      slot.node.remove();
+      return false;
+    });
+    for (var k = center - reach; k <= center + reach; k += 1) {
+      jukeboxSlot(jukebox, k);
+    }
   }
 
   /**
@@ -1938,6 +1990,8 @@ window.MusicHub = window.MusicHub || {};
     var spinAt = liftAt + JUKEBOX.liftMs + JUKEBOX.spinGapMs;
 
     var jukebox = buildJukebox(leaving);
+    jukebox.overlay.setAttribute('aria-hidden', 'true');
+    fillJukebox(jukebox, 0, JUKEBOX_SLOTS_EACH_SIDE);
     var sign = forward ? 1 : -1;
     switching = { timers: [], nodes: [jukebox.backdrop, jukebox.overlay] };
     var job = switching;
@@ -2028,6 +2082,502 @@ window.MusicHub = window.MusicHub || {};
     }
   }
 
+  /* ------------------------------------------- the jukebox, turned by hand */
+
+  /*
+   * Switched off, the record can be picked up off the platter and dragged
+   * anywhere. Let go, it lifts onto the top of the jukebox wheel, as for
+   * the arrows - but the wheel waits to be turned by hand: dragged
+   * sideways (or with the arrow keys or the mouse wheel) it turns through
+   * the records, coming to rest with one at the top. The record at the
+   * top tapped drops onto the platter, its album starting on Spotify; one
+   * further round tapped turns the wheel to it; a tap anywhere else (or
+   * Escape) puts the record back. Where the arrows don't fit (style.css)
+   * it's the only way to change records.
+   */
+  var BROWSE = {
+    // How far the record's dragged before letting it go lifts it.
+    dragPx: 12,
+    // The record a touch bigger while it's held.
+    grabScale: 1.05,
+    // How far the wheel's dragged before it turns rather than taking a tap.
+    turnPx: 8,
+    // A flung wheel goes on as far as it would in this long at the speed
+    // it was let go at; its speed is measured over the last `sampleMs`.
+    throwMs: 280,
+    sampleMs: 90,
+    // However hard it's flung, it goes on at most this many records.
+    maxThrow: 6,
+    // A turn to rest takes `stepMs` a record, within these bounds.
+    stepMs: 170,
+    minTurnMs: 260,
+    maxTurnMs: 1100,
+    // Back down onto the platter: from the wheel, and when it was only
+    // picked up, not dragged.
+    putBackMs: 450,
+    snapBackMs: 180,
+    // The mouse wheel's travel per record.
+    wheelPx: 60,
+  };
+
+  /** Whether the record can be picked up off the platter: the turntable off, another vinyl to go to. */
+  function canBrowse() {
+    return !!(player && playerParts && !playerParts.on && !playerParts.drag && !switching
+      && queue.length > 1);
+  }
+
+  /** The record grabbable (style.css) and the hint under the deck, while it can be picked up. */
+  function updateGrab() {
+    var can = canBrowse();
+    if (playerParts) {
+      playerParts.root.classList.toggle('turntable--grabbable', can);
+    }
+    if (els.grabHint) {
+      els.grabHint.hidden = !can;
+    }
+  }
+
+  /** The record pressed on the platter: picked up (see above). */
+  function grabRecord(event) {
+    if (!event.isPrimary || event.button !== 0 || !canBrowse()) {
+      return;
+    }
+    event.preventDefault();
+    var parts = playerParts;
+    var motion = reducedMotion() ? 0 : 1;
+    var jukebox = buildJukebox(parts);
+    var discRotate = window.getComputedStyle(parts.disc).rotate;
+    jukebox.discRotate = discRotate && discRotate !== 'none' ? discRotate : '';
+    // The wheel's records either side of the top: enough to reach down
+    // past the bottom of the page.
+    var reach = Math.min(10, Math.ceil(160 / jukebox.stepDeg) + 1);
+    var overlay = jukebox.overlay;
+    var job = { timers: [], nodes: [jukebox.backdrop, overlay], cleanup: null };
+    switching = job;
+    els.deck.classList.add('player__deck--jukebox');
+    jukebox.backdrop.style.opacity = '0';
+    document.body.appendChild(jukebox.backdrop);
+    document.body.appendChild(overlay);
+
+    // The record goes onto the wheel's top slot, held over the platter -
+    // 1 / DROP_SCALE of the slot - and follows the pointer from there.
+    var riseBy = jukebox.box.height * DROP_RISE;
+    function onPlatter(dx, dy, scale) {
+      return 'translate(' + dx + 'px, ' + (riseBy + dy) + 'px) scale(' + (scale / DROP_SCALE) + ')';
+    }
+    var front = jukeboxSlot(jukebox, 0);
+    front.holder.style.transform = onPlatter(0, 0, BROWSE.grabScale);
+    parts.record.style.opacity = '0';
+    parts.cap.style.opacity = '0';
+    parts.root.classList.add('turntable--grabbing');
+    var start = { x: event.clientX, y: event.clientY, id: event.pointerId };
+    var dragged = false;
+    var holding = true;
+    parts.record.setPointerCapture(event.pointerId);
+    parts.record.addEventListener('pointermove', holdMove);
+    parts.record.addEventListener('pointerup', holdEnd);
+    parts.record.addEventListener('pointercancel', holdEnd);
+
+    // Turning by hand: the drag going on (null while there's none), the
+    // record it's turning to, the mouse wheel's travel towards the next
+    // one, the frame of a turn to rest, and whether it's on its way out.
+    var turnDrag = null;
+    var aim = 0;
+    var wheelTravel = 0;
+    var turnFrame = 0;
+    var closing = false;
+    var caption = el('div', 'jukebox__caption');
+    caption.setAttribute('role', 'status');
+    var captionAlbum = el('span', 'jukebox__caption-album');
+    var captionArtist = el('span', 'jukebox__caption-artist');
+    var touch = window.matchMedia && window.matchMedia('(hover: none)').matches;
+    caption.appendChild(captionAlbum);
+    caption.appendChild(captionArtist);
+    caption.appendChild(el('span', 'jukebox__caption-hint', touch
+      ? 'Swipe to turn \u00b7 tap the top record to play it'
+      : 'Drag to turn \u00b7 click the top record to play it \u00b7 Esc puts it back'));
+
+    function later(fn, delay) {
+      job.timers.push(window.setTimeout(fn, delay));
+    }
+
+    function unlisten() {
+      parts.record.removeEventListener('pointermove', holdMove);
+      parts.record.removeEventListener('pointerup', holdEnd);
+      parts.record.removeEventListener('pointercancel', holdEnd);
+      parts.root.classList.remove('turntable--grabbing');
+      overlay.removeEventListener('pointerdown', turnStart);
+      overlay.removeEventListener('pointermove', turnMove);
+      overlay.removeEventListener('pointerup', turnEnd);
+      overlay.removeEventListener('pointercancel', turnEnd);
+      overlay.removeEventListener('wheel', onWheel);
+      document.removeEventListener('keydown', onKey);
+      window.cancelAnimationFrame(turnFrame);
+      turnFrame = 0;
+    }
+
+    function restorePlatter() {
+      parts.record.style.opacity = '';
+      parts.cap.style.opacity = '';
+      parts.root.inert = false;
+    }
+
+    // Closing the player meanwhile (cancelSwitch).
+    job.cleanup = function () {
+      unlisten();
+      restorePlatter();
+    };
+
+    function finish() {
+      if (switching !== job) {
+        return;
+      }
+      jukebox.backdrop.remove();
+      overlay.remove();
+      els.deck.classList.remove('player__deck--jukebox');
+      switching = null;
+      updateSwitchButtons();
+    }
+
+    /* -- held over the platter */
+
+    function holdMove(e) {
+      if (e.pointerId !== start.id) {
+        return;
+      }
+      var dx = e.clientX - start.x;
+      var dy = e.clientY - start.y;
+      if (Math.sqrt(dx * dx + dy * dy) >= BROWSE.dragPx) {
+        dragged = true;
+      }
+      front.holder.style.transform = onPlatter(dx, dy, BROWSE.grabScale);
+    }
+
+    function holdEnd(e) {
+      if (e.pointerId !== start.id || !holding) {
+        return;
+      }
+      holding = false;
+      parts.record.removeEventListener('pointermove', holdMove);
+      parts.record.removeEventListener('pointerup', holdEnd);
+      parts.record.removeEventListener('pointercancel', holdEnd);
+      parts.root.classList.remove('turntable--grabbing');
+      if (dragged && e.type === 'pointerup') {
+        lift();
+      } else {
+        snapBack();
+      }
+    }
+
+    /** Only picked up, not dragged: straight back down. */
+    function snapBack() {
+      closing = true;
+      unlisten();
+      var ms = BROWSE.snapBackMs * motion;
+      front.holder.animate([
+        { transform: front.holder.style.transform }, { transform: onPlatter(0, 0, 1) },
+      ], { duration: ms, easing: 'ease-out', fill: 'forwards' });
+      later(function () {
+        restorePlatter();
+        finish();
+      }, ms);
+    }
+
+    /**
+     * Let go: from where it was let go it zooms up onto the top of the
+     * wheel, the page dimming round the deck and the wheel's other records
+     * rolling in from below - as for the arrows - and waits to be turned.
+     */
+    function lift() {
+      parts.root.inert = true;
+      updateSwitchButtons();
+      var from = front.holder.style.transform;
+      front.holder.style.transform = '';
+      front.holder.animate([
+        { transform: from, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }, { transform: 'none' },
+      ], { duration: JUKEBOX.liftMs * motion });
+      jukebox.backdrop.style.opacity = '';
+      jukebox.backdrop.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: JUKEBOX.showMs * motion, easing: 'ease-out',
+      });
+      fillJukebox(jukebox, 0, reach);
+      jukebox.slots.forEach(function (slot) {
+        if (slot.step === 0) {
+          return;
+        }
+        slot.holder.animate([
+          { opacity: 0, transform: 'translateY(30%)' },
+          { opacity: 1, transform: 'none' },
+        ], {
+          delay: Math.min(Math.abs(slot.step), JUKEBOX_SLOTS_EACH_SIDE) * 60 * motion,
+          duration: JUKEBOX.liftMs * motion,
+          easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)',
+          fill: 'backwards',
+        });
+      });
+      MusicHub.sfx.play(JUKEBOX_SOUNDS, 'lift', 0);
+
+      showCaption(0);
+      overlay.appendChild(caption);
+      caption.animate([{ opacity: 0 }, { opacity: 1 }], {
+        delay: JUKEBOX.liftMs * 0.5 * motion, duration: JUKEBOX.showMs * motion, fill: 'backwards',
+      });
+      overlay.classList.add('jukebox--browse');
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-label', 'Jukebox: pick a vinyl');
+      overlay.tabIndex = -1;
+      overlay.focus({ preventScroll: true });
+      overlay.addEventListener('pointerdown', turnStart);
+      overlay.addEventListener('pointermove', turnMove);
+      overlay.addEventListener('pointerup', turnEnd);
+      overlay.addEventListener('pointercancel', turnEnd);
+      overlay.addEventListener('wheel', onWheel, { passive: false });
+      document.addEventListener('keydown', onKey);
+    }
+
+    /* -- turned by hand */
+
+    function showCaption(step) {
+      var album = queueNeighbour(step).album;
+      captionAlbum.textContent = album.name;
+      captionArtist.textContent = album.artist;
+    }
+
+    /**
+     * The wheel turned `deg` round: its records made and dropped round the
+     * top as they come and go, each shaded for where it is, and a detent's
+     * tick each time another comes up to the top.
+     */
+    function setAngle(deg) {
+      jukebox.angle = deg;
+      jukebox.wheel.style.rotate = deg + 'deg';
+      var center = Math.round(deg / jukebox.stepDeg);
+      if (center !== jukebox.center) {
+        jukebox.center = center;
+        fillJukebox(jukebox, center, reach);
+        showCaption(center);
+        MusicHub.sfx.play(JUKEBOX_SOUNDS, 'detent', 0);
+      }
+      jukebox.slots.forEach(function (slot) {
+        slot.shade.style.opacity = jukeboxShade(slot.deg + deg);
+      });
+    }
+
+    function stepAt(deg) {
+      return Math.round(deg / jukebox.stepDeg);
+    }
+
+    /** Turns the wheel to rest with record `step` at the top, easing out; then `then`. */
+    function turnTo(step, then) {
+      window.cancelAnimationFrame(turnFrame);
+      turnFrame = 0;
+      aim = step;
+      var from = jukebox.angle;
+      var to = step * jukebox.stepDeg;
+      var ms = motion * Math.min(BROWSE.maxTurnMs,
+        Math.max(BROWSE.minTurnMs, Math.abs(to - from) / jukebox.stepDeg * BROWSE.stepMs));
+      if (!ms || Math.abs(to - from) < 0.01) {
+        setAngle(to);
+        if (then) {
+          then();
+        }
+        return;
+      }
+      var startedAt = performance.now();
+      function frame(now) {
+        var progress = Math.min(1, Math.max(0, (now - startedAt) / ms));
+        setAngle(from + (to - from) * (1 - Math.pow(1 - progress, 3)));
+        if (progress < 1) {
+          turnFrame = window.requestAnimationFrame(frame);
+        } else {
+          turnFrame = 0;
+          if (then) {
+            then();
+          }
+        }
+      }
+      turnFrame = window.requestAnimationFrame(frame);
+    }
+
+    function turnStart(e) {
+      if (closing || !e.isPrimary || e.button !== 0) {
+        return;
+      }
+      e.preventDefault();
+      // Caught mid-turn, the wheel stops under the pointer.
+      window.cancelAnimationFrame(turnFrame);
+      turnFrame = 0;
+      var slot = e.target.closest && e.target.closest('.jukebox__slot');
+      turnDrag = {
+        id: e.pointerId, x: e.clientX, from: jukebox.angle, moved: false,
+        step: slot ? Number(slot.dataset.step) : null,
+        samples: [{ t: e.timeStamp, deg: jukebox.angle }],
+      };
+      overlay.setPointerCapture(e.pointerId);
+    }
+
+    function turnMove(e) {
+      if (!turnDrag || e.pointerId !== turnDrag.id) {
+        return;
+      }
+      var dx = e.clientX - turnDrag.x;
+      if (!turnDrag.moved) {
+        if (Math.abs(dx) < BROWSE.turnPx) {
+          return;
+        }
+        // From here on it's a turn - taking up from the pointer as it is.
+        turnDrag.moved = true;
+        turnDrag.x = e.clientX;
+        dx = 0;
+        overlay.classList.add('jukebox--grabbing');
+      }
+      // The top of the rim follows the pointer sideways.
+      var deg = turnDrag.from + (dx / jukebox.radius) * 180 / Math.PI;
+      setAngle(deg);
+      turnDrag.samples.push({ t: e.timeStamp, deg: deg });
+      turnDrag.samples = turnDrag.samples.filter(function (sample) {
+        return e.timeStamp - sample.t <= BROWSE.sampleMs;
+      });
+    }
+
+    function turnEnd(e) {
+      if (!turnDrag || e.pointerId !== turnDrag.id) {
+        return;
+      }
+      var drag = turnDrag;
+      turnDrag = null;
+      overlay.classList.remove('jukebox--grabbing');
+      var atTop = stepAt(jukebox.angle);
+      if (!drag.moved) {
+        if (e.type === 'pointercancel') {
+          turnTo(atTop);
+        } else if (drag.step === null) {
+          putBack();
+        } else if (drag.step === atTop) {
+          pick(drag.step);
+        } else {
+          turnTo(drag.step);
+        }
+        return;
+      }
+      // Flung: on at the speed it was let go at, slowing to a stop.
+      var first = drag.samples[0];
+      var last = drag.samples[drag.samples.length - 1];
+      var fresh = e.timeStamp - last.t <= BROWSE.sampleMs;
+      var speed = fresh && last.t > first.t ? (last.deg - first.deg) / (last.t - first.t) : 0;
+      var maxDeg = BROWSE.maxThrow * jukebox.stepDeg;
+      turnTo(stepAt(jukebox.angle + Math.max(-maxDeg, Math.min(maxDeg, speed * BROWSE.throwMs))));
+    }
+
+    function onWheel(e) {
+      e.preventDefault();
+      if (closing || turnDrag) {
+        return;
+      }
+      var delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (e.deltaMode === 1) {
+        delta *= 20;
+      } else if (e.deltaMode === 2) {
+        delta *= 400;
+      }
+      wheelTravel += delta;
+      var by = Math.trunc(wheelTravel / BROWSE.wheelPx);
+      if (by) {
+        wheelTravel -= by * BROWSE.wheelPx;
+        turnTo(aim + by);
+      }
+    }
+
+    function onKey(e) {
+      if (closing || e.altKey || e.ctrlKey || e.metaKey) {
+        return;
+      }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        turnTo(aim + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        turnTo(aim - 1);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        if (!turnDrag) {
+          pick(aim);
+        }
+      } else if (e.key === 'Escape') {
+        putBack();
+      } else {
+        return;
+      }
+      e.preventDefault();
+    }
+
+    /* -- on its way out */
+
+    /** Record `step` picked: it drops onto the platter from the top, its album starting on Spotify. */
+    function pick(step) {
+      if (closing) {
+        return;
+      }
+      var target = queueNeighbour(step);
+      if (target === player.vinyl) {
+        putBack();
+        return;
+      }
+      closing = true;
+      turnTo(step, function () {
+        unlisten();
+        stopPlaying();
+        hideTrack();
+        els.actions.hidden = true;
+        els.actions.textContent = '';
+        jukeboxSlot(jukebox, step).node.style.visibility = 'hidden';
+        overlay.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: JUKEBOX.hideMs, easing: 'ease-out', fill: 'forwards',
+        });
+        jukebox.backdrop.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: JUKEBOX.hideMs, easing: 'ease-in-out', fill: 'forwards',
+        });
+        openPlayer(target, { switched: true, lifted: true });
+        later(finish, JUKEBOX.hideMs * motion);
+      });
+    }
+
+    /**
+     * Put back: the wheel turns back to the record playing - the nearest
+     * time round it comes - and it lowers onto the platter again, the
+     * wheel and the dimming going.
+     */
+    function putBack() {
+      if (closing) {
+        return;
+      }
+      closing = true;
+      var home = Math.round(stepAt(jukebox.angle) / queue.length) * queue.length;
+      turnTo(home, function () {
+        unlisten();
+        var ms = BROWSE.putBackMs * motion;
+        var record = jukeboxSlot(jukebox, home);
+        jukebox.slots.forEach(function (slot) {
+          if (slot === record) {
+            return;
+          }
+          slot.holder.animate([
+            { opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(30%)' },
+          ], { duration: ms * 0.8, easing: 'ease-in', fill: 'forwards' });
+        });
+        caption.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms * 0.6, fill: 'forwards' });
+        record.holder.animate([
+          { transform: 'none' }, { transform: onPlatter(0, 0, 1) },
+        ], { duration: ms, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' });
+        jukebox.backdrop.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: ms, easing: 'ease-in-out', fill: 'forwards',
+        });
+        MusicHub.sfx.play(JUKEBOX_SOUNDS, 'land', ms / 1000);
+        later(function () {
+          restorePlatter();
+          finish();
+        }, ms);
+      });
+    }
+  }
+
   MusicHub.sync.ready(function () {
     els.view = document.getElementById('collection-view');
     els.grid = document.getElementById('collection-grid');
@@ -2045,6 +2595,7 @@ window.MusicHub = window.MusicHub || {};
     els.trackLabel = document.getElementById('player-track-label');
     els.trackCount = document.getElementById('player-count');
     els.actions = document.getElementById('player-actions');
+    els.grabHint = document.getElementById('player-grab-hint');
 
     els.toolbar = document.getElementById('collection-toolbar');
     els.search = document.getElementById('collection-search');

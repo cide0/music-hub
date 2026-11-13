@@ -9318,22 +9318,92 @@ button.turntable__power:focus-visible {
   box-shadow: 0 10px 28px color-mix(in srgb, var(--color-black) 60%, transparent);
 }
 
-/* No room beside the turntable: smaller arrows over the deck's edges,
-   still a comfortable size to tap. */
+/* No room beside the turntable: no arrows - they'd cover the deck. The
+   record is dragged off the platter instead (below). */
 @media (max-width: 1000px) {
-  .player__deck {
-    --switch-size: 44px;
-    --switch-side: 0.375rem;
+  .player__switch,
+  .player__switch[hidden] {
+    display: none;
   }
+}
 
-  .player__switch {
-    background-color: color-mix(in srgb, var(--color-surface) 85%, transparent);
-  }
+/* Switched off, the record can be picked up off the platter and dragged
+   anywhere (collection.js grabRecord) - let go, it lifts onto the jukebox
+   wheel to be turned by hand. It takes the pointer then, which the rest
+   of the turntable doesn't, and a touch on it never scrolls the page. */
+.turntable--grabbable .turntable__record {
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+}
 
-  .player__switch svg {
-    width: 24px;
-    height: 24px;
-  }
+.turntable--grabbing .turntable__record,
+.jukebox--grabbing,
+.jukebox--grabbing * {
+  cursor: grabbing;
+}
+
+/* Turned by hand (collection.js browse): the wheel takes the pointer -
+   dragged sideways it turns, the top record tapped drops onto the
+   platter, anywhere else puts the record back. */
+.jukebox--browse {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+}
+
+.jukebox--browse .jukebox__slot {
+  cursor: pointer;
+}
+
+.jukebox--browse.jukebox--grabbing .jukebox__slot {
+  cursor: grabbing;
+}
+
+/* The record at the top: what it is, and how to go on - at the bottom of
+   the page, over the wheel's hub. */
+.jukebox__caption {
+  position: absolute;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  width: max-content;
+  max-width: min(26rem, calc(100% - 2rem));
+  padding: 0.625rem 1.125rem;
+  translate: -50% 0;
+  border: 1px solid var(--color-purple-800);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface-raised);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-black) 55%, transparent);
+  line-height: 1.3;
+  text-align: center;
+  pointer-events: none;
+}
+
+.jukebox__caption-album {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.jukebox__caption-artist {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.jukebox__caption-hint {
+  margin-top: 0.25rem;
+  color: var(--color-purple-200);
+  font-size: 0.75rem;
 }
 
 /* Room beside the turntable for what's playing: about 10rem either side. */
@@ -9385,6 +9455,17 @@ button.turntable__power:focus-visible {
   margin: 0.75rem 0 0;
   color: var(--color-text-soft);
   font-size: 0.9375rem;
+}
+
+/* Under the status while the record can be picked up off the platter. */
+.player__grab-hint {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.player__grab-hint[hidden] {
+  display: none;
 }
 
 .player__actions {
