@@ -818,9 +818,14 @@ window.MusicHub = window.MusicHub || {};
       list.textContent = '';
       tracks.forEach(function (track, i) {
         var item = el('li', 'player__tracklist-item');
-        item.appendChild(el('span', 'player__tracklist-number', String(i + 1)));
-        item.appendChild(el('span', 'player__tracklist-name', track.name));
-        item.appendChild(el('span', 'player__tracklist-length', formatTrackLength(track.durationMs)));
+        var button = el('button', 'player__tracklist-button');
+        button.type = 'button';
+        button.dataset.index = String(i);
+        button.setAttribute('aria-label', 'Play track ' + (i + 1) + ': ' + track.name);
+        button.appendChild(el('span', 'player__tracklist-number', String(i + 1)));
+        button.appendChild(el('span', 'player__tracklist-name', track.name));
+        button.appendChild(el('span', 'player__tracklist-length', formatTrackLength(track.durationMs)));
+        item.appendChild(button);
         list.appendChild(item);
       });
     }
@@ -852,11 +857,36 @@ window.MusicHub = window.MusicHub || {};
   /**
    * Hover or keyboard focus shows the list (style.css); a touch screen
    * can't hover, so there a tap on the count opens and closes it, and a
-   * tap anywhere else closes it.
+   * tap anywhere else closes it. A track clicked plays (playTrack), and
+   * the list gets out of the way of the tonearm going there - until the
+   * pointer leaves it, or comes back onto the count. From the keyboard
+   * it stays open.
    */
   function initTrackList() {
     els.trackCountWrap.addEventListener('mouseenter', fitTrackList);
     els.trackCountWrap.addEventListener('focusin', fitTrackList);
+    // Back over the count, it shows again - the pointer can get there
+    // from the hidden list without ever leaving the corner.
+    function undismiss() {
+      els.trackCountWrap.classList.remove('player__count-wrap--dismissed');
+    }
+    els.trackCountWrap.addEventListener('mouseleave', undismiss);
+    els.trackCount.addEventListener('pointerenter', function () {
+      undismiss();
+      fitTrackList();
+    });
+    els.trackList.addEventListener('click', function (event) {
+      var button = event.target.closest('.player__tracklist-button');
+      if (!button) {
+        return;
+      }
+      if (event.detail > 0) {
+        els.trackCountWrap.classList.remove('player__count-wrap--open');
+        els.trackCountWrap.classList.add('player__count-wrap--dismissed');
+        button.blur();
+      }
+      playTrack(Number(button.dataset.index));
+    });
     els.trackCount.addEventListener('click', function () {
       if (!window.matchMedia('(hover: none)').matches) {
         return;
@@ -1192,13 +1222,39 @@ window.MusicHub = window.MusicHub || {};
       watchPlayback(run, POLL_AFTER_POWER_MS);
       return;
     }
+    var point = albumPoint(fraction);
+    playFrom(point.index, point.positionMs, { armMoved: true });
+  }
+
+  /**
+   * A track in the list under the track count clicked: the album plays
+   * from that track's start - the needle lifted and carried over to it,
+   * or, switched off, the turntable switching on and the arm swinging
+   * over from its rest - as for a track button.
+   */
+  function playTrack(index) {
+    if (!player || !player.started || !player.tracks || !player.tracks[index]
+      || switching || player.armHeld || playerParts.drag) {
+      return;
+    }
+    playFrom(index, 0, { armMoved: false });
+  }
+
+  /**
+   * The album playing from `positionMs` into track `index`: the track
+   * line, the groove and the arm go there straight away, the turntable
+   * switches on if it was off, and Spotify is asked a moment later
+   * whether it got there. `options.armMoved`: the arm was put down there
+   * by hand, so it's already where it goes - otherwise it's lifted and
+   * carried over (or swung over from its rest).
+   */
+  function playFrom(index, positionMs, options) {
+    var run = playRun;
+    var armMoved = !!options.armMoved;
     var album = player.vinyl.album;
     var tracks = player.tracks;
-    var point = albumPoint(fraction);
-    var totalMs = point.totalMs;
-    var index = point.index;
-    var track = point.track;
-    var positionMs = point.positionMs;
+    var totalMs = albumMs(tracks.length);
+    var track = tracks[index];
     player.at = { index: index, progressMs: positionMs, playing: true, time: Date.now(), durationMs: track.durationMs };
     player.expect = { index: index, positionMs: positionMs, at: Date.now() };
     player.fraction = (albumMs(index) + positionMs) / totalMs;
@@ -1206,11 +1262,13 @@ window.MusicHub = window.MusicHub || {};
     player.elsewhere = false;
     player.offAlbum = 0;
     showTrack(index + 1, tracks.length, track, true);
-    MusicHub.turntable.setNeedle(playerParts, player.fraction, 1 / totalMs, { still: reducedMotion() });
+    MusicHub.turntable.setNeedle(playerParts, player.fraction, 1 / totalMs, {
+      still: reducedMotion(), lift: !armMoved,
+    });
     if (playerParts.on) {
       updateTrackButtons();
     } else {
-      switchTurntable(true, { armMoved: true });
+      switchTurntable(true, { armMoved: armMoved });
     }
     MusicHub.turntable.setProgress(playerParts, positionMs / track.durationMs, 1 / track.durationMs, track.durationMs);
     els.actions.hidden = true;
