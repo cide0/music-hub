@@ -402,6 +402,11 @@ const DISCOGS_SEARCH_PAGE_SIZE = 100;
 // this only caps artists with an unusually large current-year catalog.
 const DISCOGS_MAX_SEARCH_PAGES = 5;
 const DISCOGS_COLLECTION_PAGE_SIZE = 50;
+// Looking up the other names an artist is credited under (see
+// discogsAliases): at most this many release details to read a name
+// variation's main name from, and at most this many names kept.
+const DISCOGS_MAX_ALIAS_DETAILS = 3;
+const DISCOGS_MAX_ALIASES = 3;
 
 let discogsNextSlotAt = 0;
 
@@ -457,7 +462,7 @@ function cleanDiscogsName(name) {
 /** "Artist A & Artist B", from a release's credited artists and their join words. */
 function joinDiscogsArtists(artists) {
   return (artists || []).map((artist, index, list) => {
-    const name = cleanDiscogsName(artist.name);
+    const name = cleanDiscogsName(artist.anv || artist.name);
     const join = String(artist.join || '').trim();
     if (index === list.length - 1) {
       return name;
@@ -484,11 +489,85 @@ function foldArtistName(value) {
  */
 function creditMatchesArtist(credit, artist) {
   const wanted = foldArtistName(artist);
-  if (!wanted) {
-    return false;
+  return !!wanted && creditParts(credit).some((part) => foldArtistName(part) === wanted);
+}
+
+/** A search result's credit text, whole and split into its artists. */
+function creditParts(credit) {
+  return [credit, ...String(credit).split(/\s*(?:,|&|\+|\/|\bfeat\.?|\bft\.?|\bfeaturing\b|\bvs\.?|\band\b|\bwith\b|\bx\b)\s*/i)];
+}
+
+/**
+ * Whether Discogs's `artist` search field can't be trusted with this name.
+ * It can't match names spelled with symbols like "$" or "!": it finds
+ * nothing for "$uicideboy$", "A$AP Rocky" or "Panic! At The Disco". The
+ * free-text `q` field does find them, so those names are also searched
+ * that way. `q` also matches titles, tracks and credits, which is why it
+ * isn't used for every name: for "Low" it finds thousands of other records
+ * first. The characters allowed here are the ones the `artist` field was
+ * seen to handle.
+ */
+function needsFreeTextSearch(artist) {
+  return /[^\p{L}\p{M}\p{N}\s.,&+'’/\-()*:?]/u.test(artist);
+}
+
+/**
+ * The other Discogs names `artist`'s records are credited under. The
+ * `artist` search field only knows each Discogs artist's main name, so a
+ * followed name that Discogs files as a name variation finds nothing by
+ * itself: "mgk" is "Machine Gun Kelly", "The Alchemist" is "Alchemist",
+ * "RÜFÜS DU SOL" is "Rüfüs" and "Pi’erre Bourne" is "Pierre Bourne". The
+ * free-text search does find those records, credited by the variation
+ * (marked "*", whose main name only the release detail tells) or by a
+ * spelling that folds to the same name.
+ *
+ * Not done for names that get the free-text search on every check anyway:
+ * that already finds their variations, and with the symbols folded away
+ * ("$NOT" -> "not") a lookalike would be taken for an alias.
+ */
+async function discogsAliases(artist, signal) {
+  const wanted = foldArtistName(artist);
+  if (!wanted || needsFreeTextSearch(artist)) {
+    return [];
   }
-  const parts = [credit, ...String(credit).split(/\s*(?:,|&|\+|\/|\bfeat\.?|\bft\.?|\bfeaturing\b|\bvs\.?|\band\b|\bwith\b|\bx\b)\s*/i)];
-  return parts.some((part) => foldArtistName(part) === wanted);
+  const params = new URLSearchParams({
+    type: 'release',
+    format: 'Vinyl',
+    q: artist,
+    sort: 'year',
+    sort_order: 'desc',
+    per_page: String(DISCOGS_SEARCH_PAGE_SIZE),
+  });
+  const data = await discogsJson(`/database/search?${params.toString()}`, signal);
+
+  const names = new Set();
+  // A release credited by each variation, to read its main name from.
+  const variations = new Map();
+  for (const result of data.results || []) {
+    for (const part of creditParts(String(result.title || '').split(' - ')[0])) {
+      if (foldArtistName(part) !== wanted) {
+        continue;
+      }
+      if (/\*\s*$/.test(part)) {
+        if (!variations.has(part.trim())) {
+          variations.set(part.trim(), result.id);
+        }
+      } else {
+        names.add(cleanDiscogsName(part));
+      }
+    }
+  }
+  for (const id of [...variations.values()].slice(0, DISCOGS_MAX_ALIAS_DETAILS)) {
+    const detail = await discogsJson(`/releases/${encodeURIComponent(id)}`, signal);
+    for (const credited of detail.artists || []) {
+      if (foldArtistName(credited.anv) === wanted || foldArtistName(credited.name) === wanted) {
+        names.add(cleanDiscogsName(credited.name));
+      }
+    }
+  }
+
+  const own = artist.toLowerCase();
+  return [...names].filter((name) => name && name.toLowerCase() !== own).slice(0, DISCOGS_MAX_ALIASES);
 }
 
 /**
@@ -547,6 +626,12 @@ function releasedSince(released, cutoffDay) {
  * artists), for the page to add to its list. Releases Discogs only dates
  * by year come back in `undated`: the page skips those for a while, then has
  * them looked at again in case a full date has been added since.
+ *
+ * Besides `artist` itself, the search covers the other Discogs names its
+ * records are credited under (see discogsAliases). Looking those up costs
+ * extra requests, so the page keeps them: it sends the ones it has as
+ * `alias` (repeated) with `aliasesKnown=1`, and without that flag they're
+ * looked up here and come back in `aliases` with `aliasesLookedUp: true`.
  */
 router.get('/api/discogs/releases', async (req, res) => {
   const artist = String(req.query.artist || '').trim();
@@ -559,6 +644,11 @@ router.get('/api/discogs/releases', async (req, res) => {
   const cutoffDay = since.slice(0, 10);
   const cutoffYear = Number(cutoffDay.slice(0, 4));
   const skip = new Set(String(req.query.skip || '').split(',').filter((id) => /^\d+$/.test(id)));
+  const aliasesKnown = req.query.aliasesKnown === '1';
+  const knownAliases = [req.query.alias || []].flat()
+    .map((name) => String(name).trim())
+    .filter(Boolean)
+    .slice(0, DISCOGS_MAX_ALIASES);
 
   // The page cancelled its check: stop spending the rate limit on it.
   const controller = new AbortController();
@@ -569,42 +659,54 @@ router.get('/api/discogs/releases', async (req, res) => {
   });
 
   try {
+    const aliases = aliasesKnown ? knownAliases : await discogsAliases(artist, controller.signal);
+    const names = [artist, ...aliases];
+    // Every name through the `artist` field, plus the free-text search for
+    // a name that field can't handle.
+    const searches = names.map((name) => ['artist', name]);
+    if (needsFreeTextSearch(artist)) {
+      searches.push(['q', artist]);
+    }
+
     const candidates = [];
     const seen = new Set();
-    for (let page = 1; page <= DISCOGS_MAX_SEARCH_PAGES; page++) {
-      const params = new URLSearchParams({
-        type: 'release',
-        format: 'Vinyl',
-        artist,
-        sort: 'year',
-        sort_order: 'desc',
-        per_page: String(DISCOGS_SEARCH_PAGE_SIZE),
-        page: String(page),
-      });
-      const data = await discogsJson(`/database/search?${params.toString()}`, controller.signal);
-      const results = data.results || [];
+    for (const [field, value] of searches) {
+      for (let page = 1; page <= DISCOGS_MAX_SEARCH_PAGES; page++) {
+        const params = new URLSearchParams({
+          type: 'release',
+          format: 'Vinyl',
+          [field]: value,
+          sort: 'year',
+          sort_order: 'desc',
+          per_page: String(DISCOGS_SEARCH_PAGE_SIZE),
+          page: String(page),
+        });
+        const data = await discogsJson(`/database/search?${params.toString()}`, controller.signal);
+        const results = data.results || [];
 
-      let reachedOlder = false;
-      for (const result of results) {
-        const year = Number(result.year);
-        if (!year) {
-          continue;
+        let reachedOlder = false;
+        for (const result of results) {
+          const year = Number(result.year);
+          if (!year) {
+            continue;
+          }
+          if (year < cutoffYear) {
+            reachedOlder = true;
+            continue;
+          }
+          // Search titles read "Artist - Title".
+          const credit = String(result.title || '').split(' - ')[0];
+          if (seen.has(result.id) || skip.has(String(result.id))
+            || !names.some((name) => creditMatchesArtist(credit, name))) {
+            continue;
+          }
+          seen.add(result.id);
+          candidates.push(result);
         }
-        if (year < cutoffYear) {
-          reachedOlder = true;
-          continue;
-        }
-        // Search titles read "Artist - Title".
-        const credit = String(result.title || '').split(' - ')[0];
-        if (seen.has(result.id) || skip.has(String(result.id)) || !creditMatchesArtist(credit, artist)) {
-          continue;
-        }
-        seen.add(result.id);
-        candidates.push(result);
-      }
 
-      if (reachedOlder || !results.length || page >= (data.pagination?.pages || 0)) {
-        break;
+        if (reachedOlder || !results.length || page >= (data.pagination?.pages || 0)) {
+          break;
+        }
       }
     }
 
@@ -620,7 +722,12 @@ router.get('/api/discogs/releases', async (req, res) => {
       }
       // The search title only told us the credit text; the detail names the
       // actual artists, so the duo "Fresh & Low" doesn't count for "Low".
-      if (detail.artists?.length && !detail.artists.some((credited) => foldArtistName(credited.name) === foldArtistName(artist))) {
+      // Each one is credited by its main name and, when the release spells
+      // it differently, a name variation (`anv`, e.g. "mgk").
+      const wanted = names.map(foldArtistName);
+      const credits = (credited) => wanted.includes(foldArtistName(credited.name))
+        || (!!credited.anv && wanted.includes(foldArtistName(credited.anv)));
+      if (detail.artists?.length && !detail.artists.some(credits)) {
         rejected[candidate.id] = String(candidate.year);
         continue;
       }
@@ -643,7 +750,9 @@ router.get('/api/discogs/releases', async (req, res) => {
       });
     }
 
-    res.json({ artist, since: cutoffDay, releases, rejected, undated });
+    res.json({
+      artist, since: cutoffDay, releases, rejected, undated, aliases, aliasesLookedUp: !aliasesKnown,
+    });
   } catch (err) {
     if (controller.signal.aborted) {
       return;

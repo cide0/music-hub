@@ -22,6 +22,12 @@ window.MusicHub = window.MusicHub || {};
   // Releases Discogs only dates by year are skipped for this long, then
   // looked at again in case a full date has been added.
   var UNDATED_RECHECK_DAYS = 30;
+  // The other Discogs names each artist is credited under ("mgk" is
+  // "Machine Gun Kelly" there) are looked up again after this many days,
+  // plus up to ALIAS_RECHECK_SPREAD more per artist, so the lookups - a few
+  // extra Discogs requests each - don't all fall due on the same check.
+  var ALIAS_RECHECK_DAYS = 30;
+  var ALIAS_RECHECK_SPREAD = 30;
   var TIMEZONE = 'Europe/Berlin';
   // Saved on the Settings page; the pick and the collection link need it.
   var USERNAME_SETTING = 'discogsUsername';
@@ -66,13 +72,15 @@ window.MusicHub = window.MusicHub || {};
    * far to its release date, so it can be pruned once that date leaves the
    * window. `known` lists, per artist, every release already looked at in
    * detail - see recordLookup - so later checks don't pay for it again.
+   * `aliases` holds, per artist, the other names Discogs credits them under
+   * and the day those were looked up (`{ names, on }`) - see aliasesDue.
    * `lastFound` holds the ids the last check added, marked "New" until the
    * next check.
    */
   function loadState() {
     var stored = MusicHub.storage.read(STORAGE_KEY, null);
     if (!stored || !Array.isArray(stored.releases)) {
-      return { checkedAt: null, since: null, releases: [], seen: {}, known: {}, lastFound: [] };
+      return { checkedAt: null, since: null, releases: [], seen: {}, known: {}, aliases: {}, lastFound: [] };
     }
 
     var seen = stored.seen && typeof stored.seen === 'object' ? stored.seen : null;
@@ -90,6 +98,7 @@ window.MusicHub = window.MusicHub || {};
       releases: stored.releases,
       seen: seen,
       known: stored.known && typeof stored.known === 'object' ? stored.known : {},
+      aliases: stored.aliases && typeof stored.aliases === 'object' ? stored.aliases : {},
       lastFound: Array.isArray(stored.lastFound) ? stored.lastFound : [],
     };
   }
@@ -243,6 +252,29 @@ window.MusicHub = window.MusicHub || {};
       next[id] = '?' + today;
     });
     return next;
+  }
+
+  /** A small stable number per name, to spread the alias lookups out. */
+  function nameHash(name) {
+    var hash = 0;
+    for (var i = 0; i < name.length; i++) {
+      hash = (hash * 31 + name.charCodeAt(i)) % 100003;
+    }
+    return hash;
+  }
+
+  /**
+   * Whether an artist's stored aliases (`{ names, on }`) are missing or old
+   * enough to be looked up again: after ALIAS_RECHECK_DAYS, plus a fixed
+   * share of ALIAS_RECHECK_SPREAD for this name.
+   */
+  function aliasesDue(entry, name, now) {
+    if (!entry || !Array.isArray(entry.names) || !/^\d{4}-\d{2}-\d{2}$/.test(entry.on || '')) {
+      return true;
+    }
+    var due = new Date(entry.on + 'T00:00:00Z');
+    due.setUTCDate(due.getUTCDate() + ALIAS_RECHECK_DAYS + nameHash(name) % ALIAS_RECHECK_SPREAD);
+    return new Date(now || Date.now()) >= due;
   }
 
   /** Lowercased and without accents, so "bjork" finds "Björk". */
@@ -873,10 +905,19 @@ window.MusicHub = window.MusicHub || {};
 
   /* -------------------------------------------------------------- checking */
 
-  function fetchReleasesFor(artistName, since, skip, signal) {
+  /**
+   * `aliases` is the artist's stored `{ names, on }` entry, sent along while
+   * it's current; without it the backend looks the names up and returns them.
+   */
+  function fetchReleasesFor(artistName, since, skip, aliases, signal) {
     var url = '/api/discogs/releases?artist=' + encodeURIComponent(artistName)
       + '&since=' + encodeURIComponent(since)
       + (skip.length ? '&skip=' + skip.join(',') : '');
+    if (!aliasesDue(aliases, artistName)) {
+      url += '&aliasesKnown=1' + aliases.names.map(function (alias) {
+        return '&alias=' + encodeURIComponent(alias);
+      }).join('');
+    }
     return fetch(url, { signal: signal }).then(function (response) {
       if (!response.ok) {
         throw new Error('request failed with ' + response.status);
@@ -902,10 +943,10 @@ window.MusicHub = window.MusicHub || {};
   /**
    * One artist at a time, back to back - the backend paces the Discogs
    * requests themselves. A single failed lookup is collected rather than
-   * fatal. Each finished lookup updates `known`, so a cancelled check still
-   * keeps what it learned.
+   * fatal. Each finished lookup updates `known` (and `aliases`, when the
+   * backend looked those up), so a cancelled check still keeps what it learned.
    */
-  function checkArtists(names, since, run, found, failed, known) {
+  function checkArtists(names, since, run, found, failed, known, aliases) {
     var chain = Promise.resolve();
 
     names.forEach(function (name, index) {
@@ -917,11 +958,14 @@ window.MusicHub = window.MusicHub || {};
         setStatus(label, (index / names.length) * 100);
 
         var entries = pruneKnown(known[name], since);
-        return fetchReleasesFor(name, since, Object.keys(entries), run.controller.signal).then(function (data) {
+        return fetchReleasesFor(name, since, Object.keys(entries), aliases[name], run.controller.signal).then(function (data) {
           (data.releases || []).forEach(function (release) {
             found.push(release);
           });
           known[name] = recordLookup(entries, data);
+          if (data.aliasesLookedUp && Array.isArray(data.aliases)) {
+            aliases[name] = { names: data.aliases, on: isoDay(new Date()) };
+          }
           if (!run.cancelled) {
             showRunningCount(found, since);
           }
@@ -998,15 +1042,21 @@ window.MusicHub = window.MusicHub || {};
       Object.keys(state.known).forEach(function (name) {
         known[name] = state.known[name];
       });
+      var aliases = {};
+      Object.keys(state.aliases).forEach(function (name) {
+        aliases[name] = state.aliases[name];
+      });
 
-      return checkArtists(names, since, run, found, failed, known).then(function () {
+      return checkArtists(names, since, run, found, failed, known, aliases).then(function () {
         // A finished check has been through every followed artist, so
         // anyone missing from the list has been unfollowed since.
         if (!run.cancelled) {
-          Object.keys(known).forEach(function (name) {
-            if (names.indexOf(name) === -1) {
-              delete known[name];
-            }
+          [known, aliases].forEach(function (perArtist) {
+            Object.keys(perArtist).forEach(function (name) {
+              if (names.indexOf(name) === -1) {
+                delete perArtist[name];
+              }
+            });
           });
         }
 
@@ -1018,6 +1068,7 @@ window.MusicHub = window.MusicHub || {};
 
         state.seen = result.seen;
         state.known = known;
+        state.aliases = aliases;
         // What it found new joins the releases already listed - a finished
         // check and a cancelled one alike. Cancelled without finding
         // anything new, it doesn't count as a check - but what it learned is
@@ -1138,6 +1189,7 @@ window.MusicHub = window.MusicHub || {};
     clearStoredData: clearStoredData,
     pruneKnown: pruneKnown,
     recordLookup: recordLookup,
+    aliasesDue: aliasesDue,
     windowStart: windowStart,
     inWindow: inWindow,
     formatReleaseDate: formatReleaseDate,
