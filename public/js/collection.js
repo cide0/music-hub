@@ -2189,7 +2189,7 @@ window.MusicHub = window.MusicHub || {};
   };
 
   // Between the bottom of the record at the top and its caption.
-  var CAPTION_GAP_PX = 10;
+  var CAPTION_GAP_PX = 18;
 
   /** Whether the record can be picked up off the platter: the turntable off, another vinyl to go to. */
   function canBrowse() {
