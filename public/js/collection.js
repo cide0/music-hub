@@ -1949,7 +1949,7 @@ window.MusicHub = window.MusicHub || {};
     overlay.appendChild(wheel);
     return {
       backdrop: backdrop, overlay: overlay, wheel: wheel, slots: [], stepDeg: stepDeg, box: box,
-      size: size, radius: radius,
+      size: size, radius: radius, top: top,
       // How far it's turned by hand (setJukeboxAngle), the record at the
       // top then, and how the record playing's label was turned on the
       // platter - its copies on the wheel turned just the same.
@@ -2188,6 +2188,9 @@ window.MusicHub = window.MusicHub || {};
     wheelPx: 60,
   };
 
+  // Between the bottom of the record at the top and its caption.
+  var CAPTION_GAP_PX = 10;
+
   /** Whether the record can be picked up off the platter: the turntable off, another vinyl to go to. */
   function canBrowse() {
     return !!(player && playerParts && !playerParts.on && !playerParts.drag && !switching
@@ -2254,8 +2257,12 @@ window.MusicHub = window.MusicHub || {};
     // where the wheel was last turned to, for its speed.
     var rumble = null;
     var lastTurn = null;
+    // The caption: centred just under the record at the top - the record
+    // fills the slot but for 4% all round (style.css).
     var caption = el('div', 'jukebox__caption');
     caption.setAttribute('role', 'status');
+    caption.style.left = jukebox.top.x + 'px';
+    caption.style.top = (jukebox.top.y + jukebox.size * 0.46 + CAPTION_GAP_PX) + 'px';
     var captionAlbum = el('span', 'jukebox__caption-album');
     var captionArtist = el('span', 'jukebox__caption-artist');
     caption.appendChild(captionAlbum);
@@ -2385,8 +2392,8 @@ window.MusicHub = window.MusicHub || {};
       });
       MusicHub.sfx.play(JUKEBOX_SOUNDS, 'lift', 0);
 
-      showCaption(0);
       overlay.appendChild(caption);
+      showCaption(0);
       caption.animate([{ opacity: 0 }, { opacity: 1 }], {
         delay: JUKEBOX.liftMs * 0.5 * motion, duration: JUKEBOX.showMs * motion, fill: 'backwards',
       });
@@ -2409,6 +2416,11 @@ window.MusicHub = window.MusicHub || {};
       var album = queueNeighbour(step).album;
       captionAlbum.textContent = album.name;
       captionArtist.textContent = album.artist;
+      // Centred under the record, but never off the side of the page.
+      var half = caption.offsetWidth / 2;
+      var margin = 16;
+      var x = Math.min(Math.max(jukebox.top.x, margin + half), window.innerWidth - margin - half);
+      caption.style.left = x + 'px';
     }
 
     /**

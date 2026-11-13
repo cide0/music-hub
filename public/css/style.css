@@ -9361,12 +9361,10 @@ button.turntable__power:focus-visible {
   cursor: grabbing;
 }
 
-/* The record at the top: its album and artist, at the bottom of the
-   page, over the wheel's hub. */
+/* The record at the top: its album and artist, centred just under it
+   (collection.js places it). */
 .jukebox__caption {
   position: absolute;
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  left: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
